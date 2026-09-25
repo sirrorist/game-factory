@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Змейка</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="wrap">
+    <header class="hud">
+      <span>Счёт: <b id="score">0</b></span>
+      <span>Рекорд: <b id="best">—</b></span>
+      <span id="mode" class="mode"></span>
+    </header>
+    <canvas id="board" width="400" height="400" aria-label="Игровое поле"></canvas>
+    <p id="message" class="message">Стрелки, WASD или свайп. Пробел — пауза.</p>
+    <button id="start" type="button">Играть</button>
+  </main>
+  <!-- Классические скрипты, не type="module": так игра работает и через file:// -->
+  <script src="gf-sdk.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

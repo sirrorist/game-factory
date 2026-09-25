@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: typecheck · unit · build · export · e2e
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      # pnpm в CI сам включает --frozen-lockfile, когда lockfile есть.
+      # Пока его нет (реестр npm был закрыт в среде, где собирался скелет), — предупреждение.
+      - name: Lockfile
+        run: |
+          if [ ! -f pnpm-lock.yaml ]; then
+            echo "::warning::pnpm-lock.yaml нет: зависимости не закреплены (docs/STATE.md)"
+          fi
+
+      - run: pnpm install
+
+      - run: pnpm typecheck
+
+      - run: pnpm test
+
+      - run: pnpm games:build
+
+      - run: pnpm games:export
+
+      - name: Chromium для e2e
+        run: pnpm exec playwright install --with-deps chromium
+
+      - run: pnpm test:e2e
+
+      - name: Офлайн-архивы игр
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline-games
+          path: .data/storage/exports/*.zip
+          if-no-files-found: error
+          retention-days: 14

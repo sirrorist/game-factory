@@ -1,0 +1,65 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { offlineProblems } from './gf.ts';
+
+const GF = new URL('./gf.ts', import.meta.url).pathname;
+
+function gf(args: string[], env: Record<string, string>) {
+  return spawnSync(process.execPath, [GF, ...args], { env: { ...process.env, ...env }, encoding: 'utf8' });
+}
+
+test('офлайн-проверка ловит внешний модульный скрипт', () => {
+  const r = offlineProblems([
+    { path: 'index.html', data: Buffer.from('<script type="module" src="main.js"></script>') },
+  ]);
+  assert.equal(r.errors.length, 1);
+});
+
+test('офлайн-проверка пропускает классический и встроенный модульный скрипт', () => {
+  const r = offlineProblems([
+    { path: 'index.html', data: Buffer.from('<script src="a.js"></script><script type="module">1</script>') },
+  ]);
+  assert.deepEqual(r.errors, []);
+});
+
+test('офлайн-проверка предупреждает о fetch', () => {
+  const r = offlineProblems([{ path: 'a.js', data: Buffer.from('fetch("x")') }]);
+  assert.equal(r.warnings.length, 1);
+});
+
+test('build: опубликованная версия неизменяема', () => {
+  const data = mkdtempSync(join(tmpdir(), 'gf-data-'));
+  const first = gf(['build', 'snake'], { GF_DATA_DIR: data });
+  assert.equal(first.status, 0, first.stderr);
+  const again = gf(['build', 'snake'], { GF_DATA_DIR: data });
+  assert.equal(again.status, 0, again.stderr);
+  assert.match(again.stdout, /без изменений/);
+
+  // Подменяем опубликованные файлы — хеш в meta уже не совпадёт с тем, что соберётся.
+  const meta = join(data, 'storage/games/snake/1.0.0.meta.json');
+  const m = JSON.parse(readFileSync(meta, 'utf8'));
+  writeFileSync(meta, JSON.stringify({ ...m, hash: 'другой' }));
+  const changed = gf(['build', 'snake'], { GF_DATA_DIR: data });
+  assert.equal(changed.status, 1);
+  assert.match(changed.stderr, /неизменяема/);
+});
+
+test('export: архив появляется в реестре', () => {
+  const data = mkdtempSync(join(tmpdir(), 'gf-data-'));
+  assert.equal(gf(['build', 'snake'], { GF_DATA_DIR: data }).status, 0);
+  const r = gf(['export', 'snake'], { GF_DATA_DIR: data });
+  assert.equal(r.status, 0, r.stderr);
+  const registry = JSON.parse(readFileSync(join(data, 'registry.json'), 'utf8'));
+  assert.equal(registry.games[0].export.file, 'snake-1.0.0.zip');
+});
+
+test('неизвестная игра и флаг — понятная ошибка', () => {
+  const data = mkdtempSync(join(tmpdir(), 'gf-data-'));
+  assert.match(gf(['build', 'nope'], { GF_DATA_DIR: data }).stderr, /не найдена/);
+  assert.match(gf(['build', '--force'], { GF_DATA_DIR: data }).stderr, /неизвестный флаг/);
+});
+

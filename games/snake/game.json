@@ -1,0 +1,16 @@
+{
+  "$schema": "../../packages/manifest/game.schema.json",
+  "id": "snake",
+  "title": "Змейка",
+  "version": "1.0.0",
+  "description": "Классическая змейка на чистом HTML/CSS/JS. Эталон статической игры: без сборки, работает офлайн.",
+  "kind": "static",
+  "toolchain": "static",
+  "source": "src",
+  "entry": "index.html",
+  "offline": true,
+  "permissions": ["saves", "leaderboard"],
+  "tags": ["arcade", "classic", "keyboard", "touch"],
+  "cover": "cover.svg",
+  "authors": ["sirrorist"]
+}

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Эталонный хаб (e2e)</title>
+</head>
+<body>
+  <!-- Та же разметка iframe, что будет в хабе на Next.js: править вместе. -->
+  <iframe
+    id="game"
+    title="game"
+    width="480"
+    height="560"
+    sandbox="allow-scripts allow-same-origin allow-pointer-lock"
+    allow="fullscreen; gamepad; autoplay"
+    referrerpolicy="no-referrer"></iframe>
+  <script id="cfg" type="application/json">__CONFIG__</script>
+  <script type="module">
+    import { connectGame, storageHandlers } from '/bridge.js';
+
+    const cfg = JSON.parse(document.getElementById('cfg').textContent);
+    const iframe = document.getElementById('game');
+    const events = [];
+    window.__events = events;
+    connectGame({
+      host: window,
+      iframe,
+      gameId: cfg.gameId,
+      gameOrigin: cfg.gameOrigin,
+      player: { id: 'p1', name: 'Тестер' },
+      handlers: storageHandlers(localStorage, cfg.gameId),
+      onEvent: (e) => {
+        events.push(e);
+        if (e.type === 'ready') document.body.dataset.gameReady = '1';
+      },
+    });
+    // src ставится после подписки: иначе hello игры может прийти раньше слушателя.
+    iframe.src = cfg.gameOrigin + '/';
+  </script>
+</body>
+</html>

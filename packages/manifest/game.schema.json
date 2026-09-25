@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://games.youranus.ru/schema/game.schema.json",
+  "title": "Game Factory manifest (game.json)",
+  "description": "Подсказки редактору. Истина — валидатор в src/index.ts, синхронность держит тест.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "title", "version", "kind", "toolchain", "entry", "offline", "permissions", "tags"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$",
+      "description": "Поддомен игры: <id>.play.<домен>"
+    },
+    "title": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "version": { "type": "string", "description": "semver; опубликованная версия неизменяема" },
+    "description": { "type": "string", "maxLength": 500 },
+    "kind": { "enum": ["static", "server"] },
+    "toolchain": { "enum": ["static", "vite-ts", "prebuilt", "rust-wasm", "godot", "docker"] },
+    "source": { "type": "string", "description": "Папка исходников для toolchain static, по умолчанию src" },
+    "output": { "type": "string", "description": "Папка сборки для остальных toolchain, по умолчанию dist" },
+    "entry": { "type": "string", "pattern": "\\.html$" },
+    "offline": { "type": "boolean", "description": "Игру можно скачать архивом и открыть через file://" },
+    "permissions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "enum": ["saves", "leaderboard", "multiplayer", "fullscreen", "pointer-lock", "gamepad", "audio"] }
+    },
+    "tags": {
+      "type": "array",
+      "maxItems": 10,
+      "items": { "type": "string", "pattern": "^[a-z0-9-]{1,24}$" }
+    },
+    "cover": { "type": "string", "pattern": "\\.(png|jpe?g|webp|svg)$" },
+    "authors": { "type": "array", "maxItems": 10, "items": { "type": "string" } }
+  }
+}

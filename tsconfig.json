@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "lib": ["es2023", "dom"]
+  },
+  "include": [
+    "apps/play-server/**/*.ts",
+    "packages/manifest/**/*.ts",
+    "packages/registry/**/*.ts",
+    "packages/hub-bridge/**/*.ts",
+    "tools/**/*.ts",
+    "tests/**/*.ts",
+    "packages/game-sdk/index.d.ts"
+  ]
+}
