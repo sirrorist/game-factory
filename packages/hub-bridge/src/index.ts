@@ -60,6 +60,31 @@ function validKey(v: unknown): v is string {
   return typeof v === 'string' && KEY_RE.test(v);
 }
 
+export interface FrameAttributes {
+  sandbox: string;
+  allow: string;
+}
+
+// Права манифеста → Permissions Policy iframe. Чего игра не просила, того у неё нет:
+// fullscreen, gamepad и autoplay для iframe с чужого origin по умолчанию закрыты.
+const ALLOW_BY_PERMISSION: Record<string, string> = {
+  fullscreen: 'fullscreen',
+  gamepad: 'gamepad',
+  audio: 'autoplay',
+};
+
+/**
+ * Атрибуты iframe игры. Песочница всегда без allow-top-navigation, allow-popups,
+ * allow-forms и allow-modals: игре нельзя уводить вкладку хаба и открывать окна.
+ * allow-same-origin нужен игре для своего localStorage — её origin всё равно чужой хабу.
+ */
+export function frameAttributes(permissions: readonly string[]): FrameAttributes {
+  const sandbox = ['allow-scripts', 'allow-same-origin'];
+  if (permissions.includes('pointer-lock')) sandbox.push('allow-pointer-lock');
+  const allow = permissions.flatMap((p) => ALLOW_BY_PERMISSION[p] ?? []);
+  return { sandbox: sandbox.join(' '), allow: allow.join('; ') };
+}
+
 /** Подключить игру в iframe к хабу. Возвращает функцию отключения. */
 export function connectGame(opts: ConnectOptions): () => void {
   const limit = opts.maxRequestsPerSecond ?? 20;

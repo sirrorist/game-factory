@@ -1,14 +1,22 @@
 version: 2
+# Раз в месяц и пачками: каждый PR — это прогон CI, а минуты CI не бесплатные (D-031).
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
     open-pull-requests-limit: 5
+    groups:
+      # Минорные и патчи — одним PR; мажоры — каждый отдельно, их смотрят руками.
+      minor-and-patch:
+        update-types: [minor, patch]
     ignore:
       # Типы должны соответствовать Node из .nvmrc (22), а не самому свежему.
       - dependency-name: "@types/node"

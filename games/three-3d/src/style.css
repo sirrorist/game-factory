@@ -1,0 +1,55 @@
+:root {
+  color-scheme: dark;
+  --bg: #0d1117;
+  --fg: #e6edf3;
+  --muted: #8b949e;
+  --accent: #7ee787;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.4 system-ui, sans-serif;
+}
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+}
+
+.hud {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.hud b {
+  color: var(--accent);
+}
+
+.mode,
+.help {
+  color: var(--muted);
+}
+
+.help {
+  margin: 0;
+  font-size: 13px;
+  text-align: center;
+}
+
+.stage canvas {
+  display: block;
+  max-width: 100%;
+  touch-action: none;
+}

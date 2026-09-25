@@ -15,27 +15,32 @@
 Нужны Node.js 22.18+ (TypeScript исполняется напрямую, без сборки) и pnpm 10.
 
 ```bash
-pnpm install          # typescript, @types/node, playwright — только dev
-pnpm check            # типы, юнит-тесты, сборка игр, офлайн-архивы, e2e
-pnpm play             # сервер игр на :4100
+pnpm install          # зависимости рабочей области (lockfile обязателен)
+pnpm check            # типы, юнит-тесты, сборка игр, архивы, сборка хаба, e2e
+pnpm play             # сервер игр на :4100 (в одном терминале)
+pnpm hub              # хаб на :3000 (в другом)
 ```
 
-Открой <http://snake.play.localhost:4100/>: `*.localhost` браузеры резолвят в 127.0.0.1
-сами, DNS не нужен. Офлайн-архив — `.data/storage/exports/snake-1.0.0.zip`: распакуй
-и открой `index.html` двойным кликом.
+Открой <http://localhost:3000>: каталог, игра в песочнице, кнопка «Скачать».
+Игры живут на `http://<id>.play.localhost:4100/` — `*.localhost` браузеры резолвят
+в 127.0.0.1 сами, DNS не нужен. Архив распакуй и открой `index.html` двойным кликом.
+
+То же в контейнерах: `pnpm games:build && pnpm games:export && docker compose up --build`.
 
 ## Что где
 
 ```
 apps/play-server/     сервер игр: раздача по поддоменам, заголовки песочницы
-apps/hub/             хаб на Next.js — этап 0б, ещё не создан
+apps/hub/             хаб на Next.js: каталог, страница игры с iframe и мостом
 packages/manifest/    схема game.json и валидатор
 packages/registry/    реестр опубликованных игр и раскладка хранилища
 packages/game-sdk/    SDK для игр (классический скрипт, работает на file://)
-packages/hub-bridge/  сторона хаба в протоколе SDK
-tools/gf.ts           CLI: list, validate, build, export
+packages/hub-bridge/  сторона хаба в протоколе SDK, атрибуты iframe из прав манифеста
+packages/vite-config/ общий Vite-конфиг игр: офлайн-сборка в один HTML
+templates/vite-ts/    шаблон игры на TypeScript + Vite (pnpm gf new <id>)
+tools/gf.ts           CLI: list, validate, build, export, new
 games/                игры; каждая — папка с game.json
-tests/e2e/            браузерные тесты: офлайн и встраивание в хаб
+tests/e2e/            браузерные тесты: офлайн, эталонный хаб, настоящий хаб
 docs/                 документация
 ```
 
@@ -47,7 +52,11 @@ docs/                 документация
 | `pnpm gf validate [id]` | проверить `game.json` |
 | `pnpm games:build [id]` | собрать и опубликовать версию в `.data/` |
 | `pnpm games:export [id]` | офлайн-архив для игр с `offline: true` |
+| `pnpm gf new <id>` | новая игра из шаблона `vite-ts` |
 | `pnpm play` | сервер игр |
+| `pnpm hub` | хаб в режиме разработки (`next dev`, :3000) |
+| `pnpm hub:build` / `pnpm hub:start` | сборка хаба / запуск собранного |
+| `docker compose up --build` | хаб и сервер игр в контейнерах (игры — из `.data/` хоста) |
 | `pnpm typecheck` | tsc без эмита |
 | `pnpm test` | юнит-тесты (`node --test`) |
 | `pnpm test:e2e` | браузерные тесты (Playwright, Chromium) |

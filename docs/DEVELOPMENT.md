@@ -3,8 +3,10 @@
 ## Окружение
 
 - Node.js ≥ 22.18 (`.nvmrc`), pnpm 10 (`packageManager` в `package.json`).
-- Chromium для e2e: `pnpm exec playwright install chromium` (в облачной среде агента
-  браузер уже стоит).
+- Chromium для e2e: `pnpm exec playwright install chromium`. В облачной среде агента
+  браузер уже стоит, но может быть старше Playwright — тогда
+  `GF_CHROMIUM_PATH=/opt/pw-browsers/chromium pnpm check` (П-030).
+- Коммиты — прямо в `main`, пока идёт MVP (D-030).
 - Переменные — `.env` по образцу `.env.example`. Секретов в `.env` на этапе 0 нет.
 
 ## Ход работы над задачей

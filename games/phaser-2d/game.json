@@ -1,0 +1,27 @@
+{
+  "$schema": "../../packages/manifest/game.schema.json",
+  "id": "phaser-2d",
+  "title": "Звездопад",
+  "version": "1.0.0",
+  "description": "Демо на Phaser 4: лови падающие звёзды. Эталон игры vite-ts на 2D-движке, работает офлайн.",
+  "kind": "static",
+  "toolchain": "vite-ts",
+  "output": "dist",
+  "entry": "index.html",
+  "offline": true,
+  "permissions": [
+    "saves",
+    "leaderboard",
+    "fullscreen"
+  ],
+  "tags": [
+    "arcade",
+    "phaser",
+    "keyboard",
+    "touch"
+  ],
+  "cover": "cover.svg",
+  "authors": [
+    "sirrorist"
+  ]
+}

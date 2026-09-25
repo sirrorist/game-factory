@@ -75,6 +75,8 @@ Chromium через Playwright. А вот `curl` и Node — нет: им пер
 общего прокси, и то, что другие домены из списка открылись сразу, для него не сработало.
 Обход: владелец открывает домен в настройках окружения; если не помогло — новая сессия.
 Пока закрыто — работа без зависимостей (D-013), lockfile ждёт.
+Сессия №2 (2026-09-25): в новой сессии реестр открыт (`curl` → 200) — обход «новая
+сессия» подтвердился.
 
 **П-015. `pnpm import` не делает lockfile из `package-lock.json` без сети.**
 Причина: pnpm всё равно ходит в реестр за метаданными. `npm install --offline
@@ -92,3 +94,80 @@ Chromium через Playwright. А вот `curl` и Node — нет: им пер
 ставится через `Math.random` и изредка ложится на путь змейки — тест зависел от
 случайности. Обход: тест фиксирует `Math.random` через `page.addInitScript`. Правило:
 e2e не опирается на случайность игры — её фиксируют, а не «перезапускают до зелёного».
+
+## Сборка игр (Vite)
+
+**П-018. Офлайн-сборка падает: top-level `await` в формате IIFE.**
+Причина: `@gf/vite-config` собирает игру классическим скриптом (IIFE), а там
+`await` вне функции невозможен. Обход: весь запуск — в `async function main()`,
+вызов `void main()` (так в шаблоне `vite-ts`).
+
+**П-019. Движок в архиве не находит картинки, в хабе — находит.**
+Та же причина, что П-002: загрузчик Phaser/Three ходит за файлом через XHR/fetch.
+Обход: `import url from './a.png'` (станет `data:`-URL) или рисовать текстуры кодом (D-029).
+
+## Next.js
+
+**П-020. `next build`: «this filesystem access causes the whole project to be traced».**
+Причина: `path.resolve(process.cwd(), …)` в серверном коде — трассировщик Next не знает,
+что это путь к данным, и тащит весь проект в сборку. Обход: `/*turbopackIgnore: true*/`
+в аргументе (`apps/hub/src/lib/config.ts`).
+
+**П-021. `next start` предупреждает и отказывается работать с `output: 'standalone'`.**
+Обход: `standalone` только при `GF_HUB_STANDALONE=1` — в Docker-образе (D-027).
+
+**П-022. `next dev` переписывает `apps/hub/tsconfig.json`.**
+Раскрывает массивы по строке и дописывает `.next/dev/types/**/*.ts` в `include`. Это
+нормально: держим файл в том виде, который Next оставляет, иначе дифф после каждого запуска.
+
+## Браузер (e2e)
+
+**П-023. WebGL в безголовом Chromium: «Automatic fallback to software WebGL has been deprecated».**
+Причина: без GPU Chromium рисует WebGL программно (SwiftShader), и молчаливый откат на
+него объявлен устаревшим — однажды Three.js просто останется без WebGL. Обход: запуск
+с `--enable-unsafe-swiftshader` (`launchBrowser` в `tests/e2e/helpers.ts`).
+
+**П-024. Предупреждение `Unrecognized feature: 'bluetooth'` в консоли игры.**
+Chromium не знает `bluetooth` в `Permissions-Policy` play-server. Безвредно (лишняя
+директива игнорируется), e2e ловит только ошибки консоли. Убирать не спешим: другие
+браузеры директиву знают.
+
+## Облачная среда агента (Docker)
+
+**П-025. `docker info`: «failed to connect to the docker API».**
+В контейнере агента `dockerd` установлен, но не запущен. Обход: `dockerd &` (своя
+одноразовая машина агента, не чужая).
+
+**П-026. `docker build`: `429 Too Many Requests` от `registry-1.docker.io`.**
+Лимит анонимных скачиваний Docker Hub с общего IP. Обход: зеркало —
+`docker compose build --build-arg NODE_IMAGE=mirror.gcr.io/library/node:22-bookworm-slim`
+(или `public.ecr.aws/docker/library/node:…`).
+
+**П-027. `docker build`: `SELF_SIGNED_CERT_IN_CHAIN` на скачивании pnpm/пакетов.**
+Причина: исходящий HTTPS среды агента идёт через TLS-прокси со своим CA, которого нет
+в образе. Обход: необязательный build-secret —
+`docker build --secret id=extra_ca,src=/root/.ccr/ca-bundle.crt …` (в образ не попадает).
+`docker compose build` секрет не передаёт — собирать образ хаба `docker build`, потом
+`docker compose up --no-build`.
+
+**П-028. Мутационный прогон «зелёный», потому что вывод теста потерялся.**
+Вариант П-016: вывод прогона фильтровался `sed "s/^/[$f] /"`, а в `$f` путь со `/` —
+`sed` падал, и строк `not ok` просто не было видно. Правило: после мутации смотреть на
+явное `not ok`, а не на отсутствие `ok`.
+
+**П-029. После `next dev` в `apps/hub/` появляются `AGENTS.md` и `CLAUDE.md`.**
+Их пишет сам Next 16 (`next/dist/server/lib/generate-agent-files.js`): «читай доки Next
+из `node_modules/next/dist/docs/`, API изменились». Правила агентов в проекте задают кит
+и корневой `CLAUDE.md`, но этот совет полезен и узок (только про Next), поэтому владелец
+решил держать файлы в репозитории (2026-09-25): удалишь — `next dev` вернёт их незакоммиченной
+правкой. По API Next 16 сверяться с `apps/hub/node_modules/next/dist/docs/`.
+
+**П-030. e2e: `Executable doesn't exist at /opt/pw-browsers/chromium_headless_shell-1243/…`.**
+Причина: Playwright в lockfile новее браузера, который предустановлен в облачной среде
+агента (там `chromium-1194` от Playwright 1.56), а скачать свой нельзя. Обход:
+`GF_CHROMIUM_PATH=/opt/pw-browsers/chromium pnpm test:e2e` — `launchBrowser` возьмёт готовый
+браузер. В CI переменная не нужна: там `playwright install` ставит свой.
+
+**П-031. e2e на полном Chromium: `Failed to load resource: 404` в консоли хаба.**
+Причина: полный Chromium запрашивает `/favicon.ico`, а безголовая сборка — нет, поэтому
+раньше не всплывало. Обход: иконка хаба `apps/hub/src/app/icon.svg` (Next сам ставит `<link rel="icon">`).

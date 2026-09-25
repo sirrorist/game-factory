@@ -1,9 +1,12 @@
 name: CI
 
+# Правки только документации CI не гоняют — минуты не бесплатные (D-031).
 on:
   push:
     branches: [main]
+    paths-ignore: ["docs/**", "**/*.md"]
   pull_request:
+    paths-ignore: ["docs/**", "**/*.md"]
 
 permissions:
   contents: read
@@ -18,23 +21,16 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
 
-      # pnpm в CI сам включает --frozen-lockfile, когда lockfile есть.
-      # Пока его нет (реестр npm был закрыт в среде, где собирался скелет), — предупреждение.
-      - name: Lockfile
-        run: |
-          if [ ! -f pnpm-lock.yaml ]; then
-            echo "::warning::pnpm-lock.yaml нет: зависимости не закреплены (docs/STATE.md)"
-          fi
-
-      - run: pnpm install
+      # Явно: lockfile обязателен, расхождение с package.json — красный CI.
+      - run: pnpm install --frozen-lockfile
 
       - run: pnpm typecheck
 
@@ -44,15 +40,20 @@ jobs:
 
       - run: pnpm games:export
 
+      - run: pnpm hub:build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
       - name: Chromium для e2e
         run: pnpm exec playwright install --with-deps chromium
 
       - run: pnpm test:e2e
 
       - name: Офлайн-архивы игр
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: offline-games
           path: .data/storage/exports/*.zip
           if-no-files-found: error
           retention-days: 14
+

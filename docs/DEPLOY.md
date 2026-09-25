@@ -32,13 +32,19 @@
 
 `.github/workflows/ci.yml`, на пуш в `main` и на PR:
 
-1. `pnpm install` (pnpm в CI сам включает `--frozen-lockfile`, если lockfile есть;
-   пока его нет — предупреждение в логе, STATE.md)
-2. `pnpm typecheck` → `pnpm test` → `pnpm games:build` → `pnpm games:export`
-3. Chromium → `pnpm test:e2e`
+Задача `check`:
+
+1. `pnpm install --frozen-lockfile` — lockfile обязателен
+2. `pnpm typecheck` → `pnpm test` → `pnpm games:build` → `pnpm games:export` → `pnpm hub:build`
+3. Chromium → `pnpm test:e2e` (эталонный хаб, настоящий хаб, офлайн через `file://`)
 4. Офлайн-архивы игр — артефакт `offline-games` на 14 дней
 
-Права workflow — `contents: read`. Dependabot — раз в неделю для npm и Actions.
+Workflow `docker.yml`: `docker compose build` — образы `hub` и `play` собираются
+(не публикуются), только при изменении Docker-файлов или lockfile и вручную (D-031).
+CI не запускается на коммиты, где правлена только документация.
+
+Права workflow — `contents: read`. Dependabot — раз в месяц для npm и Actions,
+минорные и патчи пачкой (D-031).
 
 ## CD — план
 

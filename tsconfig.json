@@ -9,6 +9,7 @@
     "packages/manifest/**/*.ts",
     "packages/registry/**/*.ts",
     "packages/hub-bridge/**/*.ts",
+    "packages/vite-config/**/*.ts",
     "tools/**/*.ts",
     "tests/**/*.ts",
     "packages/game-sdk/index.d.ts"

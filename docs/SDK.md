@@ -10,11 +10,22 @@
 <script src="game.js"></script>
 ```
 
-**Игра на Vite** (этап 0б):
+**Игра на Vite** (toolchain `vite-ts`, шаблон — `pnpm gf new <id>`):
 
 ```ts
 import { GameFactory } from '@gf/game-sdk';
+
+// Без top-level await: офлайн-сборка — классический скрипт (IIFE), П-018.
+async function main() {
+  const gf = await GameFactory.init({ gameId: __GF_GAME_ID__ }); // id из game.json, подставит сборка
+  // …
+  gf.ready();
+}
+void main();
 ```
+
+Сборка — общий конфиг `@gf/vite-config`: при `offline: true` всё собирается в один
+`index.html` с классическим скриптом внутри, и архив работает через `file://`.
 
 Не подключай SDK как `<script type="module" src=…>`: через `file://` такой скрипт не
 загрузится (PITFALLS.md, П-001).

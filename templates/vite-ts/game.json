@@ -1,0 +1,15 @@
+{
+  "$schema": "../../packages/manifest/game.schema.json",
+  "id": "vite-ts-template",
+  "title": "Шаблон vite-ts",
+  "version": "0.1.0",
+  "description": "Заготовка игры на TypeScript + Vite: офлайн-сборка в один HTML, SDK подключён.",
+  "kind": "static",
+  "toolchain": "vite-ts",
+  "output": "dist",
+  "entry": "index.html",
+  "offline": true,
+  "permissions": ["saves", "leaderboard"],
+  "tags": ["template"],
+  "cover": "cover.svg"
+}

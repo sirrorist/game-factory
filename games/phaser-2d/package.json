@@ -1,0 +1,19 @@
+{
+  "name": "@gf-game/phaser-2d",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@gf/game-sdk": "workspace:*",
+    "phaser": "^4.2.1"
+  },
+  "devDependencies": {
+    "@gf/vite-config": "workspace:*",
+    "vite": "^8.3.1"
+  }
+}

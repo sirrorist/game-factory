@@ -5,10 +5,25 @@
 | id | Название | Версия | Тип | Офлайн | Статус | Заметки |
 |---|---|---|---|---|---|---|
 | `snake` | Змейка | 1.0.0 | static / static | да | в каталоге | эталон статической игры, покрыта e2e |
-| `phaser-2d` | демо Phaser 4 | — | static / vite-ts | да | этап 0б | нужен npm |
-| `three-3d` | демо Three.js | — | static / vite-ts | да | этап 0б | нужен npm |
+| `phaser-2d` | Звездопад | 1.0.0 | static / vite-ts | да | в каталоге | эталон 2D на Phaser 4; текстуры рисуются кодом; просит `fullscreen`; покрыта e2e |
+| `three-3d` | Три полосы | 1.0.0 | static / vite-ts | да | в каталоге | эталон 3D на Three.js (WebGL); просит `fullscreen`; покрыта e2e |
 
-## Как добавить игру
+Шаблон `templates/vite-ts` — не игра и в каталог не попадает, но собирается и проверяется
+типами вместе со всеми (пакет рабочей области), чтобы не протухал.
+
+## Как добавить игру на TypeScript + Vite (основной путь)
+
+1. `pnpm gf new my-game` — копия `templates/vite-ts` в `games/my-game/` с нужными id и именем пакета.
+2. `pnpm install` — подтянуть зависимости рабочей области; движок — `pnpm --filter @gf-game/my-game add phaser`.
+3. Поправить `title`, `description`, `tags`, `permissions` в `game.json`; код — в `src/main.ts`.
+4. `pnpm --filter @gf-game/my-game dev` — Vite с горячей перезагрузкой (SDK в режиме `standalone`).
+5. `pnpm games:build my-game && pnpm games:export my-game`, потом `pnpm play` + `pnpm hub`.
+6. Строка в таблицу выше; офлайн-игру — в списки `tests/e2e/offline.test.ts` и `tests/e2e/hub.test.ts`.
+
+Требования офлайн-сборки для движков: без `fetch`/XHR за ассетами (П-002) — картинки
+импортом в код (станут `data:`-URL) или рисовать кодом; без top-level `await` (П-018).
+
+## Как добавить статическую игру (без сборки)
 
 1. Папка `games/<id>/`, где `<id>` — будущий поддомен: `a-z`, `0-9`, дефис, до 40 символов.
 2. `game.json` (схема подхватится редактором через `$schema`):
@@ -63,7 +78,7 @@
 |---|---|---|
 | `static` | берёт папку `source` как есть | работает |
 | `prebuilt` | берёт готовую папку `output` (экспорт Godot, Unity WebGL, чужая сборка) | работает |
-| `vite-ts` | `pnpm run build` в папке игры, потом `output` | код есть, проверится на этапе 0б |
+| `vite-ts` | `pnpm run build` в папке игры (Vite + `@gf/vite-config`), потом `output` | работает: `phaser-2d`, `three-3d` |
 | `rust-wasm` | сборка `wasm-pack` / `trunk` в контейнере | этап 2 |
 | `godot` | экспорт в контейнере | этап 2 |
 | `docker` | серверная часть игры | этап 3 |
@@ -77,8 +92,8 @@
 - динамический `import()` — **предупреждение**.
 
 Работают: классические `<script src>`, встроенный `<script type="module">…</script>`,
-`<img>`, `<audio>`, CSS, `data:`-URL. Для Vite-игр — офлайн-режим сборки в один HTML
-(этап 0б). Окончательная проверка — e2e через `file://`, статическая — только подсказка.
+`<img>`, `<audio>`, CSS, `data:`-URL. Для Vite-игр — офлайн-режим `@gf/vite-config`:
+один `index.html`, скрипт внутри — классический (IIFE), CSS и ассеты встроены. Окончательная проверка — e2e через `file://`, статическая — только подсказка.
 
 ## Ограничения пакета
 

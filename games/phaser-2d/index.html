@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Звездопад</title>
+</head>
+<body>
+  <main class="wrap">
+    <header class="hud">
+      <span>Счёт: <b id="score">0</b></span>
+      <span>Жизни: <b id="lives">3</b></span>
+      <span>Рекорд: <b id="best">—</b></span>
+      <span id="mode" class="mode"></span>
+    </header>
+    <div id="stage" class="stage"></div>
+    <p class="help">← → или A / D, на телефоне — касание. Поймал — очко, упустил — минус жизнь.</p>
+  </main>
+  <!-- Vite встроит сюда классический скрипт (офлайн-режим @gf/vite-config). -->
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>

@@ -7,19 +7,23 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { chromium, type Browser } from 'playwright';
-import { buildData } from './helpers.ts';
+import type { Browser } from 'playwright';
+import { buildData, launchBrowser } from './helpers.ts';
 
 let browser: Browser;
-let indexUrl: string;
+let data: string;
+
+/** Распаковать архив игры, как это сделает человек, и вернуть file://-адрес index.html. */
+function unpack(id: string, version: string): string {
+  const out = mkdtempSync(join(tmpdir(), 'gf-offline-'));
+  const r = spawnSync('unzip', ['-q', join(data, `storage/exports/${id}-${version}.zip`), '-d', out]);
+  assert.equal(r.status, 0, 'unzip');
+  return pathToFileURL(join(out, `${id}-${version}`, 'index.html')).href;
+}
 
 before(async () => {
-  const data = buildData();
-  const out = mkdtempSync(join(tmpdir(), 'gf-offline-'));
-  const r = spawnSync('unzip', ['-q', join(data, 'storage/exports/snake-1.0.0.zip'), '-d', out]);
-  assert.equal(r.status, 0, 'unzip');
-  indexUrl = pathToFileURL(join(out, 'snake-1.0.0', 'index.html')).href;
-  browser = await chromium.launch();
+  data = buildData();
+  browser = await launchBrowser();
 });
 
 after(() => browser?.close());
@@ -38,7 +42,7 @@ test('змейка из архива запускается через file:// �
     if (m.type() === 'error') errors.push(m.text());
   });
 
-  await page.goto(indexUrl);
+  await page.goto(unpack('snake', '1.0.0'));
   await page.waitForSelector('html[data-gf-ready="standalone"]', { timeout: 5000 });
   assert.equal(await page.textContent('#mode'), 'без хаба');
   assert.equal(await page.textContent('#best'), '—');
@@ -64,3 +68,39 @@ test('змейка из архива запускается через file:// �
   assert.deepEqual(errors, []);
   await context.close();
 });
+
+// Игры на движках: офлайн-сборка @gf/vite-config — один HTML с классическим скриптом.
+for (const { id, start } of [
+  { id: 'phaser-2d', start: null },
+  { id: 'three-3d', start: 'Space' },
+]) {
+  test(`${id} из архива запускается через file:// и рисует кадр`, async () => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    page.on('console', (m) => {
+      if (m.type() === 'error') errors.push(m.text());
+    });
+
+    await page.goto(unpack(id, '1.0.0'));
+    await page.waitForSelector('html[data-gf-ready="standalone"]', { timeout: 10000 });
+    assert.equal(await page.textContent('#mode'), 'без хаба');
+    assert.equal(await page.locator('canvas').count(), 1);
+    if (start) await page.keyboard.press(start);
+    // Кадр не пустой: движок действительно рисует, а не просто создал canvas.
+    await page.waitForTimeout(500);
+    const shot = await page.locator('canvas').screenshot();
+    assert.ok(shot.length > 2000, `кадр подозрительно пустой: ${shot.length} байт`);
+
+    const roundTrip = await page.evaluate(async (gameId) => {
+      const s = await window.GameFactory.init({ gameId });
+      await s.save('probe', { ok: true });
+      return { mode: s.mode, value: await s.load('probe'), score: await s.submitScore(5) };
+    }, id);
+    assert.deepEqual(roundTrip, { mode: 'standalone', value: { ok: true }, score: { best: 5, isBest: true } });
+
+    assert.deepEqual(errors, []);
+    await context.close();
+  });
+}

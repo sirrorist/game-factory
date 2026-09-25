@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { offlineProblems } from './gf.ts';
@@ -63,3 +63,21 @@ test('неизвестная игра и флаг — понятная ошиб�
   assert.match(gf(['build', '--force'], { GF_DATA_DIR: data }).stderr, /неизвестный флаг/);
 });
 
+
+test('new: игра из шаблона vite-ts проходит проверку манифеста', () => {
+  const games = mkdtempSync(join(tmpdir(), 'gf-games-'));
+  const r = gf(['new', 'my-game'], { GF_GAMES_DIR: games });
+  assert.equal(r.status, 0, r.stderr);
+  const manifest = JSON.parse(readFileSync(join(games, 'my-game/game.json'), 'utf8'));
+  assert.equal(manifest.id, 'my-game');
+  assert.equal(manifest.toolchain, 'vite-ts');
+  assert.equal(JSON.parse(readFileSync(join(games, 'my-game/package.json'), 'utf8')).name, '@gf-game/my-game');
+  assert.equal(existsSync(join(games, 'my-game/node_modules')), false, 'node_modules шаблона скопировался');
+  assert.equal(existsSync(join(games, 'my-game/dist')), false, 'сборка шаблона скопировалась');
+  assert.equal(gf(['validate', 'my-game'], { GF_GAMES_DIR: games }).status, 0);
+
+  const again = gf(['new', 'my-game'], { GF_GAMES_DIR: games });
+  assert.equal(again.status, 1);
+  assert.match(again.stderr, /уже есть/);
+  assert.equal(gf(['new', 'admin'], { GF_GAMES_DIR: games }).status, 1);
+});

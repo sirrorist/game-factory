@@ -3,8 +3,8 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Server } from 'node:http';
-import { chromium, type Browser, type Frame, type Page } from 'playwright';
-import { buildData, close, listen, mockHub, startPlay } from './helpers.ts';
+import type { Browser, Frame, Page } from 'playwright';
+import { buildData, close, launchBrowser, listen, mockHub, startPlay } from './helpers.ts';
 
 let browser: Browser;
 let play: { server: Server; port: number };
@@ -24,7 +24,7 @@ before(async () => {
   // Такой же «хаб», но на origin, которого нет в frame-ancestors.
   stranger = mockHub(() => ({ gameId: 'snake', gameOrigin: gameOrigin() }));
   strangerPort = await listen(stranger);
-  browser = await chromium.launch();
+  browser = await launchBrowser();
 });
 
 after(async () => {

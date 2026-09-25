@@ -1,0 +1,47 @@
+@import 'tailwindcss';
+
+/* Токены в духе shadcn/ui: компоненты берут цвета отсюда, тема — тёмная. */
+:root {
+  --background: oklch(0.16 0.01 260);
+  --foreground: oklch(0.95 0.01 260);
+  --card: oklch(0.2 0.01 260);
+  --card-foreground: var(--foreground);
+  --muted: oklch(0.26 0.01 260);
+  --muted-foreground: oklch(0.7 0.02 260);
+  --primary: oklch(0.72 0.15 250);
+  --primary-foreground: oklch(0.16 0.01 260);
+  --secondary: oklch(0.3 0.01 260);
+  --secondary-foreground: var(--foreground);
+  --border: oklch(0.32 0.01 260);
+  --ring: oklch(0.72 0.15 250);
+  --radius: 0.75rem;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}

@@ -5,21 +5,24 @@
 //   node tools/gf.ts build [id...] [--replace]
 //                                            собрать и опубликовать в локальное хранилище
 //   node tools/gf.ts export [id...]          офлайн-архив для игр с offline: true
+//   node tools/gf.ts new <id>                новая игра из шаблона templates/vite-ts
 //
 // Данные пишутся в GF_DATA_DIR (по умолчанию .data).
 
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { contentDir, validateManifest, type GameManifest } from '../packages/manifest/src/index.ts';
+import { contentDir, ID_RE, RESERVED_IDS, validateManifest, type GameManifest } from '../packages/manifest/src/index.ts';
 import { dataPaths, readRegistry, writeRegistry, type DataPaths, type RegistryEntry } from '../packages/registry/src/index.ts';
 import { collectFiles, hashFiles, type GameFile } from './lib/files.ts';
 import { createZip } from './lib/zip.ts';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const GAMES_DIR = join(REPO, 'games');
+// GF_GAMES_DIR — только для тестов CLI: чтобы `gf new` не мусорил в настоящих games/.
+const GAMES_DIR = process.env.GF_GAMES_DIR ?? join(REPO, 'games');
+const TEMPLATES_DIR = join(REPO, 'templates');
 const SDK_FILE = join(REPO, 'packages', 'game-sdk', 'gf-sdk.js');
 const SDK_NAME = 'gf-sdk.js';
 
@@ -241,6 +244,43 @@ function exportGames(ids: string[]): void {
   writeRegistry(paths, registry);
 }
 
+/** Новая игра из шаблона: копия без node_modules и сборки, id и название — свои. */
+function newGame(ids: string[]): void {
+  const [id, ...extra] = ids;
+  if (!id || extra.length > 0) throw new CliError('нужен ровно один id: gf new <id>');
+  if (!ID_RE.test(id) || (RESERVED_IDS as readonly string[]).includes(id)) {
+    throw new CliError(`"${id}" не годится в id: a-z, 0-9 и дефис, 1-40 символов, не служебное имя (это поддомен)`);
+  }
+  const target = join(GAMES_DIR, id);
+  if (existsSync(target)) throw new CliError(`игра "${id}" уже есть: ${target}`);
+
+  const template = join(TEMPLATES_DIR, 'vite-ts');
+  cpSync(template, target, {
+    recursive: true,
+    filter: (src) => {
+      const rel = src.slice(template.length + 1);
+      const top = rel.split(/[\\/]/)[0] ?? '';
+      return rel === '' || !(top === 'node_modules' || top === 'dist' || top.startsWith('.'));
+    },
+  });
+
+  const manifestFile = join(target, 'game.json');
+  const manifest = JSON.parse(readFileSync(manifestFile, 'utf8')) as Record<string, unknown>;
+  manifest.id = id;
+  manifest.title = id;
+  manifest.version = '0.1.0';
+  manifest.tags = [];
+  writeFileSync(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
+
+  const pkgFile = join(target, 'package.json');
+  const pkg = JSON.parse(readFileSync(pkgFile, 'utf8')) as Record<string, unknown>;
+  pkg.name = `@gf-game/${id}`;
+  pkg.version = '0.1.0';
+  writeFileSync(pkgFile, JSON.stringify(pkg, null, 2) + '\n');
+
+  console.log(`✓ ${target}\n  дальше: pnpm install, поправить title в game.json, pnpm games:build ${id}`);
+}
+
 function list(): void {
   const names = listGameDirs();
   if (names.length === 0) console.log('в games/ нет игр');
@@ -284,8 +324,10 @@ function main(argv: string[]): void {
       return build(ids, flags.has('--replace'));
     case 'export':
       return exportGames(ids);
+    case 'new':
+      return newGame(ids);
     default:
-      throw new CliError('команды: list, validate [id...], build [id...] [--replace], export [id...]');
+      throw new CliError('команды: list, validate [id...], build [id...] [--replace], export [id...], new <id>');
   }
 }
 

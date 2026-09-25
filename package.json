@@ -11,14 +11,17 @@
     "games:build": "node tools/gf.ts build",
     "games:export": "node tools/gf.ts export",
     "play": "node --env-file-if-exists=.env apps/play-server/src/main.ts",
-    "typecheck": "tsc -p tsconfig.json && tsc -p packages/game-sdk/tsconfig.json",
+    "hub": "pnpm --filter @gf/hub dev",
+    "hub:build": "pnpm --filter @gf/hub build",
+    "hub:start": "pnpm --filter @gf/hub start",
+    "typecheck": "tsc -p tsconfig.json && tsc -p packages/game-sdk/tsconfig.json && pnpm -r --if-present run typecheck",
     "test": "node --test \"packages/**/*.test.ts\" \"apps/**/*.test.ts\" \"tools/**/*.test.ts\"",
     "test:e2e": "node --test --test-concurrency=1 \"tests/e2e/**/*.test.ts\"",
-    "check": "pnpm typecheck && pnpm test && pnpm games:build && pnpm games:export && pnpm test:e2e"
+    "check": "pnpm typecheck && pnpm test && pnpm games:build && pnpm games:export && pnpm hub:build && pnpm test:e2e"
   },
   "devDependencies": {
     "@types/node": "^22.18.0",
-    "playwright": "1.56.1",
-    "typescript": "^6.0.2"
+    "playwright": "1.63.0",
+    "typescript": "^7.0.2"
   }
 }

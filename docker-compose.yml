@@ -1,0 +1,51 @@
+# Локальный запуск хаба и сервера игр в контейнерах.
+#   pnpm games:build && pnpm games:export     # игры → .data/
+#   docker compose up --build
+# Хаб: http://localhost:3000, игры: http://<id>.play.localhost:4100
+# Порты открыты только на 127.0.0.1: это стенд разработчика, не прод (деплой — D-017).
+
+x-hardening: &hardening
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  restart: unless-stopped
+
+services:
+  play:
+    <<: *hardening
+    build: { context: ., target: play }
+    environment:
+      GF_PLAY_BASE_HOST: play.localhost
+      GF_PLAY_PORT: "4100"
+      GF_HUB_ORIGINS: http://localhost:3000 http://hub.localhost:3000
+    volumes:
+      - ./.data:/data:ro
+    ports:
+      - 127.0.0.1:4100:4100
+    healthcheck:
+      # Служебный хост отвечает только на свой Host — fetch его не даст подменить, поэтому http.get.
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          require('node:http').get({ port: 4100, path: '/healthz', headers: { Host: 'play.localhost' } },
+          (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  hub:
+    <<: *hardening
+    build: { context: ., target: hub }
+    environment:
+      GF_PLAY_PUBLIC_ORIGIN_TEMPLATE: http://{id}.play.localhost:4100
+    volumes:
+      - ./.data:/data:ro
+    tmpfs:
+      - /app/apps/hub/.next/cache
+    ports:
+      - 127.0.0.1:3000:3000
+    depends_on:
+      play:
+        condition: service_healthy

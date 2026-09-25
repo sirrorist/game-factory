@@ -1,0 +1,28 @@
+{
+  "$schema": "../../packages/manifest/game.schema.json",
+  "id": "three-3d",
+  "title": "Три полосы",
+  "version": "1.0.0",
+  "description": "Демо на Three.js: уворачивайся от блоков, перестраиваясь между тремя полосами. Эталон 3D-игры vite-ts, работает офлайн.",
+  "kind": "static",
+  "toolchain": "vite-ts",
+  "output": "dist",
+  "entry": "index.html",
+  "offline": true,
+  "permissions": [
+    "saves",
+    "leaderboard",
+    "fullscreen"
+  ],
+  "tags": [
+    "arcade",
+    "three",
+    "3d",
+    "keyboard",
+    "touch"
+  ],
+  "cover": "cover.svg",
+  "authors": [
+    "sirrorist"
+  ]
+}

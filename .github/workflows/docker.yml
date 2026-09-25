@@ -1,0 +1,28 @@
+name: Docker
+
+# Образы собираются, только когда меняется то, из чего они собираются: полная сборка
+# хаба в Docker — лишние минуты на каждый пуш (D-031). Вручную — кнопкой Run workflow.
+on:
+  push:
+    branches: [main]
+    paths: ["Dockerfile", "docker-compose.yml", ".dockerignore", "pnpm-lock.yaml", ".github/workflows/docker.yml"]
+  pull_request:
+    paths: ["Dockerfile", "docker-compose.yml", ".dockerignore", "pnpm-lock.yaml", ".github/workflows/docker.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: образы docker-compose
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - run: docker compose build

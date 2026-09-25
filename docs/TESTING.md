@@ -5,8 +5,8 @@
 ```bash
 pnpm typecheck    # tsc: ядро и тесты; отдельно SDK с --checkJs
 pnpm test         # юнит: node --test, ~1 с
-pnpm test:e2e     # браузер: Chromium через Playwright, ~15 с; нужны games:build и games:export
-pnpm check        # всё по порядку, как в CI
+pnpm test:e2e     # браузер: Chromium через Playwright, ~30 с; нужны games:build, games:export, hub:build
+pnpm check        # всё по порядку, как в CI (~50 с)
 ```
 
 Один файл или один тест:
@@ -23,19 +23,26 @@ node --test --test-name-pattern="обход пути" apps/play-server/test/serv
 | `packages/manifest/test/manifest.test.ts` | валидатор: id, версии, пути, права, офлайн, синхронность JSON Schema | 11 |
 | `tools/lib/zip.test.ts` | zip читается `unzip`, побайтно совпадает, детерминирован, опасные имена | 3 |
 | `tools/lib/files.test.ts` | обход дерева, отказ от скрытых файлов и симлинков, хеш | 3 |
-| `tools/gf.test.ts` | офлайн-проверка, неизменяемость версий, экспорт, ошибки CLI | 6 |
+| `tools/gf.test.ts` | офлайн-проверка, неизменяемость версий, экспорт, ошибки CLI, `gf new` | 7 |
+| `packages/vite-config/test/inline.test.ts` | офлайн-сборка: скрипт → классический в конце `body`, CSS встроен, `</script>` в коде экранирован | 3 |
+| `packages/hub-bridge/test/frame.test.ts` | права манифеста → `sandbox` и `allow` iframe; песочница без выхода наверх | 3 |
 | `apps/play-server/test/server.test.ts` | заголовки, ETag, методы, обход пути, симлинки, MIME, хосты, SW, архивы, обложки | 14 |
-| `tests/e2e/offline.test.ts` | архив через `file://`: запуск, игра до конца, рекорд после перезагрузки, SDK | 1 |
+| `tests/e2e/offline.test.ts` | архивы через `file://`: змейка до конца и рекорд после перезагрузки; Phaser и Three рисуют кадр, SDK в `standalone` | 3 |
 | `tests/e2e/hub-embed.test.ts` | протокол с эталонным хабом; кривые запросы; подделки; изоляция; `frame-ancestors` | 5 |
+| `tests/e2e/hub.test.ts` | настоящий хаб (`next start`): каталог и обложки; переход в игру; сохранения и рекорд для каждой игры; права → `allow`; песочница; `frame-ancestors 'none'` хаба; 404; «Скачать» → `file://` для каждой игры | 12 |
 
-Итого 37 юнит + 6 e2e (проверено: `pnpm check`, 2026-09-25).
+Итого 44 юнит + 20 e2e (проверено: `pnpm check` с чистого состояния, 2026-09-25).
+
+WebGL в безголовом Chromium — программный (SwiftShader), браузер запускается с
+`--enable-unsafe-swiftshader` (`launchBrowser` в `tests/e2e/helpers.ts`, П-023).
+Браузер можно подставить готовый: `GF_CHROMIUM_PATH=… pnpm test:e2e` (П-030).
 
 ## Эталонный хаб
 
 `tests/e2e/fixtures/mock-hub.html` — минимальный хаб: тот же iframe и тот же мост
 (`packages/hub-bridge`, TS отдаётся браузеру через `module.stripTypeScriptTypes`).
-Когда появится хаб на Next.js (этап 0б), e2e переключается на него, а эталон остаётся
-тестом протокола.
+Остаётся тестом протокола и подделок сообщений; игровые сценарии гоняются на настоящем
+хабе (`hub.test.ts`), который e2e поднимает из сборки `pnpm hub:build`.
 
 ## Правило негативных тестов: проверка мутацией
 
@@ -54,19 +61,29 @@ node --test --test-name-pattern="обход пути" apps/play-server/test/serv
 | CSP `frame-ancestors` | заменить на `*` | «чужой сайт не может встроить игру» | упал ✔ |
 | sandbox без `allow-top-navigation` | добавить `allow-top-navigation` | «игра не дотягивается до хаба» | упал ✔ |
 
+| Защита (этап 0б, настоящий хаб) | Мутация | Тест | Результат 2026-09-25 |
+|---|---|---|---|
+| `frameAttributes`: sandbox без выхода наверх | добавить `allow-top-navigation` + `pnpm hub:build` | «песочница настоящего хаба…» | упал ✔ |
+| `frameAttributes`: `allow` только по правам | всегда добавлять `fullscreen` + `pnpm hub:build` | «права манифеста…» | упал ✔ |
+| хаб: `frame-ancestors 'none'` | убрать из заголовка + `pnpm hub:build` | «хаб нельзя встроить…» | упал ✔ |
+| офлайн-тест «рисует кадр» не пустышка | закомментировать `renderer.render` в `three-3d` | «three-3d из архива…» | упал ✔ |
+
+После каждой мутации файл возвращён и сверен `cmp`, контрольный прогон — 15/15 зелёных.
+
 ## План проверок по этапам
 
 ### Этап 0а (сделано)
 - [x] `pnpm check` зелёный
 - [x] Мутации трёх защит ловятся
 - [x] Ручная: `pnpm play`, открыть `http://snake.play.localhost:4100/`, сыграть
-- [ ] CI зелёный на GitHub (после первого пуша)
+- [x] CI зелёный на GitHub (запуск #9)
 
 ### Этап 0б
-- [ ] e2e на настоящем хабе: каталог → игра → сохранение → рекорд виден в хабе
-- [ ] Скачивание архива из хаба → запуск через `file://` (для каждой офлайн-игры)
-- [ ] Phaser и Three: офлайн-сборка проходит `gf export` без ошибок и e2e через `file://`
-- [ ] Разрешения манифеста превращаются в атрибут `allow` у iframe (тест на `fullscreen`)
+- [x] e2e на настоящем хабе: каталог → игра → сохранение → рекорд виден в хабе
+- [x] Скачивание архива из хаба → запуск через `file://` (для каждой офлайн-игры)
+- [x] Phaser и Three: офлайн-сборка проходит `gf export` без ошибок и e2e через `file://`
+- [x] Разрешения манифеста превращаются в атрибут `allow` у iframe (тест на `fullscreen`)
+- [x] `docker compose up`: хаб и игры открываются (вручную, 2026-09-25, облачная среда)
 - [ ] Ручная: телефон (свайпы), Firefox, Safari — хотя бы один раз
 
 ### Этап 1
@@ -88,4 +105,5 @@ node --test --test-name-pattern="обход пути" apps/play-server/test/serv
 - Другие браузеры: e2e только в Chromium.
 - Реальные домены и HTTPS: всё проверено на `*.localhost` по HTTP.
 - Нагрузку и rate-limit моста (лимит есть в коде, отдельного теста нет).
-- CI ни разу не запускался (ждёт первого пуша).
+- Режим разработки хаба (`next dev`) и игр (`vite`) — только сборки; dev-сервер e2e не гоняет.
+- Образы Docker в CI только собираются, контейнеры там не запускаются.
