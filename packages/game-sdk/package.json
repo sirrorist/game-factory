@@ -1,0 +1,14 @@
+{
+  "name": "@gf/game-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./gf-sdk.js": "./gf-sdk.js"
+  },
+  "files": ["gf-sdk.js", "index.js", "index.d.ts"]
+}
