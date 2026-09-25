@@ -17,7 +17,7 @@
     "check": "pnpm typecheck && pnpm test && pnpm games:build && pnpm games:export && pnpm test:e2e"
   },
   "devDependencies": {
-    "@types/node": "^22.18.0",
+    "@types/node": "^26.6.2",
     "playwright": "1.56.1",
     "typescript": "^6.0.2"
   }
