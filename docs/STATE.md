@@ -9,7 +9,7 @@
 
 Этап **0а** - принят владельцем. Этап **0б** - сделан, **ждёт приёмки** на проде.
 Деплой по [`specs/deploy-vps.md`](specs/deploy-vps.md): разведка ✅, изменения в репозитории ✅,
-DNS ✅, **выкладка на сервер - не начата**.
+DNS ✅, **выкладка ✅ 2026-09-25** (`d381ef1`), таймер включён; сертификат `*.play` - П-037, приёмка - не закончена.
 В ROADMAP у 0б всё ещё ⛔ "registry.npmjs.org" - снять и сменить статус решает владелец.
 
 ## Что сделано в сессии №3
@@ -49,6 +49,21 @@ DNS ✅, **выкладка на сервер - не начата**.
 | `compose.prod.yml` | `docker compose config` | разбирается |
 | Агент и Docker | `id` | `git-worker` не в группе `docker` (П-036) |
 
+### Выкладка и приёмка на проде (2026-09-25)
+
+| Что | Как | Итог |
+|---|---|---|
+| CI, Docker, Publish на `d381ef1` | `gh run list` | все `success` |
+| Образы GHCR без токена | анонимный токен GHCR + манифест `:main` | 200 у `hub`, `play`, `games` |
+| Первая выкладка (владелец) | `gf-update --force` | 3 игры "опубликована", 3 архива; `play` healthy, `hub` Up |
+| Таймер | `systemctl list-timers`, `systemctl status gf-update.service` | следующий запуск через 5 мин; прогон по таймеру `status=0/SUCCESS` |
+| 1. Каталог | `curl https://games.youranus.ru/` | Змейка, Звездопад, Три полосы |
+| 3. Архивы | ссылки из хаба, `curl` | `play.youranus.ru/exports/<id>-1.0.0.zip`, 200 |
+| 4. Заголовки хаба | `curl -sI` | `frame-ancestors 'none'`, `nosniff`, HSTS 30 дней, `X-Powered-By` нет |
+| 5. Служебный хост | `curl` | `/index.html` 404, `/registry.json` 404, `/healthz` 200 |
+| 7. Порты | `ss -tlnH` | 4100 нет; `127.0.0.1:3000` - Grafana инфраструктуры, не наш |
+| 6. Сертификат `x.play` | `openssl s_client -servername snake.play…` | ❌ нет: `tlsv1 unrecognized name` - пара `play` + `*.play` в `dns01` висит (П-037), исправление - только `*.play` |
+
 ## Что НЕ проверено
 
 - Образы `hub`/`play`/`games` через Docker и `publish.yml` - Docker агенту на VPS-1 недоступен;
@@ -66,8 +81,8 @@ DNS ✅, **выкладка на сервер - не начата**.
 | Сервер | VPS-1 (`nx`), x86_64 → образы `linux/amd64` |
 | Веб-адрес | `2.26.198.231` (D-036); *** - `***`, `***` |
 | Traefik | 3.7.10, `/etc/docker/containers/traefik/`, сеть `traefik` |
-| Сертификаты | `gf-play`: `dns01` → `play.youranus.ru` + `*.play.youranus.ru`; `gf-hub`: `letsencrypt` (HTTP-01) |
-| Прод-конфиг | `/etc/docker/containers/game-factory/{compose.yml,.env}`, `/usr/local/sbin/gf-update` - **ещё не установлены** |
+| Сертификаты | `gf-play`: `dns01` → только `*.play.youranus.ru` (П-037); `play`, `games` - действующий `*.youranus.ru` |
+| Прод-конфиг | `/etc/docker/containers/game-factory/{compose.yml,.env}`, `/usr/local/sbin/gf-update` - установлены 2026-09-25 |
 | Данные | том `game-factory_gf-data`; в restic **не** входит (воспроизводим из образов) - записано в `infra-ctl` |
 
 ## Блокеры
@@ -76,11 +91,11 @@ DNS ✅, **выкладка на сервер - не начата**.
 
 ## Следующий шаг
 
-1. CI → Publish зелёные; пакеты GHCR сделать публичными, если создались приватными.
-2. Выкладка по блокам из `OPERATIONS.md` ("Изменил deploy/" - он же первая установка,
-   плюс `mkdir` каталога и `.env`), первый `gf-update --force`, затем
-   `systemctl enable --now gf-update.timer`.
-3. 10 критериев приёмки → записать сюда → владелец принимает 0б.
+1. П-037: пуш правки `compose.prod.yml` → переустановка копии (`OPERATIONS.md`, "Изменил deploy/")
+   → сертификат `*.play.youranus.ru` выдан (проверка `openssl s_client -servername snake.play…`).
+2. Остальные критерии: 2 (игра в хабе, рекорд), 4 (заголовки игры), 5 (`nope.play` 404,
+   `Service-Worker: script` 403), 8 (выкладка по пушу ≤ 10 мин), 9 (откат), 10 (неизменяемость).
+3. Владелец принимает 0б и решает про ⛔ в ROADMAP.
 
 ## Открытые вопросы к владельцу
 

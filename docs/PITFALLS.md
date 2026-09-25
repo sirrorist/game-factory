@@ -198,3 +198,11 @@ Compose подставляет переменные и в метках: `HostReg
 `git-worker` не в группе `docker` и без `root`: `docker ps`, `docker compose`, журнал
 `gf-update` - только блоком команд для владельца. Прод-образы агент локально не собирает;
 их проверяет `docker.yml` в CI.
+
+**П-037. Сертификат `play.youranus.ru` + `*.play.youranus.ru` не выпускается, `x.play` - `tlsv1 unrecognized name`.**
+Обе проверки DNS-01 пишут TXT в одно имя `_acme-challenge.play.youranus.ru` и требуют двух
+значений сразу. 2026-09-25 через 15 минут после `Obtaining bundled SAN certificate` на всех
+четырёх NS Timeweb было **одно** значение, lego ждал второе (таймаут распространения -
+30 минут), а Traefik при `sniStrict: true` рвал TLS для имён без сертификата. Обход: в
+`dns01` просить только `*.play.youranus.ru`; сам `play.youranus.ru` покрывает уже выпущенный
+`*.youranus.ru`. Правило: одно имя TXT - одно значение за выпуск.
