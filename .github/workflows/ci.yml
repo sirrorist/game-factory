@@ -50,7 +50,7 @@ jobs:
       - run: pnpm test:e2e
 
       - name: Офлайн-архивы игр
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: offline-games
           path: .data/storage/exports/*.zip
