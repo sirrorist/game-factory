@@ -1,9 +1,10 @@
-// gf — CLI фабрики игр. Без зависимостей, запускается node напрямую (type stripping).
+// gf - CLI фабрики игр. Без зависимостей, запускается node напрямую (type stripping).
 //
 //   node tools/gf.ts list                    игры в games/ и их статус
 //   node tools/gf.ts validate [id...]        проверить манифесты
-//   node tools/gf.ts build [id...] [--replace]
+//   node tools/gf.ts build [id...] [--replace] [--prebuilt]
 //                                            собрать и опубликовать в локальное хранилище
+//                                            (--prebuilt: сборка уже сделана, взять готовый output)
 //   node tools/gf.ts export [id...]          офлайн-архив для игр с offline: true
 //   node tools/gf.ts new <id>                новая игра из шаблона templates/vite-ts
 //
@@ -20,7 +21,7 @@ import { collectFiles, hashFiles, type GameFile } from './lib/files.ts';
 import { createZip } from './lib/zip.ts';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-// GF_GAMES_DIR — только для тестов CLI: чтобы `gf new` не мусорил в настоящих games/.
+// GF_GAMES_DIR - только для тестов CLI: чтобы `gf new` не мусорил в настоящих games/.
 const GAMES_DIR = process.env.GF_GAMES_DIR ?? join(REPO, 'games');
 const TEMPLATES_DIR = join(REPO, 'templates');
 const SDK_FILE = join(REPO, 'packages', 'game-sdk', 'gf-sdk.js');
@@ -74,14 +75,16 @@ function runBuildScript(game: LoadedGame): void {
   if (r.status !== 0) throw new CliError(`игра "${game.manifest.id}": сборка упала (код ${r.status ?? r.signal})`);
 }
 
-function gatherContent(game: LoadedGame): GameFile[] {
+function gatherContent(game: LoadedGame, prebuilt: boolean): GameFile[] {
   const { manifest } = game;
   switch (manifest.toolchain) {
     case 'static':
     case 'prebuilt':
       break;
     case 'vite-ts':
-      runBuildScript(game);
+      // Образ games собирает игры в CI, а на сервере только публикует: там нет ни pnpm,
+      // ни памяти на Vite (D-034). Неизменяемость версий проверяется так же.
+      if (!prebuilt) runBuildScript(game);
       break;
     default:
       throw new CliError(`игра "${manifest.id}": toolchain "${manifest.toolchain}" запланирован, но ещё не поддерживается (docs/ROADMAP.md)`);
@@ -119,7 +122,7 @@ function writeVersion(paths: DataPaths, manifest: GameManifest, files: GameFile[
   writeFileSync(paths.versionMeta(manifest.id, manifest.version), JSON.stringify({ hash, files: files.length, bytes }, null, 2) + '\n');
 }
 
-function build(ids: string[], replace: boolean): void {
+function build(ids: string[], replace: boolean, prebuilt: boolean): void {
   const paths = dataPaths(process.env.GF_DATA_DIR ?? join(REPO, '.data'));
   const registry = readRegistry(paths);
 
@@ -128,11 +131,11 @@ function build(ids: string[], replace: boolean): void {
     const { manifest } = game;
     for (const w of game.warnings) console.warn(`! ${name}: ${w}`);
     if (manifest.kind === 'server') {
-      console.warn(`- ${name}: kind "server" пропущен — серверные игры появятся на этапе 3`);
+      console.warn(`- ${name}: kind "server" пропущен - серверные игры появятся на этапе 3`);
       continue;
     }
 
-    const files = gatherContent(game);
+    const files = gatherContent(game, prebuilt);
     const hash = hashFiles(files);
     const bytes = files.reduce((s, f) => s + f.data.length, 0);
     const metaFile = paths.versionMeta(manifest.id, manifest.version);
@@ -185,12 +188,12 @@ export function offlineProblems(files: GameFile[]): { errors: string[]; warnings
     if (f.path.endsWith('.html')) {
       for (const tag of text.match(/<script\b[^>]*>/gi) ?? []) {
         if (/type\s*=\s*["']?module/i.test(tag) && /\bsrc\s*=/i.test(tag)) {
-          errors.push(`${f.path}: <script type="module" src=...> не грузится через file:// — нужна офлайн-сборка (один файл, классический скрипт)`);
+          errors.push(`${f.path}: <script type="module" src=...> не грузится через file:// - нужна офлайн-сборка (один файл, классический скрипт)`);
         }
       }
     }
     if (/\.(js|mjs)$/.test(f.path)) {
-      if (/\bfetch\s*\(/.test(text)) warnings.push(`${f.path}: fetch() не работает через file:// — проверь, что он не нужен для запуска`);
+      if (/\bfetch\s*\(/.test(text)) warnings.push(`${f.path}: fetch() не работает через file:// - проверь, что он не нужен для запуска`);
       if (/\bimport\s*\(/.test(text)) warnings.push(`${f.path}: динамический import() не работает через file://`);
     }
   }
@@ -216,9 +219,9 @@ function exportGames(ids: string[]): void {
   for (const id of targets) {
     const entry = registry.games.find((g) => g.id === id);
     if (!entry) throw new CliError(`игра "${id}" не опубликована: сначала gf build ${id}`);
-    if (!entry.manifest.offline) throw new CliError(`игра "${id}": offline: false — офлайн-архив для неё не делается`);
+    if (!entry.manifest.offline) throw new CliError(`игра "${id}": offline: false - офлайн-архив для неё не делается`);
     if (entry.manifest.entry !== 'index.html') {
-      throw new CliError(`игра "${id}": для офлайн-архива вход должен быть index.html в корне — человек будет искать именно его`);
+      throw new CliError(`игра "${id}": для офлайн-архива вход должен быть index.html в корне - человек будет искать именно его`);
     }
 
     const files = collectFiles(paths.versionDir(entry.id, entry.version));
@@ -244,7 +247,7 @@ function exportGames(ids: string[]): void {
   writeRegistry(paths, registry);
 }
 
-/** Новая игра из шаблона: копия без node_modules и сборки, id и название — свои. */
+/** Новая игра из шаблона: копия без node_modules и сборки, id и название - свои. */
 function newGame(ids: string[]): void {
   const [id, ...extra] = ids;
   if (!id || extra.length > 0) throw new CliError('нужен ровно один id: gf new <id>');
@@ -313,7 +316,7 @@ function main(argv: string[]): void {
   const [command, ...rest] = argv;
   const flags = new Set(rest.filter((a) => a.startsWith('--')));
   const ids = rest.filter((a) => !a.startsWith('--'));
-  for (const f of flags) if (f !== '--replace') throw new CliError(`неизвестный флаг ${f}`);
+  for (const f of flags) if (f !== '--replace' && f !== '--prebuilt') throw new CliError(`неизвестный флаг ${f}`);
 
   switch (command) {
     case 'list':
@@ -321,13 +324,13 @@ function main(argv: string[]): void {
     case 'validate':
       return validate(ids);
     case 'build':
-      return build(ids, flags.has('--replace'));
+      return build(ids, flags.has('--replace'), flags.has('--prebuilt'));
     case 'export':
       return exportGames(ids);
     case 'new':
       return newGame(ids);
     default:
-      throw new CliError('команды: list, validate [id...], build [id...] [--replace], export [id...], new <id>');
+      throw new CliError('команды: list, validate [id...], build [id...] [--replace] [--prebuilt], export [id...], new <id>');
   }
 }
 

@@ -1,13 +1,13 @@
 name: Docker
 
 # Образы собираются, только когда меняется то, из чего они собираются: полная сборка
-# хаба в Docker — лишние минуты на каждый пуш (D-031). Вручную — кнопкой Run workflow.
+# хаба в Docker - лишние минуты на каждый пуш (D-031). Вручную - кнопкой Run workflow.
 on:
   push:
     branches: [main]
-    paths: ["Dockerfile", "docker-compose.yml", ".dockerignore", "pnpm-lock.yaml", ".github/workflows/docker.yml"]
+    paths: ["Dockerfile", "docker-compose.yml", ".dockerignore", "pnpm-lock.yaml", "deploy/**", ".github/workflows/docker.yml"]
   pull_request:
-    paths: ["Dockerfile", "docker-compose.yml", ".dockerignore", "pnpm-lock.yaml", ".github/workflows/docker.yml"]
+    paths: ["Dockerfile", "docker-compose.yml", ".dockerignore", "pnpm-lock.yaml", "deploy/**", ".github/workflows/docker.yml"]
   workflow_dispatch:
 
 permissions:
@@ -19,10 +19,23 @@ concurrency:
 
 jobs:
   build:
-    name: образы docker-compose
+    name: образы docker-compose и games
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 
       - run: docker compose build
+
+      - name: compose.prod.yml разбирается
+        run: GF_IMAGE_TAG=ci docker compose -f deploy/compose.prod.yml --profile publish config --quiet
+
+      # Публикатор прода: второй прогон в тот же том - "без изменений", а не отказ (D-034).
+      - name: образ games публикует и не ломает неизменяемость
+        run: |
+          docker build --target games -t gf-games .
+          docker volume create gf-data-ci
+          docker run --rm --read-only -v gf-data-ci:/data gf-games
+          docker run --rm --read-only -v gf-data-ci:/data gf-games | tee second.log
+          grep -q 'без изменений' second.log
+          ! grep -q 'опубликована' second.log

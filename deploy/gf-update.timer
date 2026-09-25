@@ -1,0 +1,10 @@
+[Unit]
+Description=Game Factory: проверка новых образов раз в 5 минут
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30s
+
+[Install]
+WantedBy=timers.target

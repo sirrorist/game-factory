@@ -1,0 +1,99 @@
+# Прод на VPS-1 за Traefik владельца (D-033, D-034). Руководство - docs/OPERATIONS.md.
+#
+# На сервере этот файл лежит копией root: /etc/docker/containers/game-factory/compose.yml,
+# рядом .env с GF_IMAGE_TAG. Не из рабочей копии репозитория: root запускает compose,
+# а файл, который правит обычный пользователь, дал бы ему root (D-035).
+#
+#   docker compose run --rm games     # публикация игр в том gf-data
+#   docker compose up -d hub play
+#
+# Домены вписаны прямо в метки: HostRegexp не собрать из переменной. Новый домен (D-010) -
+# правка этого файла.
+
+name: game-factory
+
+x-hardening: &hardening
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  logging:
+    driver: json-file
+    options: { max-size: 10m, max-file: "3" }
+
+services:
+  # Одноразовый: сборка игр уже в образе (CI), здесь - публикация и архивы.
+  games:
+    <<: *hardening
+    image: ghcr.io/sirrorist/game-factory-games:${GF_IMAGE_TAG:?GF_IMAGE_TAG в .env}
+    profiles: [publish]
+    network_mode: none
+    mem_limit: 256m
+    volumes:
+      - gf-data:/data
+
+  play:
+    <<: *hardening
+    image: ghcr.io/sirrorist/game-factory-play:${GF_IMAGE_TAG:?GF_IMAGE_TAG в .env}
+    restart: unless-stopped
+    mem_limit: 128m
+    environment:
+      GF_PLAY_BASE_HOST: play.youranus.ru
+      # Только хаб в проде: localhost здесь - дыра в frame-ancestors.
+      GF_HUB_ORIGINS: https://games.youranus.ru
+    volumes:
+      - gf-data:/data:ro
+    networks: [traefik]
+    healthcheck:
+      # Служебный хост отвечает только на свой Host - fetch его не даст подменить, поэтому http.get.
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          require('node:http').get({ port: 4100, path: '/healthz', headers: { Host: process.env.GF_PLAY_BASE_HOST } },
+          (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: traefik
+      # $$ - экранирование для compose, Traefik получит один $.
+      traefik.http.routers.gf-play.rule: 'Host(`play.youranus.ru`) || HostRegexp(`^[a-z0-9-]+\.play\.youranus\.ru$$`)'
+      traefik.http.routers.gf-play.entrypoints: websecure
+      # *.play.youranus.ru не покрыт *.youranus.ru (П-004), wildcard - только DNS-01.
+      traefik.http.routers.gf-play.tls.certresolver: dns01
+      traefik.http.routers.gf-play.tls.domains[0].main: play.youranus.ru
+      traefik.http.routers.gf-play.tls.domains[0].sans: '*.play.youranus.ru'
+      traefik.http.services.gf-play.loadbalancer.server.port: "4100"
+
+  hub:
+    <<: *hardening
+    image: ghcr.io/sirrorist/game-factory-hub:${GF_IMAGE_TAG:?GF_IMAGE_TAG в .env}
+    restart: unless-stopped
+    mem_limit: 384m
+    environment:
+      GF_PLAY_PUBLIC_ORIGIN_TEMPLATE: https://{id}.play.youranus.ru
+    volumes:
+      - gf-data:/data:ro
+    tmpfs:
+      - /app/apps/hub/.next/cache
+    networks: [traefik]
+    depends_on:
+      play:
+        condition: service_healthy
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: traefik
+      traefik.http.routers.gf-hub.rule: 'Host(`games.youranus.ru`)'
+      traefik.http.routers.gf-hub.entrypoints: websecure
+      traefik.http.routers.gf-hub.tls.certresolver: letsencrypt
+      traefik.http.services.gf-hub.loadbalancer.server.port: "3000"
+
+volumes:
+  # Постоянный: в нём история опубликованных версий, на ней держится неизменяемость.
+  gf-data:
+
+networks:
+  traefik:
+    external: true

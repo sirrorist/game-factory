@@ -1,0 +1,62 @@
+name: Publish
+
+# Образы для прода - только после зелёного CI на main (D-034). CI не гоняется на правки
+# одной документации (D-031), значит и публикации на них нет. Вручную - Run workflow.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  images:
+    name: образы в GHCR
+    # workflow_run приходит и на красный CI, и на CI из PR-веток форков - отсекаем.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        target: [hub, play, games]
+    steps:
+      # Ровно тот коммит, что прошёл CI, а не текущая голова main.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          # VPS-1 - x86_64 (разведка 2026-09-25).
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/sirrorist/game-factory-${{ matrix.target }}:${{ github.event.workflow_run.head_sha || github.sha }}
+            ghcr.io/sirrorist/game-factory-${{ matrix.target }}:main
+          labels: |
+            org.opencontainers.image.source=https://github.com/sirrorist/game-factory
+            org.opencontainers.image.revision=${{ github.event.workflow_run.head_sha || github.sha }}
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { offlineProblems } from './gf.ts';
@@ -39,7 +39,7 @@ test('build: опубликованная версия неизменяема', 
   assert.equal(again.status, 0, again.stderr);
   assert.match(again.stdout, /без изменений/);
 
-  // Подменяем опубликованные файлы — хеш в meta уже не совпадёт с тем, что соберётся.
+  // Подменяем опубликованные файлы - хеш в meta уже не совпадёт с тем, что соберётся.
   const meta = join(data, 'storage/games/snake/1.0.0.meta.json');
   const m = JSON.parse(readFileSync(meta, 'utf8'));
   writeFileSync(meta, JSON.stringify({ ...m, hash: 'другой' }));
@@ -57,12 +57,31 @@ test('export: архив появляется в реестре', () => {
   assert.equal(registry.games[0].export.file, 'snake-1.0.0.zip');
 });
 
-test('неизвестная игра и флаг — понятная ошибка', () => {
+test('неизвестная игра и флаг - понятная ошибка', () => {
   const data = mkdtempSync(join(tmpdir(), 'gf-data-'));
   assert.match(gf(['build', 'nope'], { GF_DATA_DIR: data }).stderr, /не найдена/);
   assert.match(gf(['build', '--force'], { GF_DATA_DIR: data }).stderr, /неизвестный флаг/);
 });
 
+
+test('build --prebuilt: берёт готовый output и не запускает сборку', () => {
+  const games = mkdtempSync(join(tmpdir(), 'gf-games-'));
+  const data = mkdtempSync(join(tmpdir(), 'gf-data-'));
+  assert.equal(gf(['new', 'ready'], { GF_GAMES_DIR: games }).status, 0);
+  const env = { GF_GAMES_DIR: games, GF_DATA_DIR: data };
+
+  // Сборки нет, а запускать её нельзя: ошибка про папку, а не падение pnpm.
+  const missing = gf(['build', 'ready', '--prebuilt'], env);
+  assert.equal(missing.status, 1);
+  assert.match(missing.stderr, /нет папки/);
+
+  mkdirSync(join(games, 'ready/dist'));
+  writeFileSync(join(games, 'ready/dist/index.html'), '<!doctype html><title>ready</title>');
+  writeFileSync(join(games, 'ready/dist/cover.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+  const r = gf(['build', 'ready', '--prebuilt'], env);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /ready@0\.1\.0: опубликована/);
+});
 
 test('new: игра из шаблона vite-ts проходит проверку манифеста', () => {
   const games = mkdtempSync(join(tmpdir(), 'gf-games-'));
