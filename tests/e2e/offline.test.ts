@@ -27,6 +27,11 @@ after(() => browser?.close());
 test('змейка из архива запускается через file:// и сохраняет рекорд', async () => {
   const context = await browser.newContext();
   const page = await context.newPage();
+  // Еда появляется случайно; попади она на путь змейки — счёт будет не 0 (так упал CI #1).
+  // Math.random = 0 кладёт еду в клетку (0,0), в стороне от пути по строке 10.
+  await page.addInitScript(() => {
+    Math.random = () => 0;
+  });
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => {
