@@ -14,6 +14,7 @@
 | Прод-конфиг на сервере | `/etc/docker/containers/game-factory/compose.yml` + `.env` (владелец `root`) |
 | Скрипт выкладки | `/usr/local/sbin/gf-update` (копия `deploy/update.sh`, владелец `root`) |
 | Таймер | `gf-update.timer` → `gf-update.service`, раз в 5 минут |
+| Сеть | `gf-edge` - внутренняя, только наши контейнеры и Traefik (D-038); создаётся владельцем один раз |
 | Данные | том Docker `game-factory_gf-data`: опубликованные версии игр, архивы, `registry.json` |
 | Адреса | хаб `https://games.youranus.ru`, игры `https://<id>.play.youranus.ru`, служебный `https://play.youranus.ru` |
 | Сервер | VPS-1, адрес для веба `2.26.198.231` (отдельно от адресов ***, D-036) |

@@ -62,7 +62,16 @@ DNS ✅, **выкладка ✅ 2026-09-25** (`d381ef1`), таймер вклю�
 | 4. Заголовки хаба | `curl -sI` | `frame-ancestors 'none'`, `nosniff`, HSTS 30 дней, `X-Powered-By` нет |
 | 5. Служебный хост | `curl` | `/index.html` 404, `/registry.json` 404, `/healthz` 200 |
 | 7. Порты | `ss -tlnH` | 4100 нет; `127.0.0.1:3000` - Grafana инфраструктуры, не наш |
-| 6. Сертификат `x.play` | `openssl s_client -servername snake.play…` | ❌ нет: `tlsv1 unrecognized name` - пара `play` + `*.play` в `dns01` висит (П-037), исправление - только `*.play` |
+| 6. Сертификат `x.play` | `openssl s_client -servername snake.play…` | ✅ `*.play.youranus.ru` + `play.youranus.ru`, Let's Encrypt YR2, до 2026-12-24; выпуск занял ~55 мин (П-037) |
+
+### Аудит "из веба в Docker" (2026-09-25)
+
+| Что | Как | Итог |
+|---|---|---|
+| Docker API снаружи | `ss -tlnH` | `2375`/`2376` на хосте не слушаются |
+| `***` | compose Traefik, `docker network inspect ***` (владелец) | только `traefik` и `***`; из хаба имя не резолвится |
+| Соседи по сети `traefik` | `docker network inspect traefik` (владелец) | бот ***, ***, ***, ***, ***, *** + наши |
+| Досягаемость из хаба | `docker exec game-factory-hub-1 node -e net.connect…` (владелец) | **открыты** `***:80`, `***:80`, хост `22`, `***`, интернет `1.1.1.1:443`; `9100` - таймаут → D-038 |
 
 ## Что НЕ проверено
 

@@ -29,7 +29,7 @@ DNS зоны `youranus.ru` - у Timeweb, записи заводятся чер�
   REG.RU, Selectel, Yandex Cloud DNS.
 - ✅ Зона у **Timeweb**, API есть; в Traefik владельца уже заведён резолвер `dns01`
   (`provider: timewebcloud`, токен - файлом). Роутер `gf-play` просит у него
-  только `*.play.youranus.ru` (П-037), `play.youranus.ru` покрыт действующим `*.youranus.ru`; `games.youranus.ru` - обычный HTTP-01
+  только `*.play.youranus.ru`, `play.youranus.ru` покрыт действующим `*.youranus.ru`; первый выпуск у Timeweb - около часа (П-037); `games.youranus.ru` - обычный HTTP-01
   (резолвер `letsencrypt`).
 - Токен API DNS - секрет: лежит на сервере у root, в репозиторий и в командную строку
   не попадает (правило кита).

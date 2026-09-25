@@ -42,7 +42,7 @@ services:
       GF_HUB_ORIGINS: https://games.youranus.ru
     volumes:
       - gf-data:/data:ro
-    networks: [traefik]
+    networks: [gf-edge]
     healthcheck:
       # Служебный хост отвечает только на свой Host - fetch его не даст подменить, поэтому http.get.
       test:
@@ -57,13 +57,13 @@ services:
       retries: 3
     labels:
       traefik.enable: "true"
-      traefik.docker.network: traefik
+      traefik.docker.network: gf-edge
       # $$ - экранирование для compose, Traefik получит один $.
       traefik.http.routers.gf-play.rule: 'Host(`play.youranus.ru`) || HostRegexp(`^[a-z0-9-]+\.play\.youranus\.ru$$`)'
       traefik.http.routers.gf-play.entrypoints: websecure
       # *.play.youranus.ru не покрыт *.youranus.ru (П-004), wildcard - только DNS-01.
-      # Только wildcard: play.youranus.ru уже покрыт *.youranus.ru, а пара play + *.play
-      # требует двух TXT под одним именем - у Timeweb выпуск на этом висит (П-037).
+      # Только wildcard: play.youranus.ru уже покрыт *.youranus.ru, одно значение TXT
+      # вместо двух - у Timeweb выпуск и так идёт около часа (П-037).
       traefik.http.routers.gf-play.tls.certresolver: dns01
       traefik.http.routers.gf-play.tls.domains[0].main: '*.play.youranus.ru'
       traefik.http.services.gf-play.loadbalancer.server.port: "4100"
@@ -79,13 +79,13 @@ services:
       - gf-data:/data:ro
     tmpfs:
       - /app/apps/hub/.next/cache
-    networks: [traefik]
+    networks: [gf-edge]
     depends_on:
       play:
         condition: service_healthy
     labels:
       traefik.enable: "true"
-      traefik.docker.network: traefik
+      traefik.docker.network: gf-edge
       traefik.http.routers.gf-hub.rule: 'Host(`games.youranus.ru`)'
       traefik.http.routers.gf-hub.entrypoints: websecure
       traefik.http.routers.gf-hub.tls.certresolver: letsencrypt
@@ -96,5 +96,8 @@ volumes:
   gf-data:
 
 networks:
-  traefik:
+  # Своя внутренняя сеть, общая только с Traefik (D-038): без интернета и без соседей
+  # по сети traefik (***, ***, бот). Создаётся владельцем:
+  #   docker network create --internal gf-edge && docker network connect gf-edge traefik
+  gf-edge:
     external: true
