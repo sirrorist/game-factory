@@ -61,6 +61,9 @@ test('каталог показывает все игры с обложками 
   for (const id of GAMES) {
     const card = page.locator(`[data-game-id="${id}"]`);
     assert.equal(await card.getByTestId('download').count(), 1, `${id}: нет кнопки "Скачать"`);
+    // Версия в адресе обложки - ключ её долгого кеша на сервере игр.
+    const src = await card.locator('img').getAttribute('src');
+    assert.equal(src, `http://play.localhost:${play.port}/covers/${id}?v=${gameVersion(id)}`);
     // Обложка пришла со служебного хоста игр и декодировалась.
     const loaded = await card.locator('img').evaluate(async (img: HTMLImageElement) => {
       await img.decode().catch(() => undefined);

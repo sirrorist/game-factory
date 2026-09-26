@@ -17,7 +17,10 @@ function toCatalogGame(entry: RegistryEntry): CatalogGame {
   return {
     entry,
     gameOrigin: cfg.gameOrigin(entry.id),
-    coverUrl: manifest.cover ? `${cfg.playRootOrigin}/covers/${entry.id}` : null,
+    // Версия в адресе даёт обложке долгий кеш на сервере игр (server.ts, serveRoot).
+    coverUrl: manifest.cover
+      ? `${cfg.playRootOrigin}/covers/${entry.id}?v=${encodeURIComponent(entry.version)}`
+      : null,
     download:
       manifest.offline && entry.export
         ? { url: `${cfg.playRootOrigin}/exports/${encodeURIComponent(entry.export.file)}`, bytes: entry.export.bytes }

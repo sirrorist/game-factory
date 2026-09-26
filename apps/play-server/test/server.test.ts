@@ -151,6 +151,26 @@ test('служебный хост: обложка с sandbox-CSP', async () => {
   assert.equal(r.headers['cross-origin-resource-policy'], 'cross-origin');
 });
 
+test('служебный хост: обложка кешируется надолго только с текущей версией в адресе', async () => {
+  const current = await get('play.test', '/covers/snake?v=1.0.0');
+  assert.equal(current.status, 200);
+  assert.equal(current.headers['cache-control'], 'public, max-age=31536000, immutable');
+  assert.match(String(current.headers['content-security-policy'] ?? ''), /sandbox/);
+
+  // Без версии и со старой - только с проверкой: иначе адрес надолго запомнит не те байты.
+  for (const path of ['/covers/snake', '/covers/snake?v=0.9.0']) {
+    const r = await get('play.test', path);
+    assert.equal(r.status, 200);
+    assert.equal(r.headers['cache-control'], 'no-cache', path);
+    assert.equal(r.headers.etag, current.headers.etag, path);
+  }
+
+  const again = await get('play.test', '/covers/snake', { headers: { 'If-None-Match': String(current.headers.etag) } });
+  assert.equal(again.status, 304);
+  assert.equal(again.body, '');
+  assert.match(String(again.headers['content-security-policy'] ?? ''), /sandbox/);
+});
+
 test('служебный хост не отдаёт файлы игр', async () => {
   assert.equal((await get('play.test', '/storage/games/snake/1.0.0/index.html')).status, 404);
   assert.equal((await get('play.test', '/registry.json')).status, 404);

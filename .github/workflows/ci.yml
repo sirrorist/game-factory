@@ -1,9 +1,10 @@
 name: CI
 
 # Правки только документации CI не гоняют - минуты не бесплатные (D-031).
+# dev - рабочая ветка, main - прод: CI на обеих, образы в прод - только с main (D-042).
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     paths-ignore: ["docs/**", "**/*.md"]
   pull_request:
     paths-ignore: ["docs/**", "**/*.md"]

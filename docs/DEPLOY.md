@@ -36,7 +36,7 @@ DNS зоны `youranus.ru` - у Timeweb, записи заводятся чер�
 
 ## CI (GitHub Actions)
 
-`.github/workflows/ci.yml`, на пуш в `main` и на PR:
+`.github/workflows/ci.yml`, на пуш в `dev` и `main` и на PR (публикация в прод - только с `main`, D-042):
 
 Задача `check`:
 

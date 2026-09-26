@@ -1,8 +1,10 @@
 version: 2
 # Раз в месяц и пачками: каждый PR — это прогон CI, а минуты CI не бесплатные (D-031).
 updates:
+  # Обновления идут в dev, как любая работа; в main (прод) - вместе с очередным слиянием (D-042).
   - package-ecosystem: github-actions
     directory: /
+    target-branch: dev
     schedule:
       interval: monthly
     groups:
@@ -10,6 +12,7 @@ updates:
         patterns: ["*"]
   - package-ecosystem: npm
     directory: /
+    target-branch: dev
     schedule:
       interval: monthly
     open-pull-requests-limit: 5

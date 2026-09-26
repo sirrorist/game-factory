@@ -174,13 +174,26 @@ export function createPlayServer(config: PlayConfig): Server {
       const mime = mimeFor(cover);
       const file = safeFile(paths.versionDir(entry.id, entry.version), cover);
       if (!file || !mime?.startsWith('image/')) return send(res, 404, 'обложки нет', base);
-      // Обложку показывает хаб с другого origin — отсюда cross-origin.
-      return streamFile(req, res, file, {
+      // Хаб просит обложку с ?v=<version>: версия неизменяема, значит и адрес с ней
+      // навсегда значит одни и те же байты - браузер может не спрашивать год.
+      // Без версии или со старой (хаб ещё не видел новый реестр) - только с проверкой,
+      // иначе под старым адресом надолго застрянет чужое содержимое.
+      const v = new URL(req.url ?? '/', 'http://x').searchParams.get('v');
+      const etag = `"${entry.hash.slice(0, 16)}-cover"`;
+      // Обложку показывает хаб с другого origin - отсюда cross-origin.
+      const headers = {
         ...base,
         'Content-Type': mime,
-        'Cache-Control': 'no-cache',
+        'Cache-Control': v === entry.version ? 'public, max-age=31536000, immutable' : 'no-cache',
+        ETag: etag,
         'Cross-Origin-Resource-Policy': 'cross-origin',
-      });
+      };
+      if (req.headers['if-none-match'] === etag) {
+        res.writeHead(304, headers);
+        res.end();
+        return;
+      }
+      return streamFile(req, res, file, headers);
     }
 
     return send(res, 404, 'не найдено', base);

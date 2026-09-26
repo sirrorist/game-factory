@@ -34,6 +34,7 @@
 | `Referrer-Policy: no-referrer`, COOP `same-origin`, CORP `same-origin` | ✅ | `server.test.ts` |
 | Service Worker запрещён (403 на `Service-Worker: script`) | ✅ | `server.test.ts`, D-018 |
 | Обложки (SVG) со служебного хоста - CSP `sandbox` | ✅ | `server.test.ts` |
+| Долгий кеш обложки (`immutable`, год) - только при `?v=` = текущей версии; иначе `no-cache` + `ETag`. Снятая или заменённая версия не залипает в кеше под адресом без версии (D-041) | ✅ | `server.test.ts` (мутации проверены), e2e адрес в хабе |
 | Метаданные игры (название, описание) санитизируются в хабе | 🔜 этап 0б | React экранирует; markdown не рендерить без санитайзера |
 
 ## Протокол хаб ↔ игра

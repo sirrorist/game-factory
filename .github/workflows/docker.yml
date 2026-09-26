@@ -4,7 +4,7 @@ name: Docker
 # хаба в Docker - лишние минуты на каждый пуш (D-031). Вручную - кнопкой Run workflow.
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     paths: ["Dockerfile", "docker-compose.yml", ".dockerignore", "pnpm-lock.yaml", "deploy/**", ".github/workflows/docker.yml"]
   pull_request:
     paths: ["Dockerfile", "docker-compose.yml", ".dockerignore", "pnpm-lock.yaml", "deploy/**", ".github/workflows/docker.yml"]

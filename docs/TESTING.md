@@ -23,15 +23,15 @@ node --test --test-name-pattern="обход пути" apps/play-server/test/serv
 | `packages/manifest/test/manifest.test.ts` | валидатор: id, версии, пути, права, офлайн, синхронность JSON Schema | 11 |
 | `tools/lib/zip.test.ts` | zip читается `unzip`, побайтно совпадает, детерминирован, опасные имена | 3 |
 | `tools/lib/files.test.ts` | обход дерева, отказ от скрытых файлов и симлинков, хеш | 3 |
-| `tools/gf.test.ts` | офлайн-проверка, неизменяемость версий, экспорт, ошибки CLI, `gf new` | 7 |
+| `tools/gf.test.ts` | офлайн-проверка, неизменяемость версий, экспорт, ошибки CLI, `gf new`, `--prebuilt` | 8 |
 | `packages/vite-config/test/inline.test.ts` | офлайн-сборка: скрипт → классический в конце `body`, CSS встроен, `</script>` в коде экранирован | 3 |
 | `packages/hub-bridge/test/frame.test.ts` | права манифеста → `sandbox` и `allow` iframe; песочница без выхода наверх | 3 |
-| `apps/play-server/test/server.test.ts` | заголовки, ETag, методы, обход пути, симлинки, MIME, хосты, SW, архивы, обложки | 14 |
+| `apps/play-server/test/server.test.ts` | заголовки, ETag, методы, обход пути, симлинки, MIME, хосты, SW, архивы, обложки и их кеш по версии в адресе | 15 |
 | `tests/e2e/offline.test.ts` | архивы через `file://`: змейка до конца и рекорд после перезагрузки; Phaser и Three рисуют кадр, SDK в `standalone` | 3 |
 | `tests/e2e/hub-embed.test.ts` | протокол с эталонным хабом; кривые запросы; подделки; изоляция; `frame-ancestors` | 5 |
 | `tests/e2e/hub.test.ts` | настоящий хаб (`next start`): каталог и обложки; переход в игру; сохранения и рекорд для каждой игры; права → `allow`; песочница; `frame-ancestors 'none'` хаба; 404; «Скачать» → `file://` для каждой игры | 12 |
 
-Итого 44 юнит + 20 e2e (проверено: `pnpm check` с чистого состояния, 2026-09-25).
+Итого 46 юнит + 20 e2e (проверено: `pnpm check`, 2026-09-26, сессия №4).
 
 WebGL в безголовом Chromium — программный (SwiftShader), браузер запускается с
 `--enable-unsafe-swiftshader` (`launchBrowser` в `tests/e2e/helpers.ts`, П-023).
