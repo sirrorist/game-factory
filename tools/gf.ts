@@ -7,6 +7,8 @@
 //                                            (--prebuilt: сборка уже сделана, взять готовый output)
 //   node tools/gf.ts export [id...]          офлайн-архив для игр с offline: true
 //   node tools/gf.ts new <id>                новая игра из шаблона templates/vite-ts
+//   node tools/gf.ts check-prod              та же version, что на проде, - то же содержимое?
+//                                            (GF_PROD_GAME_URL, например https://{id}.play.example.ru/)
 //
 // Данные пишутся в GF_DATA_DIR (по умолчанию .data).
 
@@ -16,7 +18,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, r
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { contentDir, ID_RE, RESERVED_IDS, validateManifest, type GameManifest } from '../packages/manifest/src/index.ts';
-import { dataPaths, readRegistry, writeRegistry, type DataPaths, type RegistryEntry } from '../packages/registry/src/index.ts';
+import { contentTag, dataPaths, readRegistry, writeRegistry, type DataPaths, type RegistryEntry } from '../packages/registry/src/index.ts';
 import { collectFiles, hashFiles, type GameFile } from './lib/files.ts';
 import { createZip } from './lib/zip.ts';
 
@@ -284,6 +286,58 @@ function newGame(ids: string[]): void {
   console.log(`✓ ${target}\n  дальше: pnpm install, поправить title в game.json, pnpm games:build ${id}`);
 }
 
+/**
+ * Сверка собранных игр с продом: та же version с другим содержимым прод публиковать
+ * откажется (неизменяемость), и выкладка встанет молча (П-034). Здесь это видно сразу.
+ * Прод отдаёт метку содержимого в ETag файла игры, а id@version - в X-GF-Game.
+ */
+async function checkProd(): Promise<void> {
+  const template = process.env.GF_PROD_GAME_URL;
+  if (!template?.includes('{id}')) {
+    throw new CliError('нужен GF_PROD_GAME_URL с {id}, например https://{id}.play.example.ru/');
+  }
+  const registry = readRegistry(dataPaths(process.env.GF_DATA_DIR ?? join(REPO, '.data')));
+  if (registry.games.length === 0) throw new CliError('нечего сверять: сначала gf build');
+
+  const stale: string[] = [];
+  for (const entry of registry.games) {
+    const name = `${entry.id}@${entry.version}`;
+    let res: Response;
+    try {
+      res = await fetch(template.replaceAll('{id}', entry.id), { method: 'HEAD', redirect: 'manual', signal: AbortSignal.timeout(15_000) });
+    } catch (e) {
+      // Недоступный прод - не повод держать CI красным: сверка лишь подсказка к П-034.
+      console.warn(`! ${name}: прод не ответил (${(e as Error).message}) - сверка пропущена`);
+      continue;
+    }
+    if (res.status === 404) {
+      console.log(`- ${name}: на проде нет - новая игра`);
+      continue;
+    }
+    const published = res.headers.get('x-gf-game');
+    const tag = /^"([0-9a-f]{16})-/.exec(res.headers.get('etag') ?? '')?.[1];
+    if (res.status !== 200 || !published || !tag) {
+      console.warn(`! ${name}: прод ответил ${res.status} без метки версии - сверка пропущена`);
+      continue;
+    }
+    if (published !== name) {
+      console.log(`✓ ${name}: на проде ${published} - новая версия`);
+    } else if (tag === contentTag(entry)) {
+      console.log(`✓ ${name}: совпадает с продом`);
+    } else {
+      stale.push(entry.id);
+      console.error(`✗ ${name}: на проде та же версия с другим содержимым`);
+    }
+  }
+  if (stale.length > 0) {
+    throw new CliError(
+      `содержимое изменилось без смены version: ${stale.join(', ')}.\n` +
+        '  Прод такую сборку не опубликует, выкладка встанет (П-034).\n' +
+        '  Подними "version" в game.json этих игр - в этом же коммите.',
+    );
+  }
+}
+
 function list(): void {
   const names = listGameDirs();
   if (names.length === 0) console.log('в games/ нет игр');
@@ -312,7 +366,7 @@ function validate(ids: string[]): void {
   if (failed > 0) throw new CliError(`невалидных манифестов: ${failed}`);
 }
 
-function main(argv: string[]): void {
+function main(argv: string[]): void | Promise<void> {
   const [command, ...rest] = argv;
   const flags = new Set(rest.filter((a) => a.startsWith('--')));
   const ids = rest.filter((a) => !a.startsWith('--'));
@@ -329,14 +383,16 @@ function main(argv: string[]): void {
       return exportGames(ids);
     case 'new':
       return newGame(ids);
+    case 'check-prod':
+      return checkProd();
     default:
-      throw new CliError('команды: list, validate [id...], build [id...] [--replace] [--prebuilt], export [id...], new <id>');
+      throw new CliError('команды: list, validate [id...], build [id...] [--replace] [--prebuilt], export [id...], new <id>, check-prod');
   }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
-    main(process.argv.slice(2));
+    await main(process.argv.slice(2));
   } catch (e) {
     if (e instanceof CliError) {
       console.error(`gf: ${e.message}`);

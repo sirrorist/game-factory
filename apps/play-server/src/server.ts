@@ -9,7 +9,7 @@ import { createReadStream, lstatSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { join, resolve, sep } from 'node:path';
 import { isSafeRelativePath } from '../../../packages/manifest/src/index.ts';
-import { createRegistryReader, dataPaths, type RegistryEntry } from '../../../packages/registry/src/index.ts';
+import { contentTag, createRegistryReader, dataPaths, type RegistryEntry } from '../../../packages/registry/src/index.ts';
 import { classifyHost, type PlayConfig } from './config.ts';
 import { mimeFor } from './mime.ts';
 
@@ -84,6 +84,12 @@ function streamFile(
   file: string,
   headers: Record<string, string>,
 ): void {
+  // 304 - для всего, что отдаётся с ETag: файлов игр, обложек и архивов.
+  if (headers.ETag && req.headers['if-none-match'] === headers.ETag) {
+    res.writeHead(304, headers);
+    res.end();
+    return;
+  }
   const size = lstatSync(file).size;
   res.writeHead(200, { ...headers, 'Content-Length': String(size) });
   if (req.method === 'HEAD') {
@@ -119,11 +125,10 @@ export function createPlayServer(config: PlayConfig): Server {
     const file = safeFile(paths.versionDir(entry.id, entry.version), target);
     if (!file) return send(res, 404, 'не найдено');
 
-    const etag = `"${entry.hash.slice(0, 16)}-${createHash('sha1').update(target).digest('hex').slice(0, 8)}"`;
-    const headers: Record<string, string> = {
+    streamFile(req, res, file, {
       'Content-Type': mime,
       'Cache-Control': 'no-cache',
-      ETag: etag,
+      ETag: `"${contentTag(entry)}-${createHash('sha1').update(target).digest('hex').slice(0, 8)}"`,
       'X-Content-Type-Options': 'nosniff',
       'Referrer-Policy': 'no-referrer',
       'Cross-Origin-Resource-Policy': 'same-origin',
@@ -131,13 +136,7 @@ export function createPlayServer(config: PlayConfig): Server {
       'Permissions-Policy': PERMISSIONS_POLICY,
       'Content-Security-Policy': csp,
       'X-GF-Game': `${entry.id}@${entry.version}`,
-    };
-    if (req.headers['if-none-match'] === etag) {
-      res.writeHead(304, headers);
-      res.end();
-      return;
-    }
-    streamFile(req, res, file, headers);
+    });
   }
 
   function serveRoot(req: IncomingMessage, res: ServerResponse): void {
@@ -179,21 +178,14 @@ export function createPlayServer(config: PlayConfig): Server {
       // Без версии или со старой (хаб ещё не видел новый реестр) - только с проверкой,
       // иначе под старым адресом надолго застрянет чужое содержимое.
       const v = new URL(req.url ?? '/', 'http://x').searchParams.get('v');
-      const etag = `"${entry.hash.slice(0, 16)}-cover"`;
       // Обложку показывает хаб с другого origin - отсюда cross-origin.
-      const headers = {
+      return streamFile(req, res, file, {
         ...base,
         'Content-Type': mime,
         'Cache-Control': v === entry.version ? 'public, max-age=31536000, immutable' : 'no-cache',
-        ETag: etag,
+        ETag: `"${contentTag(entry)}-cover"`,
         'Cross-Origin-Resource-Policy': 'cross-origin',
-      };
-      if (req.headers['if-none-match'] === etag) {
-        res.writeHead(304, headers);
-        res.end();
-        return;
-      }
-      return streamFile(req, res, file, headers);
+      });
     }
 
     return send(res, 404, 'не найдено', base);

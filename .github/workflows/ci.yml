@@ -41,6 +41,13 @@ jobs:
 
       - run: pnpm games:build
 
+      # Та же version с другим содержимым прод не опубликует, и выкладка встанет молча
+      # (П-034): например, Dependabot поднял движок. Здесь это красный CI с подсказкой.
+      - name: Игры сверены с продом
+        run: pnpm gf check-prod
+        env:
+          GF_PROD_GAME_URL: https://{id}.play.youranus.ru/
+
       - run: pnpm games:export
 
       - run: pnpm hub:build

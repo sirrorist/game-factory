@@ -38,7 +38,7 @@ packages/game-sdk/    SDK для игр (классический скрипт, 
 packages/hub-bridge/  сторона хаба в протоколе SDK, атрибуты iframe из прав манифеста
 packages/vite-config/ общий Vite-конфиг игр: офлайн-сборка в один HTML
 templates/vite-ts/    шаблон игры на TypeScript + Vite (pnpm gf new <id>)
-tools/gf.ts           CLI: list, validate, build, export, new
+tools/gf.ts           CLI: list, validate, build, export, new, check-prod
 games/                игры; каждая — папка с game.json
 tests/e2e/            браузерные тесты: офлайн, эталонный хаб, настоящий хаб
 docs/                 документация
@@ -53,6 +53,7 @@ docs/                 документация
 | `pnpm games:build [id]` | собрать и опубликовать версию в `.data/` |
 | `pnpm games:export [id]` | офлайн-архив для игр с `offline: true` |
 | `pnpm gf new <id>` | новая игра из шаблона `vite-ts` |
+| `pnpm gf check-prod` | та же `version`, что на проде, - то же содержимое? (`GF_PROD_GAME_URL`, D-044) |
 | `pnpm play` | сервер игр |
 | `pnpm hub` | хаб в режиме разработки (`next dev`, :3000) |
 | `pnpm hub:build` / `pnpm hub:start` | сборка хаба / запуск собранного |

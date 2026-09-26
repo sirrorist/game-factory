@@ -171,6 +171,16 @@ test('служебный хост: обложка кешируется надо�
   assert.match(String(again.headers['content-security-policy'] ?? ''), /sandbox/);
 });
 
+test('архив и файл игры: повторный запрос с ETag - 304 без тела', async () => {
+  for (const [host, path] of [['play.test', '/exports/snake-1.0.0.zip'], ['snake.play.test', '/']] as const) {
+    const first = await get(host, path);
+    assert.ok(first.headers.etag, path);
+    const r = await get(host, path, { headers: { 'If-None-Match': String(first.headers.etag) } });
+    assert.equal(r.status, 304, path);
+    assert.equal(r.body, '', path);
+  }
+});
+
 test('служебный хост не отдаёт файлы игр', async () => {
   assert.equal((await get('play.test', '/storage/games/snake/1.0.0/index.html')).status, 404);
   assert.equal((await get('play.test', '/registry.json')).status, 404);

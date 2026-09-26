@@ -80,6 +80,14 @@ export function writeRegistry(paths: DataPaths, registry: Registry): void {
   renameSync(tmp, paths.registry);
 }
 
+/**
+ * Метка содержимого версии: начало ETag у файлов игры и обложки. По ней `gf check-prod`
+ * сверяет сборку с продом (D-044) - формат не менять молча.
+ */
+export function contentTag(entry: RegistryEntry): string {
+  return entry.hash.slice(0, 16);
+}
+
 /** Реестр с кешем по mtime: сервер игр перечитывает файл только когда тот изменился. */
 export function createRegistryReader(paths: DataPaths): () => Registry {
   let cachedMtime = -1;
