@@ -12,6 +12,11 @@ import { createPlayServer } from '../../apps/play-server/src/server.ts';
 
 const ROOT = new URL('../../', import.meta.url).pathname;
 
+/** Версия игры из её game.json: тесты не должны ломаться при выпуске новой версии. */
+export function gameVersion(id: string): string {
+  return (JSON.parse(readFileSync(join(ROOT, 'games', id, 'game.json'), 'utf8')) as { version: string }).version;
+}
+
 export function buildData(): string {
   const data = mkdtempSync(join(tmpdir(), 'gf-e2e-'));
   for (const cmd of [['build'], ['export']]) {
@@ -26,8 +31,8 @@ export function buildData(): string {
 
 /**
  * Chromium без GPU рисует WebGL программно (SwiftShader). Молчаливый откат на него
- * объявлен устаревшим — флаг включает его явно, иначе Three.js однажды останется без WebGL.
- * GF_CHROMIUM_PATH — готовый браузер, когда скачать свой нельзя (облачная среда агента, П-030).
+ * объявлен устаревшим - флаг включает его явно, иначе Three.js однажды останется без WebGL.
+ * GF_CHROMIUM_PATH - готовый браузер, когда скачать свой нельзя (облачная среда агента, П-030).
  */
 export function launchBrowser(): Promise<Browser> {
   return chromium.launch({
@@ -72,7 +77,7 @@ export function mockHub(config: () => { gameId: string; gameOrigin: string }): S
   });
 }
 
-/** Свободный порт: занять нулевой и отпустить. Нужен заранее — хаб и сервер игр ссылаются друг на друга. */
+/** Свободный порт: занять нулевой и отпустить. Нужен заранее - хаб и сервер игр ссылаются друг на друга. */
 export async function freePort(): Promise<number> {
   const s = createServer();
   const port = await listen(s);

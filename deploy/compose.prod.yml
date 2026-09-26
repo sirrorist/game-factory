@@ -97,7 +97,7 @@ volumes:
 
 networks:
   # Своя внутренняя сеть, общая только с Traefik (D-038): без интернета и без соседей
-  # по сети traefik (***, ***, бот). Создаётся владельцем:
+  # по общей сети Traefik. Создаётся владельцем:
   #   docker network create --internal gf-edge && docker network connect gf-edge traefik
   gf-edge:
     external: true

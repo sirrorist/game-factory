@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Browser, Frame, Page } from 'playwright';
-import { buildData, close, freePort, launchBrowser, startHub, startPlay, type Hub } from './helpers.ts';
+import { buildData, close, freePort, gameVersion, launchBrowser, startHub, startPlay, type Hub } from './helpers.ts';
 
 const GAMES = ['phaser-2d', 'snake', 'three-3d'] as const;
 
@@ -22,7 +22,7 @@ const gameOrigin = (id: string): string => `http://${id}.play.localhost:${play.p
 
 before(async () => {
   const data = buildData();
-  // Порт хаба нужен серверу игр для frame-ancestors, а хабу — порт игр: хабу порт выбираем заранее.
+  // Порт хаба нужен серверу игр для frame-ancestors, а хабу - порт игр: хабу порт выбираем заранее.
   const hubPort = await freePort();
   play = await startPlay(data, [`http://localhost:${hubPort}`]);
   hub = await startHub({ port: hubPort, dataDir: data, playPort: play.port });
@@ -52,7 +52,7 @@ async function openGame(page: Page, id: string): Promise<Frame> {
   return game;
 }
 
-test('каталог показывает все игры с обложками и кнопкой «Скачать»', async () => {
+test('каталог показывает все игры с обложками и кнопкой "Скачать"', async () => {
   const page = await browser.newPage();
   const errors = trackErrors(page);
   await page.goto(`${hub.origin}/`);
@@ -60,7 +60,7 @@ test('каталог показывает все игры с обложками 
   assert.deepEqual([...ids].sort(), [...GAMES]);
   for (const id of GAMES) {
     const card = page.locator(`[data-game-id="${id}"]`);
-    assert.equal(await card.getByTestId('download').count(), 1, `${id}: нет кнопки «Скачать»`);
+    assert.equal(await card.getByTestId('download').count(), 1, `${id}: нет кнопки "Скачать"`);
     // Обложка пришла со служебного хоста игр и декодировалась.
     const loaded = await card.locator('img').evaluate(async (img: HTMLImageElement) => {
       await img.decode().catch(() => undefined);
@@ -72,7 +72,7 @@ test('каталог показывает все игры с обложками 
   await page.close();
 });
 
-test('из каталога в игру: ссылка «Играть» открывает страницу игры', async () => {
+test('из каталога в игру: ссылка "Играть" открывает страницу игры', async () => {
   const page = await browser.newPage();
   await page.goto(`${hub.origin}/`);
   await page.locator('[data-game-id="snake"]').getByRole('link', { name: 'Играть' }).click();
@@ -82,12 +82,12 @@ test('из каталога в игру: ссылка «Играть» откр�
 });
 
 for (const id of GAMES) {
-  test(`${id}: в хабе — сохранения и рекорд уходят в хаб и видны на странице`, async () => {
+  test(`${id}: в хабе - сохранения и рекорд уходят в хаб и видны на странице`, async () => {
     const page = await browser.newPage();
     const errors = trackErrors(page);
     const game = await openGame(page, id);
     assert.equal(await game.textContent('#mode'), 'в хабе');
-    assert.equal(await page.getByTestId('hub-best').textContent(), '—');
+    assert.equal(await page.getByTestId('hub-best').textContent(), '\u2014');
 
     const r = await game.evaluate(async (gameId) => {
       const s = await window.GameFactory.init({ gameId });
@@ -117,7 +117,7 @@ for (const id of GAMES) {
 
 test('права манифеста: fullscreen есть только у игр, которые его просили', async () => {
   const page = await browser.newPage();
-  // phaser-2d просит fullscreen, snake — нет.
+  // phaser-2d просит fullscreen, snake - нет.
   const phaser = await openGame(page, 'phaser-2d');
   assert.equal(await page.locator('iframe#game').getAttribute('allow'), 'fullscreen');
   assert.equal(await phaser.evaluate(() => document.fullscreenEnabled), true);
@@ -147,7 +147,7 @@ test('песочница настоящего хаба: игра не доста
     try {
       window.top!.location.href = 'http://example.invalid/';
     } catch {
-      // заблокировано — так и надо
+      // заблокировано - так и надо
     }
     return out;
   });
@@ -163,7 +163,7 @@ test('хаб нельзя встроить в iframe (frame-ancestors none)', as
   assert.equal(r.headers.get('x-powered-by'), null);
 });
 
-test('неизвестная игра и мусор вместо id — 404', async () => {
+test('неизвестная игра и мусор вместо id - 404', async () => {
   const base = hub.origin.replace('localhost', '127.0.0.1');
   for (const path of ['/games/nope', '/games/..%2F..%2Fetc', '/games/SNAKE']) {
     const r = await fetch(base + path);
@@ -172,7 +172,7 @@ test('неизвестная игра и мусор вместо id — 404', as
 });
 
 for (const id of GAMES) {
-  test(`${id}: «Скачать» в хабе → архив → запуск через file://`, async () => {
+  test(`${id}: "Скачать" в хабе → архив → запуск через file://`, async () => {
     const context = await browser.newContext({ acceptDownloads: true });
     const page = await context.newPage();
     await page.goto(`${hub.origin}/`);
@@ -180,7 +180,7 @@ for (const id of GAMES) {
       page.waitForEvent('download'),
       page.locator(`[data-game-id="${id}"]`).getByTestId('download').click(),
     ]);
-    assert.equal(download.suggestedFilename(), `${id}-1.0.0.zip`);
+    assert.equal(download.suggestedFilename(), `${id}-${gameVersion(id)}.zip`);
     const dir = mkdtempSync(join(tmpdir(), 'gf-download-'));
     const zip = join(dir, download.suggestedFilename());
     await download.saveAs(zip);
@@ -189,7 +189,7 @@ for (const id of GAMES) {
 
     const offline = await context.newPage();
     const errors = trackErrors(offline);
-    await offline.goto(pathToFileURL(join(dir, `${id}-1.0.0`, 'index.html')).href);
+    await offline.goto(pathToFileURL(join(dir, `${id}-${gameVersion(id)}`, 'index.html')).href);
     await offline.waitForSelector('html[data-gf-ready="standalone"]', { timeout: 10000 });
     assert.equal(await offline.textContent('#mode'), 'без хаба');
     assert.deepEqual(errors, []);

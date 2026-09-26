@@ -1,4 +1,4 @@
-// Офлайн-архив: распаковали, открыли index.html через file:// — игра работает.
+// Офлайн-архив: распаковали, открыли index.html через file:// - игра работает.
 
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Browser } from 'playwright';
-import { buildData, launchBrowser } from './helpers.ts';
+import { buildData, gameVersion, launchBrowser } from './helpers.ts';
 
 let browser: Browser;
 let data: string;
@@ -31,7 +31,7 @@ after(() => browser?.close());
 test('змейка из архива запускается через file:// и сохраняет рекорд', async () => {
   const context = await browser.newContext();
   const page = await context.newPage();
-  // Еда появляется случайно; попади она на путь змейки — счёт будет не 0 (так упал CI #1).
+  // Еда появляется случайно; попади она на путь змейки - счёт будет не 0 (так упал CI #1).
   // Math.random = 0 кладёт еду в клетку (0,0), в стороне от пути по строке 10.
   await page.addInitScript(() => {
     Math.random = () => 0;
@@ -42,10 +42,10 @@ test('змейка из архива запускается через file:// �
     if (m.type() === 'error') errors.push(m.text());
   });
 
-  await page.goto(unpack('snake', '1.0.0'));
+  await page.goto(unpack('snake', gameVersion('snake')));
   await page.waitForSelector('html[data-gf-ready="standalone"]', { timeout: 5000 });
   assert.equal(await page.textContent('#mode'), 'без хаба');
-  assert.equal(await page.textContent('#best'), '—');
+  assert.equal(await page.textContent('#best'), '\u2014');
 
   // Змейка едет вправо и через ~1,2 с врезается в стену.
   await page.click('#start');
@@ -69,7 +69,7 @@ test('змейка из архива запускается через file:// �
   await context.close();
 });
 
-// Игры на движках: офлайн-сборка @gf/vite-config — один HTML с классическим скриптом.
+// Игры на движках: офлайн-сборка @gf/vite-config - один HTML с классическим скриптом.
 for (const { id, start } of [
   { id: 'phaser-2d', start: null },
   { id: 'three-3d', start: 'Space' },
@@ -83,7 +83,7 @@ for (const { id, start } of [
       if (m.type() === 'error') errors.push(m.text());
     });
 
-    await page.goto(unpack(id, '1.0.0'));
+    await page.goto(unpack(id, gameVersion(id)));
     await page.waitForSelector('html[data-gf-ready="standalone"]', { timeout: 10000 });
     assert.equal(await page.textContent('#mode'), 'без хаба');
     assert.equal(await page.locator('canvas').count(), 1);
