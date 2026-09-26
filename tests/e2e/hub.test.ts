@@ -87,7 +87,7 @@ for (const id of GAMES) {
     const errors = trackErrors(page);
     const game = await openGame(page, id);
     assert.equal(await game.textContent('#mode'), 'в хабе');
-    assert.equal(await page.getByTestId('hub-best').textContent(), '\u2014');
+    assert.equal(await page.getByTestId('hub-best').textContent(), '-');
 
     const r = await game.evaluate(async (gameId) => {
       const s = await window.GameFactory.init({ gameId });

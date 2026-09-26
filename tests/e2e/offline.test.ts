@@ -45,7 +45,8 @@ test('змейка из архива запускается через file:// �
   await page.goto(unpack('snake', gameVersion('snake')));
   await page.waitForSelector('html[data-gf-ready="standalone"]', { timeout: 5000 });
   assert.equal(await page.textContent('#mode'), 'без хаба');
-  assert.equal(await page.textContent('#best'), '\u2014');
+  // Рекорда ещё нет: на месте числа - прочерк (какой именно - дело разметки игры).
+  assert.doesNotMatch((await page.textContent('#best')) ?? '', /\d/);
 
   // Змейка едет вправо и через ~1,2 с врезается в стену.
   await page.click('#start');

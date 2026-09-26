@@ -1,6 +1,6 @@
 'use client';
 
-// Игра в iframe + мост хаба. Всё, что приходит из iframe, — недоверенный ввод:
+// Игра в iframe + мост хаба. Всё, что приходит из iframe, - недоверенный ввод:
 // проверяет packages/hub-bridge (source + origin, форма, лимиты).
 
 import { connectGame, storageHandlers, type GameDataHandlers } from '@gf/hub-bridge';
@@ -26,7 +26,7 @@ export function GameFrame({ gameId, gameOrigin, title, sandbox, allow, fullscree
     const iframe = iframeRef.current;
     if (!iframe) return;
     setReady(false);
-    // Этап 0: данные игры живут в localStorage хаба. Этап 1 — API хаба.
+    // Этап 0: данные игры живут в localStorage хаба. Этап 1 - API хаба.
     const base = storageHandlers(window.localStorage, gameId);
     void base.bestScore().then(setBest);
     const handlers: GameDataHandlers = {
@@ -42,7 +42,7 @@ export function GameFrame({ gameId, gameOrigin, title, sandbox, allow, fullscree
       iframe,
       gameId,
       gameOrigin,
-      player: null, // гость: авторизация — этап 1
+      player: null, // гость: авторизация - этап 1
       handlers,
       onEvent: (e) => {
         if (e.type === 'ready') setReady(true);
@@ -61,7 +61,7 @@ export function GameFrame({ gameId, gameOrigin, title, sandbox, allow, fullscree
     <div className="flex w-full max-w-[560px] flex-col gap-3" data-game-ready={ready ? '1' : undefined}>
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-sm">
-          Твой рекорд: <b data-testid="hub-best">{best === null ? '—' : best}</b>
+          Твой рекорд: <b data-testid="hub-best">{best === null ? '-' : best}</b>
         </span>
         {!ready ? <span className="text-sm text-muted-foreground">загрузка…</span> : null}
         <span className="flex-1" />
@@ -72,7 +72,7 @@ export function GameFrame({ gameId, gameOrigin, title, sandbox, allow, fullscree
         ) : null}
         {children}
       </div>
-      {/* Разметка iframe — как в tests/e2e/fixtures/mock-hub.html: sandbox и allow из манифеста (frameAttributes). */}
+      {/* Разметка iframe - как в tests/e2e/fixtures/mock-hub.html: sandbox и allow из манифеста (frameAttributes). */}
       <iframe
         ref={iframeRef}
         id="game"
