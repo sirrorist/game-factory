@@ -1,12 +1,14 @@
 name: CI
 
-# Правки только документации CI не гоняют — минуты не бесплатные (D-031).
+# Правки только документации CI не гоняют - минуты не бесплатные (D-031).
 on:
   push:
     branches: [main]
     paths-ignore: ["docs/**", "**/*.md"]
   pull_request:
     paths-ignore: ["docs/**", "**/*.md"]
+  # Вручную: после force-push GitHub прогон не создал (П-038).
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -29,7 +31,7 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      # Явно: lockfile обязателен, расхождение с package.json — красный CI.
+      # Явно: lockfile обязателен, расхождение с package.json - красный CI.
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm typecheck
