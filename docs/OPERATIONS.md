@@ -9,7 +9,7 @@
 | Что | Где |
 |---|---|
 | Код | GitHub `sirrorist/game-factory`, ветка `main`, репозиторий **публичный** |
-| Рабочая копия на сервере | VPS-1, `/srv/prod/games-factory` (пользователь `git-worker`, ключ `github-game-factory`) |
+| Рабочая копия на сервере | VPS-1, у пользователя агента (путь - в приватной базе инфраструктуры, D-043) |
 | Образы | GHCR: `ghcr.io/sirrorist/game-factory-{hub,play,games}`, теги `main` и `<sha коммита>` |
 | Прод-конфиг на сервере | `/etc/docker/containers/game-factory/compose.yml` + `.env` (владелец `root`) |
 | Скрипт выкладки | `/usr/local/sbin/gf-update` (копия `deploy/update.sh`, владелец `root`) |
@@ -20,7 +20,7 @@
 | Сервер | VPS-1, адрес для веба `2.26.198.231` (отдельный, D-036) |
 
 Файлы в `/etc/docker/containers/game-factory` и `/usr/local/sbin` - **копии** из `deploy/`,
-а не ссылки на рабочую копию: их исполняет `root`, и правка из-под `git-worker` не должна
+а не ссылки на рабочую копию: их исполняет `root`, и правка из-под пользователя агента не должна
 давать ему `root` (D-035). Поменял `deploy/` в репозитории - переустанови копии (ниже).
 
 ## Как код попадает в прод
@@ -166,17 +166,19 @@ gf-update --force
 Нужно, когда поменялись `deploy/compose.prod.yml`, `deploy/update.sh` или unit-файлы.
 Сначала подтянуть рабочую копию.
 
-VPS-1, `git-worker`, fish:
+VPS-1, пользователь агента, fish (путь к рабочей копии спрашивается вводом):
 
 ```fish
-cd /srv/prod/games-factory
+read -P 'путь к рабочей копии: ' WC
+cd $WC
 git pull --ff-only
 ```
 
 VPS-1, `root`, bash:
 
 ```bash
-cd /srv/prod/games-factory/deploy
+read -r -p 'путь к рабочей копии: ' WC
+cd "$WC/deploy"
 install -m 0644 compose.prod.yml /etc/docker/containers/game-factory/compose.yml
 install -m 0755 update.sh /usr/local/sbin/gf-update
 install -m 0644 gf-update.service gf-update.timer /etc/systemd/system/
@@ -189,20 +191,17 @@ gf-update --force
 ## Изоляция прода (D-038) - если сервер поднимают заново
 
 Один раз при установке; `gf-update` и переустановка `deploy/` это не трогают.
-Внутренняя сеть, общая только с Traefik, и два правила файрвола:
+Внутренняя сеть, общая только с Traefik:
 
 VPS-1, `root`, bash:
 
 ```bash
 docker network create --internal gf-edge
 docker network connect gf-edge traefik
-NET=$(docker network inspect gf-edge \
-  --format '{{(index .IPAM.Config 0).Subnet}}')
-ufw insert 1 deny in from "$NET" \
-  comment 'gf-edge: контейнеры игр не ходят на хост, D-038'
-ufw insert 1 deny in to 2.26.198.231 \
-  comment 'web IP: только 80/443 через Docker, D-038'
 ```
+
+Правила файрвола хоста для `gf-edge` и веб-адреса - в приватной базе инфраструктуры
+(это настройка сервера, а не проекта; D-043).
 
 Чтобы Traefik не потерял сеть при пересоздании, `gf-edge` вписана и в его compose
 (список сетей сервиса и `external: true` внизу) - это настройка Traefik владельца, а не этого
@@ -248,9 +247,8 @@ systemctl start gf-update.timer
 
 - **Облачная сессия** (claude.ai/code) - код и документы. Коммит в `dev` с твоим "да";
   в `main` (прод) - отдельным "да". Новых веток агент не создаёт (D-042).
-- **Сессия на VPS-1** (`/srv/prod/games-factory`) - всё про сервер. Агент на VPS-1 -
-  пользователь `git-worker`: **нет `root` и нет доступа к Docker**. Команды, меняющие
-  сервер, он выдаёт блоками, выполняешь ты.
+- **Сессия на VPS-1** - всё про сервер. У агента на VPS-1 **нет `root` и нет доступа
+  к Docker**. Команды, меняющие сервер, он выдаёт блоками, выполняешь ты.
 - Начало любой сессии - `docs/STATE.md`; конец - STATE переписан (правило `CLAUDE.md`).
-- Проект описан и в базе инфраструктуры: `infra-ctl/docs/projects/game-factory/README.md` -
-  там то, что касается сервера целиком (адреса, Traefik, память, бэкап).
+- Проект описан и в приватной базе инфраструктуры - там то, что касается сервера целиком
+  (адреса, Traefik, файрвол, память, бэкап).

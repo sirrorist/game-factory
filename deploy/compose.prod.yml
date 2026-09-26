@@ -63,7 +63,7 @@ services:
       traefik.http.routers.gf-play.entrypoints: websecure
       # *.play.youranus.ru не покрыт *.youranus.ru (П-004), wildcard - только DNS-01.
       # Только wildcard: play.youranus.ru уже покрыт *.youranus.ru, одно значение TXT
-      # вместо двух - у Timeweb выпуск и так идёт около часа (П-037).
+      # вместо двух - выпуск и так идёт около часа (П-037).
       traefik.http.routers.gf-play.tls.certresolver: dns01
       traefik.http.routers.gf-play.tls.domains[0].main: '*.play.youranus.ru'
       traefik.http.services.gf-play.loadbalancer.server.port: "4100"

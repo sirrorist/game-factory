@@ -7,12 +7,12 @@
 
 | Имя | Назначение | Запись |
 |---|---|---|
-| `games.youranus.ru` | хаб | A → `2.26.198.231` (VPS-1, веб-адрес, D-036) |
+| `games.youranus.ru` | хаб | A → `2.26.198.231` (веб-адрес, D-036) |
 | `play.youranus.ru` | служебный хост игр: архивы, обложки | A → `2.26.198.231` |
 | `*.play.youranus.ru` | игры, `<id>.play.youranus.ru` | A → `2.26.198.231` |
 
-DNS зоны `youranus.ru` - у Timeweb, записи заводятся через их API (команды - в базе
-инфраструктуры `infra-ctl`, `11-SHELL.md`, `TPL:api-*`). AAAA не заводится: у остальных имён зоны их тоже нет.
+Записи заводит владелец через API DNS-провайдера (как - в приватной базе инфраструктуры).
+AAAA не заводится.
 
 - `*-play.youranus.ru` невозможен (П-004); `*.play.youranus.ru` - правильная форма.
 - Wildcard-запись **не покрывает** сам `play.youranus.ru` - для него нужна отдельная запись.
@@ -27,12 +27,11 @@ DNS зоны `youranus.ru` - у Timeweb, записи заводятся чер�
 - Сертификат живёт 90 дней, поэтому нужен API DNS-провайдера: Traefik (через lego)
   сам создаёт TXT-запись и продлевает. Поддерживаются, среди прочих, Cloudflare,
   REG.RU, Selectel, Yandex Cloud DNS.
-- ✅ Зона у **Timeweb**, API есть; в Traefik владельца уже заведён резолвер `dns01`
-  (`provider: timewebcloud`, токен - файлом). Роутер `gf-play` просит у него
-  только `*.play.youranus.ru`, `play.youranus.ru` покрыт действующим `*.youranus.ru`; первый выпуск у Timeweb - около часа (П-037); `games.youranus.ru` - обычный HTTP-01
-  (резолвер `letsencrypt`).
-- Токен API DNS - секрет: лежит на сервере у root, в репозиторий и в командную строку
-  не попадает (правило кита).
+- ✅ API у DNS-провайдера есть, в Traefik владельца заведён резолвер `dns01`. Роутер
+  `gf-play` просит у него только `*.play.youranus.ru` (`play.youranus.ru` покрыт
+  действующим `*.youranus.ru`); первый выпуск - около часа (П-037). `games.youranus.ru` -
+  обычный HTTP-01 (резолвер `letsencrypt`).
+- Токен API DNS - секрет: в репозиторий и в командную строку не попадает (правило кита).
 
 ## CI (GitHub Actions)
 
@@ -67,8 +66,9 @@ CI не запускается на коммиты, где правлена то
    В GitHub нет ключей от сервера, входящих соединений нет.
 4. **Прод-конфиг - копии root** в `/etc/docker/containers/game-factory/` и
    `/usr/local/sbin/gf-update` (D-035), а не файлы рабочей копии.
-5. **Traefik** владельца (3.7, provider docker, сеть `traefik`): маршруты - метками в
-   `deploy/compose.prod.yml`. Портов наружу у контейнеров нет.
+5. **Traefik** владельца (provider docker): маршруты - метками в
+   `deploy/compose.prod.yml`, общая с ним сеть - `gf-edge` (D-038). Портов наружу у
+   контейнеров нет.
 6. **Откат** - `GF_IMAGE_TAG=<sha>` в `.env` и `gf-update --force`; он же заморозка.
 
 Workflow `docker.yml` (на PR и при правке Docker-файлов/`deploy/`) дополнительно проверяет,
