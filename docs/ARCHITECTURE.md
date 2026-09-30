@@ -44,7 +44,8 @@ Phaser, Three.js, Godot, Rust→WASM или голый HTML. Он знает м�
 | `packages/hub-bridge` | сторона хаба: проверка сообщений, лимиты, хранение | нет |
 | `apps/play-server` | раздача игр по поддоменам, служебный хост | нет |
 | `tools/gf.ts` | CLI: проверка, сборка, публикация, офлайн-архив, `new` | нет |
-| `apps/hub` | каталог и страница игры, мост, кнопка "Скачать" | Next.js 16, React 19, Tailwind 4 |
+| `apps/hub` | каталог и страница игры, мост, кнопка "Скачать", `/healthz` с проверкой базы | Next.js 16, React 19, Tailwind 4 |
+| `packages/db` | база хаба (этап 1): схема, SQL-миграции, подключение, `migrate` | drizzle-orm, postgres; тесты - PGlite (D-051) |
 | `packages/vite-config` | общий Vite-конфиг игр `vite-ts`, офлайн-сборка в один HTML | Vite 8 (только сборка игр) |
 | `templates/vite-ts` | шаблон игры на TS + Vite, из него `gf new` | Vite |
 

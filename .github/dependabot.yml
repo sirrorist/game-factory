@@ -1,5 +1,5 @@
 version: 2
-# Раз в месяц и пачками: каждый PR — это прогон CI, а минуты CI не бесплатные (D-031).
+# Раз в месяц и пачками: каждый PR - это прогон CI, а минуты CI не бесплатные (D-031).
 updates:
   # Обновления идут в dev, как любая работа; в main (прод) - вместе с очередным слиянием (D-042).
   - package-ecosystem: github-actions
@@ -17,10 +17,16 @@ updates:
       interval: monthly
     open-pull-requests-limit: 5
     groups:
-      # Минорные и патчи — одним PR; мажоры — каждый отдельно, их смотрят руками.
+      # Минорные и патчи - одним PR; мажоры - каждый отдельно, их смотрят руками.
       minor-and-patch:
         update-types: [minor, patch]
     ignore:
       # Типы должны соответствовать Node из .nvmrc (22), а не самому свежему.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
+  # Образ базы в deploy/compose.prod.yml закреплён digest'ом - новый приходит PR, через CI.
+  - package-ecosystem: docker-compose
+    directory: /deploy
+    target-branch: dev
+    schedule:
+      interval: monthly

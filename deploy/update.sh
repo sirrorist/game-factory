@@ -9,7 +9,9 @@
 set -euo pipefail
 
 DIR=${GF_DEPLOY_DIR:-/etc/docker/containers/game-factory}
-SERVICES=(games play hub)
+# Дампы базы перед миграцией: последние 10, только root.
+BACKUP_DIR=${GF_BACKUP_DIR:-/var/backups/game-factory}
+SERVICES=(games migrate db play hub)
 
 [[ $EUID -eq 0 ]] || { echo "нужен root" >&2; exit 1; }
 cd "$DIR"
@@ -43,6 +45,18 @@ if ! compose run --rm games; then
   exit 1
 fi
 
-compose up -d --remove-orphans play hub
+# База - до хаба: миграции идут в живую базу, хаб стартует уже на новой схеме (D-047).
+# Перед миграцией - дамп: миграции только вперёд, это точка возврата. Не снялся - стоп.
+compose up -d --wait db
+install -d -m 0700 "$BACKUP_DIR"
+compose exec -T db pg_dump -U gf -d gf | gzip > "$BACKUP_DIR/pre-migrate-$(date +%Y%m%d-%H%M%S).sql.gz"
+# Хранить последние 10: имена с датой сортируются как время.
+find "$BACKUP_DIR" -maxdepth 1 -name 'pre-migrate-*.sql.gz' | sort -r | tail -n +11 | xargs -r rm -f --
+if ! compose run --rm migrate; then
+  echo "migrate упал - выкладка остановлена, хаб на прежнем образе" >&2
+  exit 1
+fi
+
+compose up -d --remove-orphans db play hub
 docker image prune -f --filter "label=org.opencontainers.image.source=https://github.com/sirrorist/game-factory" > /dev/null
 echo "выложено: $(compose ps --format '{{.Service}} {{.Image}}' play hub | tr '\n' ' ')"

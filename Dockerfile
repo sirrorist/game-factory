@@ -55,6 +55,22 @@ RUN --mount=type=secret,id=extra_ca,required=false \
 RUN pnpm --filter "@gf-game/*" --if-present run build \
     && rm -rf games/*/node_modules
 
+# --- миграции базы хаба (packages/db): одноразовый запуск до старта хаба (D-047)
+FROM base AS migrate-build
+COPY . .
+RUN --mount=type=secret,id=extra_ca,required=false \
+    if [ -s /run/secrets/extra_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/extra_ca; fi; \
+    pnpm install --frozen-lockfile --filter "@gf/db" \
+    && pnpm --filter @gf/db deploy --prod --legacy /out \
+    && rm -rf /out/test /out/drizzle.config.ts
+
+FROM ${NODE_IMAGE} AS migrate
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=migrate-build /out ./
+USER node
+CMD ["node", "src/migrate.ts"]
+
 # Публикатор: gf build --prebuilt && gf export в постоянный том /data. Версия, опубликованная
 # с другим содержимым, валит запуск ("неизменяема") - и выкладка останавливается на старом.
 FROM ${NODE_IMAGE} AS games

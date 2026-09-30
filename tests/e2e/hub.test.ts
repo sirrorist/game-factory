@@ -166,6 +166,13 @@ test('хаб нельзя встроить в iframe (frame-ancestors none)', as
   assert.equal(r.headers.get('x-powered-by'), null);
 });
 
+test('/healthz без базы - 503 и без подробностей', async () => {
+  // e2e поднимают хаб без базы (слайс 1.1): 503 - честный ответ "хаб жив, базы нет".
+  const r = await fetch(hub.origin.replace('localhost', '127.0.0.1') + '/healthz');
+  assert.equal(r.status, 503);
+  assert.equal(await r.text(), 'unavailable\n', 'наружу - без причины');
+});
+
 test('неизвестная игра и мусор вместо id - 404', async () => {
   const base = hub.origin.replace('localhost', '127.0.0.1');
   for (const path of ['/games/nope', '/games/..%2F..%2Fetc', '/games/SNAKE']) {

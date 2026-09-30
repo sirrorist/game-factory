@@ -10,12 +10,13 @@
 |---|---|
 | Код | GitHub `sirrorist/game-factory`, ветка `main`, репозиторий **публичный** |
 | Рабочая копия на сервере | VPS-1, у пользователя агента (путь - в приватной базе инфраструктуры, D-043) |
-| Образы | GHCR: `ghcr.io/sirrorist/game-factory-{hub,play,games}`, теги `main` и `<sha коммита>` |
+| Образы | GHCR: `ghcr.io/sirrorist/game-factory-{hub,play,games,migrate}`, теги `main` и `<sha коммита>`; база - `postgres:17-alpine` |
 | Прод-конфиг на сервере | `/etc/docker/containers/game-factory/compose.yml` + `.env` (владелец `root`) |
 | Скрипт выкладки | `/usr/local/sbin/gf-update` (копия `deploy/update.sh`, владелец `root`) |
 | Таймер | `gf-update.timer` → `gf-update.service`, раз в 5 минут |
 | Сеть | `gf-edge` - внутренняя, только наши контейнеры и Traefik (D-038); создаётся владельцем один раз |
 | Данные | том Docker `game-factory_gf-data`: опубликованные версии игр, архивы, `registry.json` |
+| База хаба (этап 1) | том `game-factory_gf-db`; сеть `gf-db` - внутренняя, только хаб и миграции; пароль - `secrets/db_password` рядом с `compose.yml` (D-047, D-051) |
 | Адреса | хаб `https://games.youranus.ru`, игры `https://<id>.play.youranus.ru`, служебный `https://play.youranus.ru` |
 | Сервер | VPS-1, адрес для веба `2.26.198.231` (отдельный, D-036) |
 
@@ -28,7 +29,7 @@
 ```
 коммиты → dev → CI (проверка, в прод не едет)
 "да" владельца → dev переносится в main → CI → зелёный → Publish: образы в GHCR с тегами <sha> и main
-→ через ≤ 5 минут таймер на VPS-1: pull → games публикует игры в том → up -d play hub
+→ через ≤ 5 минут таймер на VPS-1: pull → games публикует игры в том → up db → migrate → up -d play hub
 ```
 
 - Работа идёт в `dev`, прод - это `main` (D-042). Выкатить `dev` на прод
@@ -206,6 +207,82 @@ docker network connect gf-edge traefik
 Чтобы Traefik не потерял сеть при пересоздании, `gf-edge` вписана и в его compose
 (список сетей сервиса и `external: true` внизу) - это настройка Traefik владельца, а не этого
 репозитория. Проверка: хаб и игра открываются с телефона через мобильную сеть.
+
+## База хаба (этап 1) - установка один раз
+
+Порядок важен: сначала пароль и сеть, потом новый `compose.yml` (раздел выше). Пока их нет,
+новый хаб работает и без базы - `/healthz` отвечает 503 "db: не настроена".
+
+VPS-1, `root`, bash. Пароль вводится скрыто и в историю команд не попадает:
+
+```bash
+cd /etc/docker/containers/game-factory
+install -d -m 0700 secrets
+read -rs -p 'пароль базы (длинный, случайный): ' P; echo
+printf '%s' "$P" > secrets/db_password; unset P
+chmod 0644 secrets/db_password
+wc -c secrets/db_password
+```
+
+Права: каталог `0700` закрывает файл на хосте; `0644` нужен, потому что compose монтирует
+файл с правами хоста, а читают его внутри postgres и node (П-044).
+
+Сеть - внутренняя, с подсетью из приватной базы инфраструктуры: на неё там же правило
+файрвола, иначе хаб дотянется через неё до хоста (как у `gf-edge`, D-038):
+
+```bash
+read -r -p 'подсеть gf-db: ' S
+docker network create --internal --subnet "$S" gf-db
+```
+
+Проверка после `gf-update --force`:
+
+```bash
+curl -s https://games.youranus.ru/healthz        # ok
+cd /etc/docker/containers/game-factory
+GW=$(docker network inspect gf-db -f '{{(index .IPAM.Config 0).Gateway}}')
+# Хаб через gf-db до хоста не дотягивается: ждём closed на 22 и на порт Docker API.
+for port in 22 2375 2376; do
+  docker compose exec -T hub node -e '
+    const [h, p] = process.argv.slice(1);
+    const s = require("node:net").connect({ host: h, port: +p, timeout: 3000 });
+    const say = (x) => { console.log(h, p, x); process.exit(0); };
+    s.on("connect", () => say("OPEN - правило файрвола не работает"));
+    s.on("error", () => say("closed")); s.on("timeout", () => say("closed"));' "$GW" "$port"
+done
+```
+
+Первая публикация образа `game-factory-migrate` в GHCR может оказаться приватной - тогда
+`gf-update` на `pull` остановится целиком (и `play`, и `hub`). Агент проверяет анонимный
+доступ после первого Publish; если приватный - в GitHub: Packages → `game-factory-migrate` →
+Package settings → Change visibility → Public.
+
+## База хаба - бэкап и восстановление
+
+Перед каждой миграцией `gf-update` сам снимает дамп в `/var/backups/game-factory/`
+(последние 10, только root): миграции идут только вперёд, это точка возврата.
+
+Дамп снимается внутри контейнера и уходит ежедневным бэкапом сервера (как - приватная база
+инфраструктуры, D-047). Снять дамп руками (VPS-1, `root`, bash):
+
+```bash
+cd /etc/docker/containers/game-factory
+docker compose exec -T db pg_dump -U gf -d gf | gzip > /root/gf-db-$(date +%F).sql.gz
+```
+
+Восстановить в пустую базу (хаб на это время остановлен):
+
+```bash
+cd /etc/docker/containers/game-factory
+systemctl stop gf-update.timer
+docker compose stop hub
+docker compose exec -T db dropdb -U gf gf
+docker compose exec -T db createdb -U gf gf
+read -r -p 'файл дампа: ' F
+gunzip -c "$F" | docker compose exec -T db psql -U gf -d gf -v ON_ERROR_STOP=1
+docker compose up -d hub
+systemctl start gf-update.timer
+```
 
 ## Перезапуск и остановка
 

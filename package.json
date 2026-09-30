@@ -17,7 +17,8 @@
     "typecheck": "tsc -p tsconfig.json && tsc -p packages/game-sdk/tsconfig.json && pnpm -r --if-present run typecheck",
     "test": "node --test \"packages/**/*.test.ts\" \"apps/**/*.test.ts\" \"tools/**/*.test.ts\"",
     "test:e2e": "node --test --test-concurrency=1 \"tests/e2e/**/*.test.ts\"",
-    "check": "pnpm typecheck && pnpm test && pnpm games:build && pnpm games:export && pnpm hub:build && pnpm test:e2e"
+    "check": "pnpm typecheck && pnpm test && pnpm test:db && pnpm games:build && pnpm games:export && pnpm hub:build && pnpm test:e2e",
+    "test:db": "node --test --test-concurrency=1 \"packages/db/test/*.pgtest.ts\""
   },
   "devDependencies": {
     "@types/node": "^22.18.0",

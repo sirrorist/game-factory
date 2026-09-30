@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 20
     strategy:
       matrix:
-        target: [hub, play, games]
+        target: [hub, play, games, migrate]
     steps:
       # Ровно тот коммит, что прошёл CI, а не текущая голова main.
       - uses: actions/checkout@v7

@@ -5,6 +5,7 @@
 # а файл, который правит обычный пользователь, дал бы ему root (D-035).
 #
 #   docker compose run --rm games     # публикация игр в том gf-data
+#   docker compose up -d db && docker compose run --rm migrate
 #   docker compose up -d hub play
 #
 # Домены вписаны прямо в метки: HostRegexp не собрать из переменной. Новый домен (D-010) -
@@ -30,6 +31,51 @@ services:
     mem_limit: 256m
     volumes:
       - gf-data:/data
+
+  # База хаба (этап 1, D-047). Своя внутренняя сеть gf-db - только хаб и миграции, без
+  # интернета; порт наружу не публикуется. Бэкап - дамп в бэкапе сервера (OPERATIONS.md).
+  db:
+    <<: *hardening
+    # По digest: таймер тянет образы под root каждые 5 минут, а тег меняется мимо CI и с
+    # пересозданием контейнера с данными. Обновление - PR Dependabot (docker-compose) в dev.
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    restart: unless-stopped
+    # Сразу пользователем postgres образа: без root при старте не нужны и CAP_CHOWN/SETUID.
+    user: "70:70"
+    mem_limit: 256m
+    shm_size: 64m
+    environment:
+      POSTGRES_USER: gf
+      POSTGRES_DB: gf
+      POSTGRES_PASSWORD_FILE: /run/secrets/gf_db_password
+    command: [postgres, -c, shared_buffers=32MB, -c, max_connections=20]
+    secrets: [gf_db_password]
+    volumes:
+      - gf-db:/var/lib/postgresql/data
+    tmpfs:
+      - /var/run/postgresql
+      - /tmp
+    networks: [gf-db]
+    healthcheck:
+      test: [CMD, pg_isready, -U, gf, -d, gf]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  # Одноразовый: миграции схемы до старта хаба (packages/db). Упала - хаб остаётся прежним.
+  migrate:
+    <<: *hardening
+    image: ghcr.io/sirrorist/game-factory-migrate:${GF_IMAGE_TAG:?GF_IMAGE_TAG в .env}
+    profiles: [publish]
+    mem_limit: 128m
+    environment:
+      GF_DB_HOST: db
+      GF_DB_PASSWORD_FILE: /run/secrets/gf_db_password
+    secrets: [gf_db_password]
+    networks: [gf-db]
+    depends_on:
+      db:
+        condition: service_healthy
 
   play:
     <<: *hardening
@@ -75,11 +121,14 @@ services:
     mem_limit: 384m
     environment:
       GF_PLAY_PUBLIC_ORIGIN_TEMPLATE: https://{id}.play.youranus.ru
+      GF_DB_HOST: db
+      GF_DB_PASSWORD_FILE: /run/secrets/gf_db_password
+    secrets: [gf_db_password]
     volumes:
       - gf-data:/data:ro
     tmpfs:
       - /app/apps/hub/.next/cache
-    networks: [gf-edge]
+    networks: [gf-edge, gf-db]
     depends_on:
       play:
         condition: service_healthy
@@ -94,10 +143,24 @@ services:
 volumes:
   # Постоянный: в нём история опубликованных версий, на ней держится неизменяемость.
   gf-data:
+  # База хаба: учётки, сохранения, очки - из образов не восстановить, бэкап обязателен (D-047).
+  gf-db:
+
+secrets:
+  # Каталог secrets/ рядом с compose.yml - root 0700, файл - 0644: compose монтирует файл с
+  # правами хоста, а читать его внутри должны postgres (70) и node (1000); на хосте каталог
+  # закрыт. Создаётся владельцем скрытым вводом (OPERATIONS.md).
+  gf_db_password:
+    file: ./secrets/db_password
 
 networks:
   # Своя внутренняя сеть, общая только с Traefik (D-038): без интернета и без соседей
   # по общей сети Traefik. Создаётся владельцем:
   #   docker network create --internal gf-edge && docker network connect gf-edge traefik
   gf-edge:
+    external: true
+  # База и хаб (D-047): внутренняя, без Traefik. Внешняя, как gf-edge: подсеть задаётся при
+  # создании - на неё правило файрвола хоста, иначе хаб дотянется до хоста через эту сеть.
+  #   docker network create --internal --subnet <см. приватную базу> gf-db
+  gf-db:
     external: true

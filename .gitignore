@@ -12,3 +12,6 @@ test-results/
 *.tsbuildinfo
 next-env.d.ts
 .claude/settings.local.json
+
+# Пароль базы (deploy/compose.prod.yml, секрет compose) - ни в git, ни в образ.
+deploy/secrets/

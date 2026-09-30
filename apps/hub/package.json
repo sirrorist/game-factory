@@ -10,6 +10,7 @@
     "typecheck": "next typegen && tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@gf/db": "workspace:*",
     "@gf/hub-bridge": "workspace:*",
     "@gf/manifest": "workspace:*",
     "@gf/registry": "workspace:*",
