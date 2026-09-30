@@ -1,7 +1,7 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, readFileSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { request, type IncomingHttpHeaders, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -118,12 +118,12 @@ test('симлинк в хранилище не отдаётся', async () => {
   assert.equal(r.status, 404);
 });
 
-test('тип файла вне белого списка — 403', async () => {
+test('тип файла вне белого списка - 403', async () => {
   const r = await get('snake.play.test', '/game.php');
   assert.equal(r.status, 403);
 });
 
-test('неизвестные хосты и игры — 404', async () => {
+test('неизвестные хосты и игры - 404', async () => {
   assert.equal((await get('evil.example', '/')).status, 404);
   assert.equal((await get('nope.play.test', '/')).status, 404);
   assert.equal((await get('a.b.play.test', '/')).status, 404);
@@ -169,6 +169,33 @@ test('служебный хост: обложка кешируется надо�
   assert.equal(again.status, 304);
   assert.equal(again.body, '');
   assert.match(String(again.headers['content-security-policy'] ?? ''), /sandbox/);
+});
+
+test('обложка: другое содержимое версии - другой ETag, старый If-None-Match не даёт 304', async () => {
+  // Без этого "no-cache без версии" ничего не стоит: браузер переспросит, получит 304
+  // по старому ETag и оставит обложку снятой версии (D-041).
+  const old = await get('play.test', '/covers/snake');
+  const file = join(data, 'registry.json');
+  const original = readFileSync(file, 'utf8');
+  try {
+    const reg = JSON.parse(original) as { games: { id: string; hash: string }[] };
+    const snake = reg.games.find((g) => g.id === 'snake')!;
+    snake.hash = snake.hash.replace(/^./, (c) => (c === '0' ? '1' : '0'));
+    writeFileSync(file, JSON.stringify(reg));
+    // Реестр читается с кешем по mtime: сдвигаем его явно, чтобы не зависеть от точности ФС.
+    const later = new Date(Date.now() + 10_000);
+    utimesSync(file, later, later);
+
+    const changed = await get('play.test', '/covers/snake');
+    assert.equal(changed.status, 200);
+    assert.notEqual(changed.headers.etag, old.headers.etag);
+    const stale = await get('play.test', '/covers/snake', { headers: { 'If-None-Match': String(old.headers.etag) } });
+    assert.equal(stale.status, 200);
+  } finally {
+    writeFileSync(file, original);
+    const later = new Date(Date.now() + 20_000);
+    utimesSync(file, later, later);
+  }
 });
 
 test('архив и файл игры: повторный запрос с ETag - 304 без тела', async () => {
