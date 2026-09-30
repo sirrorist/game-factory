@@ -13,7 +13,8 @@ import { PGlite } from '@electric-sql/pglite';
 import { sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
-import { databaseUrl, gameSaves, MAX_VALUE_BYTES, MIGRATIONS_DIR, ping, schema, scores } from '../src/index.ts';
+import { databaseUrl, gameSaves, MAX_VALUE_BYTES, ping, schema, scores } from '../src/index.ts';
+import { MIGRATIONS_DIR } from '../src/migrations.ts';
 
 const client = new PGlite();
 const db = drizzle(client, { schema });

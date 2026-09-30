@@ -4,7 +4,8 @@
 //   GF_DATABASE_URL=postgres://… node packages/db/src/migrate.ts
 
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
-import { createDb, databaseUrl, MIGRATIONS_DIR } from './index.ts';
+import { createDb, databaseUrl } from './index.ts';
+import { MIGRATIONS_DIR } from './migrations.ts';
 
 const url = databaseUrl();
 if (!url) {

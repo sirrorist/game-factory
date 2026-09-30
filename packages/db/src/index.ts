@@ -10,9 +10,6 @@ import * as schema from './schema.ts';
 export * from './schema.ts';
 export { schema };
 
-/** Каталог SQL-миграций - общий для прода (postgres) и тестов (PGlite). */
-export const MIGRATIONS_DIR = new URL('../migrations', import.meta.url).pathname;
-
 export type Db = PostgresJsDatabase<typeof schema>;
 
 /**
