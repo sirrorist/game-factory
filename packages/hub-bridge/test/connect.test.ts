@@ -98,3 +98,47 @@ test('лимит по умолчанию - 20 запросов в секунду
   const limited = sent.filter((s) => s.message.error === 'rate-limited').map((s) => s.message.id);
   assert.deepEqual(limited, [21, 22, 23, 24, 25]);
 });
+
+test('лимит - на любые сообщения: hello в цикле не даёт поток welcome', async () => {
+  const events: string[] = [];
+  const { deliver, sent } = setup({ onEvent: (e) => void events.push(e.type === 'rejected' ? e.reason : e.type) });
+  for (let i = 0; i < 1000; i++) deliver({ gf: PROTOCOL, type: 'hello', gameId: 'snake', sdk: '1' });
+  await tick();
+  assert.equal(sent.length, 20);
+  assert.equal(events.filter((e) => e === 'rate-limited').length, 1, 'одно событие на окно, а не на каждое лишнее');
+});
+
+test('через секунду лимит снова пропускает', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+  const { deliver, saves } = setup();
+  for (let id = 1; id <= 25; id++) deliver(save(id));
+  t.mock.timers.tick(999);
+  deliver(save(26));
+  t.mock.timers.tick(1);
+  deliver(save(27, 'after'));
+  await tick();
+  assert.equal(saves.length, 21);
+  assert.equal(saves.at(-1), 'after');
+});
+
+test('счётчик у каждого подключения свой: игроки друг другу лимит не съедают', async () => {
+  const a = setup();
+  const b = setup();
+  for (let id = 1; id <= 25; id++) a.deliver(save(id));
+  for (let id = 1; id <= 20; id++) b.deliver(save(id));
+  await tick();
+  assert.equal(a.saves.length, 20);
+  assert.equal(b.saves.length, 20);
+});
+
+test('чужие сообщения не тратят лимит игры: проверка окна и origin - до счётчика', async () => {
+  const events: string[] = [];
+  const { deliver, sent, saves } = setup({ onEvent: (e) => void events.push(e.type === 'rejected' ? e.reason : e.type) });
+  for (let id = 1; id <= 25; id++) deliver(save(id), 'https://evil.example');
+  for (let id = 1; id <= 25; id++) deliver(save(id), GAME_ORIGIN, {});
+  deliver(save(100, 'real'));
+  await tick();
+  assert.deepEqual(saves, ['real']);
+  assert.deepEqual(sent.map((s) => s.message.id), [100], 'на чужие id мост не отвечает');
+  assert.ok(!events.includes('rate-limited'));
+});

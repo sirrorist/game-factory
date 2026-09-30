@@ -2,9 +2,9 @@
 //
 // Файл самодостаточен (без import) и написан на стираемом подмножестве TS:
 // его берёт хаб на Next.js, а e2e-тест отдаёт браузеру после
-// module.stripTypeScriptTypes — без сборщика.
+// module.stripTypeScriptTypes - без сборщика.
 //
-// Правило моста: всё, что пришло из iframe, — недоверенный ввод. Сообщение
+// Правило моста: всё, что пришло из iframe, - недоверенный ввод. Сообщение
 // принимается, только если совпали и окно (event.source), и origin игры,
 // а содержимое прошло проверку формы и лимитов.
 
@@ -22,7 +22,7 @@ export interface ScoreResult {
   isBest: boolean;
 }
 
-/** Где хаб хранит данные игры. Этап 0 — localStorage браузера, этап 1 — API хаба и Postgres. */
+/** Где хаб хранит данные игры. Этап 0 - localStorage браузера, этап 1 - API хаба и Postgres. */
 export interface GameDataHandlers {
   save(key: string, value: string): Promise<void>;
   load(key: string): Promise<string | null>;
@@ -46,7 +46,10 @@ export interface ConnectOptions {
   player: Player | null;
   handlers: GameDataHandlers;
   onEvent?: (event: BridgeEvent) => void;
-  /** Лимит запросов в секунду от одной игры. */
+  /**
+   * Лимит сообщений в секунду от игры - любых, не только запросов. Счётчик свой у каждого
+   * подключения, то есть у каждой вкладки игрока: игроки друг другу лимит не съедают.
+   */
   maxRequestsPerSecond?: number;
 }
 
@@ -76,7 +79,7 @@ const ALLOW_BY_PERMISSION: Record<string, string> = {
 /**
  * Атрибуты iframe игры. Песочница всегда без allow-top-navigation, allow-popups,
  * allow-forms и allow-modals: игре нельзя уводить вкладку хаба и открывать окна.
- * allow-same-origin нужен игре для своего localStorage — её origin всё равно чужой хабу.
+ * allow-same-origin нужен игре для своего localStorage - её origin всё равно чужой хабу.
  */
 export function frameAttributes(permissions: readonly string[]): FrameAttributes {
   const sandbox = ['allow-scripts', 'allow-same-origin'];
@@ -128,6 +131,23 @@ export function connectGame(opts: ConnectOptions): () => void {
   const onMessage = (event: MessageEvent): void => {
     if (event.source !== opts.iframe.contentWindow || event.origin !== opts.gameOrigin) return;
     const d: unknown = event.data;
+
+    // Лимит - на любое сообщение игры: hello в цикле иначе давал бы welcome (с игроком)
+    // и событие хабу на каждое. Нормальная игра шлёт hello и ready по разу за запуск.
+    const now = Date.now();
+    if (now - windowStart >= 1000) {
+      windowStart = now;
+      windowCount = 0;
+    }
+    if (++windowCount > limit) {
+      if (isRecord(d) && d.type === 'request' && typeof d.id === 'number') {
+        post({ gf: PROTOCOL, type: 'response', id: d.id, ok: false, error: 'rate-limited' });
+      }
+      // Событие - одно на окно, а не на каждое лишнее сообщение: хаб не должен тонуть в них.
+      if (windowCount === limit + 1) emit({ type: 'rejected', reason: 'rate-limited' });
+      return;
+    }
+
     if (!isRecord(d) || d.gf !== PROTOCOL || typeof d.type !== 'string') {
       emit({ type: 'rejected', reason: 'bad-shape' });
       return;
@@ -150,16 +170,6 @@ export function connectGame(opts: ConnectOptions): () => void {
 
     if (d.type === 'request' && typeof d.id === 'number' && typeof d.method === 'string') {
       const id = d.id;
-      const now = Date.now();
-      if (now - windowStart >= 1000) {
-        windowStart = now;
-        windowCount = 0;
-      }
-      if (++windowCount > limit) {
-        post({ gf: PROTOCOL, type: 'response', id, ok: false, error: 'rate-limited' });
-        emit({ type: 'rejected', reason: 'rate-limited' });
-        return;
-      }
       emit({ type: 'request', method: d.method });
       const params = isRecord(d.params) ? d.params : null;
       Promise.resolve()
