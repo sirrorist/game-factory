@@ -30,3 +30,8 @@ updates:
     target-branch: dev
     schedule:
       interval: monthly
+    ignore:
+      # Мажор Postgres - не PR, а решение: другой путь данных в образе (том не подхватится),
+      # PGlite в тестах - та же ветка, на мажор опирается бэкап сервера (OPERATIONS.md).
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
