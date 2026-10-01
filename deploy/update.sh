@@ -17,6 +17,8 @@ SERVICES=(games migrate db play hub)
 cd "$DIR"
 
 # Второй запуск, пока идёт первый, просто выходит: таймер догонит следующим тиком.
+# Этот же замок берёт ночной бэкап сервера, чтобы не снимать дамп базы посреди миграции:
+# имя и flock не менять без записи в приватной базе инфраструктуры (OPERATIONS.md).
 exec 9> /run/gf-update.lock
 flock -n 9 || { echo "уже идёт другой прогон"; exit 0; }
 
@@ -49,7 +51,11 @@ fi
 # Перед миграцией - дамп: миграции только вперёд, это точка возврата. Не снялся - стоп.
 compose up -d --wait db
 install -d -m 0700 "$BACKUP_DIR"
-compose exec -T db pg_dump -U gf -d gf | gzip > "$BACKUP_DIR/pre-migrate-$(date +%Y%m%d-%H%M%S).sql.gz"
+# Во временное имя (не под шаблоном ротации) и переименовать после успеха: иначе дамп,
+# оборванный на сбое pg_dump, остался бы среди 10 последних и вытеснил целый.
+dump="$BACKUP_DIR/pre-migrate-$(date +%Y%m%d-%H%M%S).sql.gz"
+compose exec -T db pg_dump -U gf -d gf | gzip > "$dump.part"
+mv "$dump.part" "$dump"
 # Хранить последние 10: имена с датой сортируются как время.
 find "$BACKUP_DIR" -maxdepth 1 -name 'pre-migrate-*.sql.gz' | sort -r | tail -n +11 | xargs -r rm -f --
 if ! compose run --rm migrate; then
