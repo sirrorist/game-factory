@@ -170,8 +170,10 @@
   position: relative; width: 100%; aspect-ratio: 16 / 10; border-radius: var(--radius-md);
   background: #000; box-shadow: inset 0 0 0 1px var(--line); overflow: hidden;
 }
+/* Кнопка выхода - ниже выреза камеры (env() даёт viewport-fit=cover в layout.tsx; без выреза он 0).
+   Саму игру полями не сжимаем: k8s-at-home узнаёт полный экран хаба по размеру окна (П-047). */
 .gf-exit-pill {
-  position: absolute; left: 50%; top: var(--space-3); transform: translateX(-50%);
+  position: absolute; left: 50%; top: calc(env(safe-area-inset-top, 0px) + var(--space-3)); transform: translateX(-50%);
   display: inline-flex; align-items: center; gap: var(--space-2);
   height: 36px; padding: 0 var(--space-4) 0 var(--space-3);
   font: 600 13px/1 var(--font-body); color: var(--hud-ink); background: var(--hud-strong);

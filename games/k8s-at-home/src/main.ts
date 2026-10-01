@@ -12,7 +12,7 @@ import { decodeEdits, encodeEdits, fromBase64, parseMeta, SAVE_VERSION, splitPar
 import { Sky } from './sky.ts';
 import { WaterFlow } from './water.ts';
 import { FallingBlocks } from './falling.ts';
-import { chunkKey, meshInRange, meshVisible, PAD_VOLUME, World } from './world.ts';
+import { boxDistance, chunkKey, meshInRange, meshVisible, PAD_VOLUME, World } from './world.ts';
 import './style.css';
 
 const $ = (id: string): HTMLElement => document.getElementById(id)!;
@@ -24,6 +24,12 @@ const AUTOSAVE_MS = 10_000;
 const MAX_RD = 10;
 
 const touchDevice = matchMedia('(pointer: coarse)').matches;
+
+// Туман по расстоянию до камеры, а не по глубине кадра (у three.js - глубина): тогда за fog.far
+// не видно ничего и в любом углу экрана, и чанк целиком дальше тумана можно не рисовать
+// (`cullFogged`). С глубиной блок у края экрана виден и за fog.far - отсечение давало бы дыры.
+// Правка общая для всех материалов с туманом; программы шейдеров собираются позже, при первом кадре.
+THREE.ShaderChunk.fog_vertex = THREE.ShaderChunk.fog_vertex.replace('- mvPosition.z', 'length( mvPosition.xyz )');
 
 // Смещения чанков вокруг игрока по возрастанию расстояния: ближние грузятся первыми.
 const OFFSETS: [number, number][] = [];
@@ -46,6 +52,13 @@ interface Particle {
 interface ChunkMeshes {
   solid: THREE.Mesh | null;
   water: THREE.Mesh | null;
+  cx: number;
+  cz: number;
+  /** Высоты граней чанка - коробка для отсечения туманом. */
+  minY: number;
+  maxY: number;
+  /** В круге дальности (`meshVisible`); рисуется, только если ещё и не целиком в тумане. */
+  ring: boolean;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -357,10 +370,23 @@ class Game {
         c.dirty = true;
       } else {
         const m = this.meshes.get(key);
-        const on = meshVisible(dx, dz, this.renderDistance);
-        if (m?.solid) m.solid.visible = on;
-        if (m?.water) m.water.visible = on;
+        if (m) m.ring = meshVisible(dx, dz, this.renderDistance);
       }
+    }
+  }
+
+  /**
+   * Рисовать сетку, только если она в круге дальности и хоть край её ближе fog.far: дальше туман
+   * сплошной (туман по расстоянию - см. fog_vertex вверху). Высоко в небе это почти весь мир:
+   * раньше он рисовался целиком под туманом, и кадр проседал на пустом экране.
+   */
+  private cullFogged(p: THREE.Vector3, far: number): void {
+    for (const m of this.meshes.values()) {
+      const x0 = m.cx * CHUNK;
+      const z0 = m.cz * CHUNK;
+      const on = m.ring && boxDistance(p.x, p.y, p.z, x0, m.minY, z0, x0 + CHUNK, m.maxY, z0 + CHUNK) < far;
+      if (m.solid) m.solid.visible = on;
+      if (m.water) m.water.visible = on;
     }
   }
 
@@ -389,7 +415,11 @@ class Game {
     const solid = this.makeMesh(data.solid, this.solidMat, cx, cz);
     const water = this.makeMesh(data.water, this.waterMat, cx, cz);
     if (water) water.renderOrder = 1;
-    this.meshes.set(key, { solid, water });
+    const parts = [data.solid, data.water].filter((d) => d.indices.length > 0);
+    const minY = Math.min(...parts.map((d) => d.minY));
+    const maxY = Math.max(...parts.map((d) => d.maxY)) + 1;
+    // Строится только в круге построения - значит, в круге дальности.
+    this.meshes.set(key, { solid, water, cx, cz, minY, maxY, ring: true });
   }
 
   private dropMesh(key: number): void {
@@ -590,6 +620,7 @@ class Game {
 
     const view = this.renderDistance * CHUNK;
     const { daylight } = this.sky.update(this.time, cam, view, b.headInWater, dt);
+    this.cullFogged(cam.position, this.sky.fogFar);
     this.solidMat.color.setScalar(daylight);
     this.waterMat.color.setScalar(daylight);
     $('water').hidden = !b.headInWater;

@@ -61,8 +61,14 @@ function sunTexture(): THREE.CanvasTexture {
 function startGame(session: Session): void {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(WIDTH, HEIGHT);
+  // Размер холста задаёт CSS (квадрат по .stage), буфер рисования - под него: без размытия
+  // при растяжении на полный экран. Камера квадратная, aspect не меняется.
+  renderer.setSize(WIDTH, HEIGHT, false);
   $('stage').appendChild(renderer.domElement);
+  new ResizeObserver(() => {
+    const el = renderer.domElement;
+    if (el.clientWidth > 0) renderer.setSize(el.clientWidth, el.clientHeight, false);
+  }).observe(renderer.domElement);
 
   const scene = new THREE.Scene();
   scene.background = skyTexture();

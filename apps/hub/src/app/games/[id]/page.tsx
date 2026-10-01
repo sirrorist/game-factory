@@ -46,7 +46,6 @@ export default async function GamePage({ params }: Props) {
         title={manifest.title}
         sandbox={frame.sandbox}
         allow={frame.allow}
-        fullscreen={manifest.permissions.includes('fullscreen')}
       >
         {download ? <DownloadLink url={download.url} bytes={download.bytes} /> : null}
       </GameFrame>

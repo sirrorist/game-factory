@@ -14,15 +14,17 @@ interface Props {
   title: string;
   sandbox: string;
   allow: string;
-  fullscreen: boolean;
   children?: ReactNode;
 }
 
-export function GameFrame({ gameId, gameOrigin, title, sandbox, allow, fullscreen, children }: Props) {
+export function GameFrame({ gameId, gameOrigin, title, sandbox, allow, children }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  // Полный экран хаба разворачивает обёртку, а не игру: права игры "fullscreen" ему не нужно -
+  // кнопка есть у всех игр, где браузер это умеет (на iPhone - нет). Узнаём после монтирования: на сервере document нет.
+  const [canFullscreen, setCanFullscreen] = useState(false);
   const [best, setBest] = useState<number | null>(null);
 
   useEffect(() => {
@@ -61,6 +63,7 @@ export function GameFrame({ gameId, gameOrigin, title, sandbox, allow, fullscree
   }, [gameId, gameOrigin]);
 
   useEffect(() => {
+    setCanFullscreen(document.fullscreenEnabled);
     const sync = (): void => setIsFullscreen(!!wrapRef.current && document.fullscreenElement === wrapRef.current);
     document.addEventListener('fullscreenchange', sync);
     return () => document.removeEventListener('fullscreenchange', sync);
@@ -80,7 +83,7 @@ export function GameFrame({ gameId, gameOrigin, title, sandbox, allow, fullscree
         </span>
         {!ready ? <span className="text-sm text-muted-foreground">загрузка…</span> : null}
         <span className="gf-toolbar__spacer" />
-        {fullscreen ? (
+        {canFullscreen ? (
           <Button variant="outline" size="sm" onClick={() => void wrapRef.current?.requestFullscreen().catch(() => undefined)}>
             <Icon name="fullscreen" />
             На весь экран

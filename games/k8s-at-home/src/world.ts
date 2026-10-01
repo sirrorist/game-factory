@@ -32,6 +32,17 @@ export function meshVisible(dx: number, dz: number, rd: number): boolean {
   return dx * dx + dz * dz <= (rd + 0.5) ** 2;
 }
 
+/** Расстояние от точки до коробки [x0, x1] × [y0, y1] × [z0, z1]; внутри - 0. */
+export function boxDistance(
+  px: number, py: number, pz: number,
+  x0: number, y0: number, z0: number, x1: number, y1: number, z1: number,
+): number {
+  const dx = Math.max(x0 - px, 0, px - x1);
+  const dy = Math.max(y0 - py, 0, py - y1);
+  const dz = Math.max(z0 - pz, 0, pz - z1);
+  return Math.hypot(dx, dy, dz);
+}
+
 export const PAD_SIDE = CHUNK + 2;
 export const PAD_HEIGHT = HEIGHT + 2;
 export const PAD_VOLUME = PAD_SIDE * PAD_SIDE * PAD_HEIGHT;

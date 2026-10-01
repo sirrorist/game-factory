@@ -12,18 +12,29 @@
 
 html,
 body {
+  height: 100%;
   margin: 0;
   background: var(--bg);
   color: var(--fg);
   font: 15px/1.4 system-ui, sans-serif;
 }
 
+/* Игра - во всё окно и по центру: в рамке хаба и в его полном экране размер окна разный,
+   поле масштабируется под него, а не стоит 480×480 в левом верхнем углу. */
 .wrap {
+  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   padding: 8px;
+}
+
+.stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
 }
 
 .hud {
@@ -48,8 +59,8 @@ body {
   text-align: center;
 }
 
+/* Размер и центр холста задаёт Phaser (Scale.FIT по .stage). */
 .stage canvas {
   display: block;
-  max-width: 100%;
   touch-action: none;
 }

@@ -10,7 +10,7 @@ import { makeBody, raycast, stepBody, type MoveInput } from '../src/physics.ts';
 import { decodeEdits, encodeEdits, fromBase64, MAX_PARTS, PART_BYTES, parseMeta, splitParts, toBase64 } from '../src/save.ts';
 import { FallingBlocks } from '../src/falling.ts';
 import { FLOW_RANGE, WaterFlow } from '../src/water.ts';
-import { chunkKey, meshInRange, meshVisible, PAD_VOLUME, padIdx, World } from '../src/world.ts';
+import { boxDistance, chunkKey, meshInRange, meshVisible, PAD_VOLUME, padIdx, World } from '../src/world.ts';
 
 test('генерация детерминирована: один сид - один мир, другой сид - другой', () => {
   const a = new Generator(42).generate(3, -7);
@@ -294,4 +294,15 @@ test('дальность: сетка снимается за дальность�
   assert.ok(!meshInRange(4, 0, 2));
   assert.ok(!meshInRange(3, 3, 2));
   assert.ok(meshInRange(3, 0, 2) && !meshVisible(3, 0, 2), 'чанк запаса: сетка есть, но не рисуется');
+});
+
+test('отсечение туманом: расстояние до коробки чанка - до ближайшей точки, внутри 0', () => {
+  // Чанк 0..16 по x и z, грани от 40 до 70 по высоте.
+  const d = (x: number, y: number, z: number): number => boxDistance(x, y, z, 0, 40, 0, 16, 70, 16);
+  assert.equal(d(8, 50, 8), 0);
+  assert.equal(d(8, 100, 8), 30);
+  assert.equal(d(-3, 50, 8), 3);
+  assert.equal(d(19, 74, 8), 5);
+  // Высоко над миром: горизонталь рядом, но до граней 90 блоков - дальше тумана в 80.
+  assert.ok(d(8, 160, 8) > 80);
 });

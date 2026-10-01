@@ -187,6 +187,8 @@ async function main(): Promise<void> {
     parent: 'stage',
     width: WIDTH,
     height: HEIGHT,
+    // Поле 480×480 вписывается в #stage и стоит по центру - и в рамке хаба, и в полном экране.
+    scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
     backgroundColor: '#161b22',
     // Баннер Phaser в консоли не нужен: консоль игры читают тесты.
     banner: false,

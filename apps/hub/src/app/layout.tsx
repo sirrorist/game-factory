@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Logo } from '@/components/logo.tsx';
@@ -9,6 +9,10 @@ export const metadata: Metadata = {
   title: { default: 'Game Factory', template: '%s · Game Factory' },
   description: 'Браузерные игры: играть в хабе или скачать и играть без интернета.',
 };
+
+// viewport-fit=cover - чтобы браузер отдал env(safe-area-inset-*): по ним полный экран игры
+// опускает кнопку выхода ниже выреза камеры (.gf-exit-pill), а страница в ландшафте - "чёлку" по бокам.
+export const viewport: Viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover' };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

@@ -131,6 +131,9 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-body);
+    /* viewport-fit=cover (layout.tsx): в ландшафте на телефоне с вырезом страница не уходит под него. */
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
   }
   h1,
   h2,

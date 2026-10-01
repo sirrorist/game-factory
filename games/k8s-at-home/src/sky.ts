@@ -29,6 +29,11 @@ export class Sky {
   private readonly cloudMat: THREE.MeshBasicMaterial;
   private drift = 0;
 
+  /** Дальше этого расстояния туман сплошной: чанки за ним не рисуются (main.ts, cullFogged). */
+  get fogFar(): number {
+    return this.fog.far;
+  }
+
   constructor(scene: THREE.Scene) {
     this.scene = scene;
     this.fog = new THREE.Fog(DAY.getHex(), 40, 80);
