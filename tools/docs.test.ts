@@ -32,3 +32,15 @@ test('каждая ссылка D-/П- ведёт на существующую 
   }
   assert.deepEqual(dangling, [], 'ссылки на несуществующие записи');
 });
+
+// STATE читается целиком в начале каждой сессии. Ведётся журналом - растёт без предела и
+// дорожает с каждой сессией, поэтому он снимок, а доказательства - в CHANGELOG (D-052).
+const STATE_MAX_LINES = 120;
+
+test(`STATE.md - снимок не длиннее ${STATE_MAX_LINES} строк`, () => {
+  const lines = readFileSync(join(REPO, 'docs/STATE.md'), 'utf8').trimEnd().split('\n').length;
+  assert.ok(
+    lines <= STATE_MAX_LINES,
+    `STATE.md - ${lines} строк: перенеси сделанное и проверенное в CHANGELOG.md, оставь снимок`,
+  );
+});
