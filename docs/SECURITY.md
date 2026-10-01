@@ -24,7 +24,7 @@
 | Служебный хост не отдаёт файлы игр | ✅ | `server.test.ts` |
 | Хаб и игры на одном регистрируемом домене | ⚠️ до этапа 5 | D-010 |
 | Отдельный домен для игр + Public Suffix List | 🔜 этап 5 | D-010 |
-| iframe `sandbox="allow-scripts allow-same-origin allow-pointer-lock"`, без `allow-top-navigation`, без `allow-popups-to-escape-sandbox` | ✅ | эталонный хаб; e2e ловит навигацию наверх (мутация проверена) |
+| iframe `sandbox="allow-scripts allow-same-origin"` (+ `allow-pointer-lock`, `allow-orientation-lock` - только по праву манифеста, D-055), без `allow-top-navigation`, без `allow-popups-to-escape-sandbox` | ✅ | эталонный хаб; e2e ловит навигацию наверх (мутация проверена); `frame.test.ts`, e2e "права манифеста…" |
 | CSP `frame-ancestors` = только хаб | ✅ | e2e "чужой сайт" (мутация проверена) |
 | CSP игры: `object-src 'none'`, `base-uri 'none'`, `form-action 'none'` | ✅ | `server.test.ts` |
 | `script-src 'unsafe-inline'` | ⚠️ | нужен офлайн-сборкам; XSS не выходит за origin игры |

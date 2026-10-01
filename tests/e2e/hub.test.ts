@@ -12,7 +12,7 @@ import { pathToFileURL } from 'node:url';
 import type { Browser, Frame, Page } from 'playwright';
 import { buildData, close, freePort, gameVersion, launchBrowser, startHub, startPlay, type Hub } from './helpers.ts';
 
-const GAMES = ['phaser-2d', 'snake', 'three-3d'] as const;
+const GAMES = ['k8s-at-home', 'phaser-2d', 'snake', 'three-3d'] as const;
 
 let browser: Browser;
 let play: { server: Server; port: number };
@@ -128,6 +128,18 @@ test('права манифеста: fullscreen есть только у игр,
   const snake = await openGame(page, 'snake');
   assert.equal(await page.locator('iframe#game').getAttribute('allow'), '');
   assert.equal(await snake.evaluate(() => document.fullscreenEnabled), false);
+  assert.equal(await page.locator('iframe#game').getAttribute('sandbox'), 'allow-scripts allow-same-origin');
+  await page.close();
+});
+
+test('права манифеста: захват мыши и разворот экрана - только у игры, которая их просила', async () => {
+  const page = await browser.newPage();
+  await openGame(page, 'k8s-at-home');
+  assert.equal(
+    await page.locator('iframe#game').getAttribute('sandbox'),
+    'allow-scripts allow-same-origin allow-pointer-lock allow-orientation-lock',
+  );
+  assert.equal(await page.locator('iframe#game').getAttribute('allow'), 'fullscreen; autoplay');
   await page.close();
 });
 

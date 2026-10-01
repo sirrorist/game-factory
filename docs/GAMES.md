@@ -7,6 +7,7 @@
 | `snake` | Змейка | 1.0.0 | static / static | да | в каталоге | эталон статической игры, покрыта e2e |
 | `phaser-2d` | Звездопад | 1.1.0 | static / vite-ts | да | в каталоге | эталон 2D на Phaser 4; текстуры рисуются кодом; уровни сложности каждые 20 с (D-040); просит `fullscreen`; покрыта e2e |
 | `three-3d` | Три полосы | 1.0.0 | static / vite-ts | да | в каталоге | эталон 3D на Three.js (WebGL); просит `fullscreen`; покрыта e2e |
+| `k8s-at-home` | k8s at home | 1.0.0 | static / vite-ts | да | собрана, ждёт выкладки | воксельная песочница на Three.js (D-054): чанки, биомы, пещеры, день и ночь, сенсорное управление; просит `pointer-lock` и `orientation-lock`; логика - юнит-тесты `games/k8s-at-home/test`, запуск - e2e |
 
 Шаблон `templates/vite-ts` - не игра и в каталог не попадает, но собирается и проверяется
 типами вместе со всеми (пакет рабочей области), чтобы не протухал.
@@ -19,6 +20,7 @@
 4. `pnpm --filter @gf-game/my-game dev` - Vite с горячей перезагрузкой (SDK в режиме `standalone`).
 5. `pnpm games:build my-game && pnpm games:export my-game`, потом `pnpm play` + `pnpm hub`.
 6. Строка в таблицу выше; офлайн-игру - в списки `tests/e2e/offline.test.ts` и `tests/e2e/hub.test.ts`.
+7. Логику без DOM и Three - в `games/<id>/test/*.test.ts`: их гоняет `pnpm test` (импорты - с `.ts`).
 
 Требования офлайн-сборки для движков: без `fetch`/XHR за ассетами (П-002) - картинки
 импортом в код (станут `data:`-URL) или рисовать кодом; без top-level `await` (П-018).
@@ -65,7 +67,7 @@
 | `output` | нет | папка сборки (для остальных) | по умолчанию `dist`; для `static` запрещён |
 | `entry` | да | входной HTML | относительный путь, `.html` |
 | `offline` | да | можно скачать архивом | только для `kind: static`; вход должен быть `index.html` |
-| `permissions` | да | что игра просит | `saves`, `leaderboard`, `multiplayer`, `fullscreen`, `pointer-lock`, `gamepad`, `audio` |
+| `permissions` | да | что игра просит | `saves`, `leaderboard`, `multiplayer`, `fullscreen`, `pointer-lock`, `orientation-lock` (разворот экрана в полноэкранном режиме, D-055), `gamepad`, `audio` |
 | `tags` | да | теги | до 10, `a-z0-9-` до 24 символов |
 | `cover` | нет | обложка | png / jpg / webp / svg внутри пакета |
 | `authors` | нет | авторы | до 10 строк |

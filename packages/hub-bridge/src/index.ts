@@ -84,6 +84,9 @@ const ALLOW_BY_PERMISSION: Record<string, string> = {
 export function frameAttributes(permissions: readonly string[]): FrameAttributes {
   const sandbox = ['allow-scripts', 'allow-same-origin'];
   if (permissions.includes('pointer-lock')) sandbox.push('allow-pointer-lock');
+  // Разворот экрана браузер даёт только в полноэкранном режиме игры, и выход из него
+  // разворот снимает: вкладку хаба игра повернуть не может.
+  if (permissions.includes('orientation-lock')) sandbox.push('allow-orientation-lock');
   const allow = permissions.flatMap((p) => ALLOW_BY_PERMISSION[p] ?? []);
   return { sandbox: sandbox.join(' '), allow: allow.join('; ') };
 }

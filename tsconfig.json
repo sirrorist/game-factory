@@ -13,6 +13,7 @@
     "packages/vite-config/**/*.ts",
     "tools/**/*.ts",
     "tests/**/*.ts",
+    "games/*/test/**/*.ts",
     "packages/game-sdk/index.d.ts"
   ]
 }

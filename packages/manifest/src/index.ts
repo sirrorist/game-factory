@@ -10,6 +10,7 @@ export const PERMISSIONS = [
   'multiplayer',
   'fullscreen',
   'pointer-lock',
+  'orientation-lock',
   'gamepad',
   'audio',
 ] as const;
@@ -168,7 +169,7 @@ export function validateManifest(input: unknown): ValidationResult {
     errors.push('"tags" обязателен: массив строк, можно пустой');
   } else {
     if (m.tags.length > 10) errors.push('"tags": не больше 10');
-    for (const t of m.tags) if (!TAG_RE.test(t)) errors.push(`"tags": "${t}" — только a-z, 0-9, дефис, до 24 символов`);
+    for (const t of m.tags) if (!TAG_RE.test(t)) errors.push(`"tags": "${t}" - только a-z, 0-9, дефис, до 24 символов`);
   }
 
   if (m.authors !== undefined && !(isStringArray(m.authors) && m.authors.length <= 10)) {

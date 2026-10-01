@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://games.youranus.ru/schema/game.schema.json",
   "title": "Game Factory manifest (game.json)",
-  "description": "Подсказки редактору. Истина — валидатор в src/index.ts, синхронность держит тест.",
+  "description": "Подсказки редактору. Истина - валидатор в src/index.ts, синхронность держит тест.",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "title", "version", "kind", "toolchain", "entry", "offline", "permissions", "tags"],
@@ -25,7 +25,7 @@
     "permissions": {
       "type": "array",
       "uniqueItems": true,
-      "items": { "enum": ["saves", "leaderboard", "multiplayer", "fullscreen", "pointer-lock", "gamepad", "audio"] }
+      "items": { "enum": ["saves", "leaderboard", "multiplayer", "fullscreen", "pointer-lock", "orientation-lock", "gamepad", "audio"] }
     },
     "tags": {
       "type": "array",

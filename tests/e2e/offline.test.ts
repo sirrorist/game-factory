@@ -74,6 +74,7 @@ test('змейка из архива запускается через file:// �
 for (const { id, start } of [
   { id: 'phaser-2d', start: null },
   { id: 'three-3d', start: 'Space' },
+  { id: 'k8s-at-home', start: null },
 ]) {
   test(`${id} из архива запускается через file:// и рисует кадр`, async () => {
     const context = await browser.newContext();

@@ -1,0 +1,33 @@
+{
+  "$schema": "../../packages/manifest/game.schema.json",
+  "id": "k8s-at-home",
+  "title": "k8s at home",
+  "version": "1.0.0",
+  "description": "Своя воксельная песочница: бесконечный мир из кубиков с биомами, пещерами и сменой дня и ночи. Ломай и строй, на ПК и на телефоне. Работает офлайн.",
+  "kind": "static",
+  "toolchain": "vite-ts",
+  "output": "dist",
+  "entry": "index.html",
+  "offline": true,
+  "permissions": [
+    "saves",
+    "leaderboard",
+    "fullscreen",
+    "pointer-lock",
+    "orientation-lock",
+    "audio"
+  ],
+  "tags": [
+    "sandbox",
+    "voxel",
+    "three",
+    "3d",
+    "keyboard",
+    "mouse",
+    "touch"
+  ],
+  "cover": "cover.svg",
+  "authors": [
+    "sirrorist"
+  ]
+}
