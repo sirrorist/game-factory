@@ -102,7 +102,8 @@ export class Generator {
         let filler: number;
         switch (biome) {
           case 'ocean': {
-            const gravel = hash3(seed, wx >> 3, 1, wz >> 3) < 0.3;
+            // Гравий - пятнами по шуму: по хешу клеток 8×8 он лежал на дне ровными квадратами.
+            const gravel = fbm2(this.terrain, wx / 20 + 300, wz / 20 - 200, 2) > 0.28;
             top = gravel ? B.GRAVEL : B.SAND;
             filler = gravel ? B.GRAVEL : B.SAND;
             break;
@@ -155,8 +156,8 @@ export class Generator {
           const wy = y * CAVE_STEP;
           const wz = z0 + z * CAVE_STEP;
           const i = x + z * CAVE_NX + y * CAVE_NX * CAVE_NX;
-          this.caveA[i] = this.caves.n3(wx / 28, wy / 18, wz / 28);
-          this.caveB[i] = this.caves.n3(wx / 28 + 91.7, wy / 18 - 13.1, wz / 28 + 47.3);
+          this.caveA[i] = this.caves.n3(wx / 40, wy / 24, wz / 40);
+          this.caveB[i] = this.caves.n3(wx / 40 + 91.7, wy / 24 - 13.1, wz / 40 + 47.3);
         }
       }
     }
@@ -171,8 +172,8 @@ export class Generator {
     const tx = fx - ix, ty = fy - iy, tz = fz - iz;
     const a = trilinear(this.caveA, ix, iy, iz, tx, ty, tz);
     const b = trilinear(this.caveB, ix, iy, iz, tx, ty, tz);
-    // Глубже - шире: у поверхности редкие узкие ходы, внизу - просторнее.
-    const width = 0.012 + (y < 24 ? (24 - y) * 0.0012 : 0);
+    // Ходы крупные (шаг шума 40 блоков) - по ним можно пройти; глубже - шире.
+    const width = 0.019 + (y < 24 ? (24 - y) * 0.0012 : 0);
     return a * a + b * b < width;
   }
 

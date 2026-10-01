@@ -136,10 +136,17 @@ button.danger.armed { background: var(--danger); color: #fff; }
 .note { margin: 0; color: var(--muted); font-size: 12px; }
 .hint { margin: 0; color: var(--muted); font-size: 12px; }
 
-#picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 6px; }
-#picker-grid button { padding: 4px; height: 64px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
-#picker-grid img { width: 36px; height: 36px; image-rendering: pixelated; pointer-events: none; }
-#picker-grid span { font-size: 10px; color: var(--muted); line-height: 1.1; text-align: center; }
+#picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; }
+#picker-grid button {
+  padding: 6px 4px; min-height: 76px; display: flex; flex-direction: column; align-items: center;
+  justify-content: flex-start; gap: 4px; min-width: 0;
+}
+#picker-grid img { width: 36px; height: 36px; flex: none; image-rendering: pixelated; pointer-events: none; }
+/* Длинные названия ("Заснеженная трава") переносятся по слогам и не вылезают из кнопки. */
+#picker-grid span {
+  font-size: 11px; color: var(--muted); line-height: 1.15; text-align: center;
+  max-width: 100%; overflow-wrap: anywhere; hyphens: auto;
+}
 
 /* Низкий экран телефона боком: меню компактнее. */
 @media (max-height: 480px) {

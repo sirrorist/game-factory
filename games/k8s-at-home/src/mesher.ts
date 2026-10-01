@@ -130,7 +130,13 @@ export function meshChunk(pad: Uint8Array, faceTiles: Uint8Array): ChunkMesh {
           const n = at + s * STEP[a]!;
           const nid = pad[n]!;
           if (OPAQUE[nid]) continue;
-          if (water && nid === B.WATER) continue;
+          // Вода к воде не рисуется - кроме полоски над соседом с опущенной поверхностью:
+          // иначе между полным блоком воды и соседом под воздухом видна щель в 2 пикселя.
+          let strip = false;
+          if (water && nid === B.WATER) {
+            if (a === 1 || waterTop || pad[n + STEP[1]!] === B.WATER) continue;
+            strip = true;
+          }
           if (glass && nid === B.GLASS) continue;
           const ua = (a + 1) % 3;
           const va = (a + 2) % 3;
@@ -149,6 +155,7 @@ export function meshChunk(pad: Uint8Array, faceTiles: Uint8Array): ChunkMesh {
             corner[ua] = pos[ua]! + cu;
             corner[va] = pos[va]! + cv;
             if (waterTop && corner[1] === y + 1) corner[1] = y + 0.875;
+            if (strip && corner[1] === y) corner[1] = y + 0.875;
             p[k * 3] = corner[0]!;
             p[k * 3 + 1] = corner[1]!;
             p[k * 3 + 2] = corner[2]!;

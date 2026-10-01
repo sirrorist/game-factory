@@ -8,6 +8,7 @@ import { CHUNK, Generator, HEIGHT, idx, SEA } from '../src/gen.ts';
 import { meshChunk } from '../src/mesher.ts';
 import { makeBody, raycast, stepBody, type MoveInput } from '../src/physics.ts';
 import { decodeEdits, encodeEdits, fromBase64, MAX_PARTS, PART_BYTES, parseMeta, splitParts, toBase64 } from '../src/save.ts';
+import { FLOW_RANGE, WaterFlow } from '../src/water.ts';
 import { chunkKey, PAD_VOLUME, padIdx, World } from '../src/world.ts';
 
 test('генерация детерминирована: один сид - один мир, другой сид - другой', () => {
@@ -188,4 +189,66 @@ test('луч: первый твёрдый блок и грань, в котор�
   assert.deepEqual([hit.x, hit.y, hit.z, hit.nx, hit.ny, hit.nz], [0, 10, -3, 0, 0, 1]);
   assert.equal(raycast(0.5, 10.5, 0.5, 0, 0, -1, 2, solid), null);
   assert.equal(SOLID[B.WATER], 0);
+});
+
+/** Маленький мир для воды: всё твёрдое, кроме заданных клеток. */
+function box(cells: Record<string, number>): { get(x: number, y: number, z: number): number; set(x: number, y: number, z: number, id: number): boolean; at(k: string): number } {
+  const m = new Map(Object.entries(cells));
+  return {
+    get: (x, y, z) => m.get(`${x},${y},${z}`) ?? B.STONE,
+    set: (x, y, z, id) => (m.set(`${x},${y},${z}`, id), true),
+    at: (k) => m.get(k) ?? B.STONE,
+  };
+}
+
+test('вода: из озера затекает в пробитую дыру и дальше по воздушному ходу', () => {
+  // Над клеткой (0,5,0) - вода, сбоку от неё ход из двух клеток воздуха.
+  const w = box({ '0,6,0': B.WATER, '0,5,0': B.AIR, '1,5,0': B.AIR, '2,5,0': B.AIR });
+  const flow = new WaterFlow();
+  flow.wake(w, 0, 5, 0);
+  for (let i = 0; i < 10; i++) flow.step(w, 24);
+  assert.equal(w.at('0,5,0'), B.WATER);
+  assert.equal(w.at('1,5,0'), B.WATER);
+  assert.equal(w.at('2,5,0'), B.WATER);
+  assert.equal(flow.pending, 0);
+});
+
+test('вода: вбок не дальше FLOW_RANGE; сама по себе не течёт', () => {
+  const cells: Record<string, number> = { '0,10,0': B.WATER };
+  for (let x = 1; x <= 20; x++) cells[`${x},10,0`] = B.AIR;
+  const w = box(cells);
+  const flow = new WaterFlow();
+  flow.step(w, 100);
+  assert.equal(w.at('1,10,0'), B.AIR, 'без правки вода стоит');
+  flow.wake(w, 1, 10, 0);
+  for (let i = 0; i < 50; i++) flow.step(w, 24);
+  assert.equal(w.at(`${FLOW_RANGE},10,0`), B.WATER);
+  assert.equal(w.at(`${FLOW_RANGE + 1},10,0`), B.AIR);
+});
+
+test('вода: падает вниз сколько угодно и вбок с падения не растекается', () => {
+  const cells: Record<string, number> = { '0,10,0': B.WATER, '1,10,0': B.AIR, '2,9,0': B.AIR };
+  for (let y = 0; y < 10; y++) cells[`1,${y},0`] = B.AIR;
+  const w = box(cells);
+  const flow = new WaterFlow();
+  flow.wake(w, 1, 10, 0);
+  for (let i = 0; i < 50; i++) flow.step(w, 24);
+  for (let y = 0; y <= 10; y++) assert.equal(w.at(`1,${y},0`), B.WATER, `y=${y}`);
+  assert.equal(w.at('2,9,0'), B.AIR, 'падающая вода растеклась вбок');
+});
+
+test('мешинг: у полного блока воды рядом с опущенной поверхностью - полоска, без щели', () => {
+  const pad = emptyPad();
+  pad[padIdx(3, 20, 3)] = B.WATER; // над ним вода - он полный
+  pad[padIdx(3, 21, 3)] = B.WATER;
+  pad[padIdx(4, 20, 3)] = B.WATER; // над ним воздух - поверхность опущена
+  const { water } = meshChunk(pad, FACE_TILES);
+  // Ищем грань +x у (3, 20): все её вершины на x = 4 и y от 20,875 до 21.
+  let strip = false;
+  for (let f = 0; f < water.positions.length / 12; f++) {
+    const v = water.positions.subarray(f * 12, f * 12 + 12);
+    const xs = [v[0]!, v[3]!, v[6]!, v[9]!], ys = [v[1]!, v[4]!, v[7]!, v[10]!];
+    if (xs.every((x) => x === 4) && Math.min(...ys) === 20.875 && Math.max(...ys) === 21) strip = true;
+  }
+  assert.ok(strip, 'нет полоски воды над соседом');
 });

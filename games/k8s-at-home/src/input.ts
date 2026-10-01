@@ -8,6 +8,8 @@ const TOUCH_SENS = 0.0055;
 const HOLD_MS = 320; // удержание дольше - ломаем, короче - ставим
 const TAP_SLOP = 12; // пикселей: сдвиг больше - это поворот камеры, а не касание
 const STICK_R = 50;
+// Скачок указателя больше этого за одно событие - сбой браузера при захвате, а не движение руки.
+const MOUSE_SPIKE = 300;
 
 export interface InputEvents {
   breakStart(): void;
@@ -20,6 +22,8 @@ export interface InputEvents {
   togglePicker(): void;
   toggleDebug(): void;
   pause(): void;
+  /** Захват мыши потерян не через меню (Esc, смена окна). main.ts решает: меню или нет. */
+  lockLost(): void;
   /** Первый жест игрока - можно включать звук. */
   gesture(): void;
 }
@@ -28,6 +32,10 @@ export class Input {
   yaw = 0;
   pitch = 0;
   touchMode = false;
+  /** Счётчики для F3: событий мыши, самый большой шаг, отсеянные скачки. Сбрасывает main.ts. */
+  readonly mouseStats = { events: 0, maxStep: 0, dropped: 0 };
+  /** Сырой ввод мыши: null - ещё не захватывали, false - браузер не умеет. */
+  rawMouse: boolean | null = null;
   /** Игра идёт: меню закрыто. Пока false, ввод в мир не идёт. */
   active = false;
   placeHeld = false;
@@ -41,6 +49,8 @@ export class Input {
   private touchDown = false;
   private lastSpace = 0;
   private lastJumpTap = 0;
+  private lastForward = 0;
+  private sprintW = false;
 
   constructor(canvas: HTMLElement, ev: InputEvents) {
     this.canvas = canvas;
@@ -50,7 +60,12 @@ export class Input {
     window.addEventListener('keyup', (e) => this.onKey(e, false));
     window.addEventListener('blur', () => this.releaseAll());
     document.addEventListener('pointerlockchange', () => {
-      if (!this.locked && this.active && !this.touchMode) ev.pause();
+      if (this.locked || !this.active || this.touchMode) return;
+      // Esc в полноэкранном режиме браузер тратит сразу на два выхода - из захвата и из полного
+      // экрана, а события приходят в любом порядке. Ждём второе, потом решаем.
+      setTimeout(() => {
+        if (!this.locked && this.active) ev.lockLost();
+      }, 250);
     });
     document.addEventListener('pointerlockerror', () => {
       // Chrome не даёт снова захватить указатель сразу после Esc - игрок кликнет ещё раз.
@@ -77,6 +92,13 @@ export class Input {
     });
     window.addEventListener('mousemove', (e) => {
       if (!this.locked || !this.active) return;
+      const step = Math.max(Math.abs(e.movementX), Math.abs(e.movementY));
+      this.mouseStats.events++;
+      if (step > MOUSE_SPIKE) {
+        this.mouseStats.dropped++;
+        return;
+      }
+      if (step > this.mouseStats.maxStep) this.mouseStats.maxStep = step;
       this.turn(e.movementX * MOUSE_SENS, e.movementY * MOUSE_SENS);
     });
     canvas.addEventListener('wheel', (e) => {
@@ -94,10 +116,23 @@ export class Input {
 
   lock(): void {
     if (this.touchMode || this.locked) return;
+    const canvas = this.canvas as HTMLElement & {
+      requestPointerLock(options?: { unadjustedMovement?: boolean }): Promise<void> | void;
+    };
     try {
+      // Сырое движение мыши - без ускорения ОС и с меньшей задержкой. Где его нет (часть
+      // систем), браузер отвечает NotSupportedError - тогда обычный захват.
       // В новых браузерах - промис: отказ не должен становиться необработанной ошибкой.
-      const r = this.canvas.requestPointerLock() as unknown;
-      if (r instanceof Promise) r.catch(() => undefined);
+      const r = canvas.requestPointerLock({ unadjustedMovement: true });
+      if (r instanceof Promise) {
+        r.then(() => (this.rawMouse = true)).catch((e: unknown) => {
+          if (e instanceof DOMException && e.name === 'NotSupportedError') {
+            this.rawMouse = false;
+            const again = canvas.requestPointerLock();
+            if (again instanceof Promise) again.catch(() => undefined);
+          }
+        });
+      }
     } catch {
       // нет захвата - останется меню
     }
@@ -123,7 +158,20 @@ export class Input {
       if (e.code === 'KeyE' && down) this.ev.togglePicker();
       return;
     }
+    // Сочетания с Ctrl и Cmd в игре - браузерные (Ctrl+D - закладка, Ctrl+S - сохранить):
+    // гасим те, что браузер даёт погасить. Ctrl+W и Ctrl+T не гасятся вовсе, поэтому
+    // Ctrl в управлении не участвует - бег на Shift или двойном W.
+    // Отпускание клавиши обрабатываем всегда - иначе W, отпущенная с зажатым Ctrl, "залипнет".
+    if (down && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      return;
+    }
     if (down) {
+      if (e.code === 'KeyW' && !e.repeat) {
+        const now = performance.now();
+        this.sprintW = now - this.lastForward < 300;
+        this.lastForward = now;
+      }
       if (e.code === 'Space' && !e.repeat) {
         const now = performance.now();
         if (now - this.lastSpace < 300) this.ev.toggleFly();
@@ -158,7 +206,8 @@ export class Input {
     if (!this.active) return { forward: 0, strafe: 0, sprint: false };
     let forward = (this.key('KeyW', 'ArrowUp') ? 1 : 0) - (this.key('KeyS', 'ArrowDown') ? 1 : 0);
     let strafe = (this.key('KeyD', 'ArrowRight') ? 1 : 0) - (this.key('KeyA', 'ArrowLeft') ? 1 : 0);
-    let sprint = this.key('ControlLeft', 'ControlRight');
+    if (!this.key('KeyW', 'ArrowUp')) this.sprintW = false;
+    let sprint = this.sprintW;
     if (this.stick.id >= 0) {
       const dx = this.stick.x - this.stick.x0;
       const dy = this.stick.y - this.stick.y0;

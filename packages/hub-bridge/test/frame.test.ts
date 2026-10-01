@@ -15,6 +15,8 @@ test('права манифеста превращаются в allow и sandbox
 
 test('разворот экрана - только по праву orientation-lock, fullscreen его не даёт', () => {
   assert.equal(frameAttributes(['fullscreen']).sandbox, 'allow-scripts allow-same-origin');
+  // Захват мыши - соседнее право того же вида: разворот вместе с ним не выдаётся.
+  assert.equal(frameAttributes(['pointer-lock']).sandbox, 'allow-scripts allow-same-origin allow-pointer-lock');
   assert.equal(frameAttributes(['orientation-lock']).sandbox, 'allow-scripts allow-same-origin allow-orientation-lock');
 });
 

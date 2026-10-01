@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { Logo } from '@/components/logo.tsx';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -14,7 +15,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="min-h-dvh">
         <header className="border-b">
           <div className="mx-auto flex h-14 max-w-5xl items-center px-4">
-            <Link href="/" className="font-semibold tracking-tight">
+            <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
+              <Logo />
               Game Factory
             </Link>
           </div>

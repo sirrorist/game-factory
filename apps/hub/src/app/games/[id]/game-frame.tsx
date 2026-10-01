@@ -19,7 +19,9 @@ interface Props {
 
 export function GameFrame({ gameId, gameOrigin, title, sandbox, allow, fullscreen, children }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [best, setBest] = useState<number | null>(null);
 
   useEffect(() => {
@@ -57,8 +59,15 @@ export function GameFrame({ gameId, gameOrigin, title, sandbox, allow, fullscree
     };
   }, [gameId, gameOrigin]);
 
+  useEffect(() => {
+    const sync = (): void => setIsFullscreen(!!wrapRef.current && document.fullscreenElement === wrapRef.current);
+    document.addEventListener('fullscreenchange', sync);
+    return () => document.removeEventListener('fullscreenchange', sync);
+  }, []);
+
   return (
-    <div className="flex w-full max-w-[560px] flex-col gap-3" data-game-ready={ready ? '1' : undefined}>
+    // Рамка игры - во всю ширину колонки хаба: игры сами центруют себя внутри iframe.
+    <div className="flex w-full flex-col gap-3" data-game-ready={ready ? '1' : undefined}>
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-sm">
           Твой рекорд: <b data-testid="hub-best">{best === null ? '-' : best}</b>
@@ -66,22 +75,37 @@ export function GameFrame({ gameId, gameOrigin, title, sandbox, allow, fullscree
         {!ready ? <span className="text-sm text-muted-foreground">загрузка…</span> : null}
         <span className="flex-1" />
         {fullscreen ? (
-          <Button variant="secondary" size="sm" onClick={() => void iframeRef.current?.requestFullscreen()}>
+          <Button variant="secondary" size="sm" onClick={() => void wrapRef.current?.requestFullscreen().catch(() => undefined)}>
             На весь экран
           </Button>
         ) : null}
         {children}
       </div>
       {/* Разметка iframe - как в tests/e2e/fixtures/mock-hub.html: sandbox и allow из манифеста (frameAttributes). */}
-      <iframe
-        ref={iframeRef}
-        id="game"
-        title={title}
-        sandbox={sandbox}
-        allow={allow}
-        referrerPolicy="no-referrer"
-        className="h-[600px] w-full rounded-lg border bg-black"
-      />
+      {/* На весь экран разворачивается обёртка, а не сам iframe: поверх игры остаётся кнопка
+          выхода хаба. Изнутри iframe полноэкранный режим хаба не виден - игра его не выключит. */}
+      <div ref={wrapRef} className={isFullscreen ? 'relative h-full w-full bg-black' : 'relative w-full'}>
+        <iframe
+          ref={iframeRef}
+          id="game"
+          title={title}
+          sandbox={sandbox}
+          allow={allow}
+          referrerPolicy="no-referrer"
+          className={isFullscreen ? 'h-full w-full bg-black' : 'h-[min(75dvh,680px)] min-h-[420px] w-full rounded-lg border bg-black'}
+        />
+        {isFullscreen ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            data-testid="exit-fullscreen"
+            className="absolute left-1/2 top-2 -translate-x-1/2 opacity-80"
+            onClick={() => void document.exitFullscreen().catch(() => undefined)}
+          >
+            ✕ Выйти
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }

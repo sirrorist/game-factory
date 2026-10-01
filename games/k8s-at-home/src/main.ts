@@ -9,6 +9,7 @@ import { meshChunk, type MeshData } from './mesher.ts';
 import { bodyCollides, EYE, makeBody, raycast, stepBody, type Body, type Hit } from './physics.ts';
 import { decodeEdits, encodeEdits, fromBase64, parseMeta, SAVE_VERSION, splitParts, type WorldMeta } from './save.ts';
 import { Sky } from './sky.ts';
+import { WaterFlow } from './water.ts';
 import { chunkKey, PAD_VOLUME, World } from './world.ts';
 import './style.css';
 
@@ -92,6 +93,8 @@ class Game {
   private readonly tileColor: THREE.Color[] = [];
   private readonly meshes = new Map<number, ChunkMeshes>();
   private readonly padBuf = new Uint8Array(PAD_VOLUME);
+  private readonly water = new WaterFlow();
+  private lastFlow = 0;
 
   private world!: World;
   private body!: Body;
@@ -118,7 +121,12 @@ class Game {
   private fpsAt = 0;
   private frame = 0;
   private lastFrame = 0;
+  // Замер для F3 за последнюю секунду: время кадра, рывки, подгрузка чанков.
+  private perf = { at: 0, frames: 0, sum: 0, worst: 0, slow: 0, stream: 0 };
+  private perfShown = { avg: 0, worst: 0, slow: 0, stream: 0, mouse: 0, step: 0, dropped: 0 };
   private started = false;
+  private fullscreenExitAt = -Infinity;
+  private wasHostFullscreen = false;
 
   constructor(session: Session, best: number | null) {
     this.session = session;
@@ -192,6 +200,11 @@ class Game {
         $('debug').hidden = !this.debug;
       },
       pause: () => this.openMenu(),
+      lockLost: () => {
+        // Один Esc - одно действие: вышли из полного экрана - игра ждёт клика, без меню.
+        if (performance.now() - this.fullscreenExitAt < 800) toast('Полный экран выключен - кликни по миру, чтобы играть дальше', 3000);
+        else this.openMenu();
+      },
       gesture: () => this.sound.unlock(),
     });
     if (touchDevice) this.input.enableTouch();
@@ -368,11 +381,9 @@ class Game {
     if (!t) return;
     const id = this.world.get(t.x, t.y, t.z);
     if (!BLOCKS[id]!.breakable) return;
-    // Вода стоячая, но в дыру рядом с ней затекает - иначе на берегу оставались бы стены воды.
-    const w = this.world;
-    const nearWater = [w.get(t.x, t.y + 1, t.z), w.get(t.x + 1, t.y, t.z), w.get(t.x - 1, t.y, t.z), w.get(t.x, t.y, t.z + 1), w.get(t.x, t.y, t.z - 1)]
-      .includes(B.WATER);
-    if (!w.set(t.x, t.y, t.z, nearWater ? B.WATER : B.AIR)) return;
+    if (!this.world.set(t.x, t.y, t.z, B.AIR)) return;
+    // Соседняя вода затекает в дыру и дальше по воздуху (water.ts).
+    this.water.wake(this.world, t.x, t.y, t.z);
     this.mined++;
     $('score').textContent = String(this.mined);
     this.dirty = true;
@@ -456,8 +467,10 @@ class Game {
 
   private tick(now: number): void {
     // Шаг ограничен: после свёрнутой вкладки игрок не должен пролететь сквозь мир.
-    const dt = this.lastFrame ? Math.min((now - this.lastFrame) / 1000, 0.05) : 0;
+    const frameMs = this.lastFrame ? now - this.lastFrame : 0;
+    const dt = Math.min(frameMs / 1000, 0.05);
     this.lastFrame = now;
+    this.measure(now, frameMs);
     this.frame++;
     this.frames++;
     if (now - this.fpsAt > 500) {
@@ -522,7 +535,15 @@ class Game {
       this.place();
     }
 
-    this.stream(touchDevice ? 5 : 7);
+    // Бюджет мал намеренно: долгий кадр ощущается как рывок мыши сильнее, чем поздний чанк.
+    // Вода течёт шагами - видно, как она заполняет ход, и кадр не проседает на большой пещере.
+    if (this.water.pending && now - this.lastFlow > 140) {
+      this.lastFlow = now;
+      if (this.water.step(this.world, 24)) this.dirty = true;
+    }
+    const s0 = performance.now();
+    this.stream(touchDevice ? 3 : 4);
+    this.perf.stream += performance.now() - s0;
     if (this.frame % 60 === 0) this.unloadFar();
 
     const view = this.renderDistance * CHUNK;
@@ -538,12 +559,37 @@ class Game {
     if (this.dirty && now - this.lastSave > AUTOSAVE_MS) void this.save();
   }
 
+  private measure(now: number, frameMs: number): void {
+    const p = this.perf;
+    if (frameMs > 0) {
+      p.frames++;
+      p.sum += frameMs;
+      if (frameMs > p.worst) p.worst = frameMs;
+      // Дольше двух кадров при 60 Гц - глаз и рука замечают рывок.
+      if (frameMs > 34) p.slow++;
+    }
+    if (now - p.at < 1000) return;
+    const m = this.input.mouseStats;
+    this.perfShown = {
+      avg: p.frames ? p.sum / p.frames : 0, worst: p.worst, slow: p.slow, stream: p.stream,
+      mouse: m.events, step: m.maxStep, dropped: m.dropped,
+    };
+    this.perf = { at: now, frames: 0, sum: 0, worst: 0, slow: 0, stream: 0 };
+    m.events = 0;
+    m.maxStep = 0;
+    m.dropped = 0;
+  }
+
   private updateDebug(): void {
     const b = this.body;
+    const q = this.perfShown;
+    const raw = this.input.rawMouse === null ? '-' : this.input.rawMouse ? 'сырой' : 'обычный';
     const col = this.world.gen.column(Math.floor(b.x), Math.floor(b.z));
     const info = this.renderer.info.render;
     $('debug').textContent = [
-      `fps ${this.fps}`,
+      `fps ${this.fps} · кадр ${q.avg.toFixed(1)} мс, худший ${q.worst.toFixed(0)} мс · рывков ${q.slow}/с`,
+      `чанки ${q.stream.toFixed(0)} мс/с · экран ${this.renderer.domElement.width}×${this.renderer.domElement.height}`,
+      `мышь ${q.mouse} соб/с · макс шаг ${q.step} px · отсеяно ${q.dropped} · ввод ${raw}`,
       `xyz ${b.x.toFixed(1)} ${b.y.toFixed(1)} ${b.z.toFixed(1)}`,
       `чанк ${Math.floor(b.x) >> 4} ${Math.floor(b.z) >> 4} · биом ${BIOME_NAMES[col.biome]}`,
       `чанков ${this.world.chunks.size} · сеток ${this.meshes.size}`,
@@ -557,6 +603,10 @@ class Game {
     const w = Math.max(1, el.clientWidth);
     const h = Math.max(1, el.clientHeight);
     this.renderer.setSize(w, h, false);
+    // Полный экран хаба изнутри iframe виден только по размеру окна.
+    const host = this.hostFullscreen();
+    if (this.wasHostFullscreen && !host) this.fullscreenExitAt = performance.now();
+    this.wasHostFullscreen = host;
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     if (this.input?.touchMode && h > w * 1.1 && !document.fullscreenElement) {
@@ -720,12 +770,41 @@ class Game {
       : 'Хранилище недоступно: мир проживёт до закрытия вкладки.';
   }
 
+  /**
+   * Похоже на полноэкранный режим, включённый не игрой, а страницей хаба (её кнопка
+   * "На весь экран" разворачивает весь iframe): изнутри iframe его не видно и не выключить.
+   */
+  private hostFullscreen(): boolean {
+    return !document.fullscreenElement && window.innerWidth >= screen.width - 2 && window.innerHeight >= screen.height - 2;
+  }
+
+  private syncFullscreenButtons(): void {
+    const on = !!document.fullscreenElement;
+    $('btn-fs').textContent = on ? '✕' : '⛶';
+    $('btn-fs').title = on ? 'Выйти из полноэкранного режима' : 'На весь экран';
+    $('fs').textContent = on ? 'Выйти из полноэкранного' : 'На весь экран';
+  }
+
   private async toggleFullscreen(): Promise<void> {
-    try {
-      if (document.fullscreenElement) {
-        await document.exitFullscreen();
-        return;
+    if (document.fullscreenElement) {
+      // Сначала снять разворот: на части Android выход с зафиксированной ориентацией залипает.
+      try {
+        screen.orientation.unlock();
+      } catch {
+        // нет разворота - нечего снимать
       }
+      try {
+        await document.exitFullscreen();
+      } catch (e) {
+        toast(`Не вышло выйти (${e instanceof Error ? e.name : 'ошибка'}): кнопка "Назад" или Esc`, 4000);
+      }
+      return;
+    }
+    if (this.hostFullscreen()) {
+      toast('Полный экран включил хаб - выйти: кнопка "Назад" или Esc', 4000);
+      return;
+    }
+    try {
       await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
       if (this.input.touchMode) {
         // Разворот есть не везде (iOS - нет) и только в полноэкранном режиме - отказ не ошибка.
@@ -759,6 +838,10 @@ class Game {
       $('fs').hidden = false;
       $('btn-fs').addEventListener('click', () => void this.toggleFullscreen());
       $('fs').addEventListener('click', () => void this.toggleFullscreen());
+      document.addEventListener('fullscreenchange', () => {
+        if (!document.fullscreenElement) this.fullscreenExitAt = performance.now();
+        this.syncFullscreenButtons();
+      });
     }
     // Новый мир - в два нажатия: окна подтверждения в песочнице хаба нет (allow-modals закрыт).
     $('new-world').addEventListener('click', () => {
@@ -780,6 +863,7 @@ class Game {
 
   private async newWorld(): Promise<void> {
     for (const key of [...this.meshes.keys()]) this.dropMesh(key);
+    this.water.clear();
     this.world = new World(Math.floor(Math.random() * 2 ** 31));
     this.body = this.findSpawn();
     this.time = 0.3;

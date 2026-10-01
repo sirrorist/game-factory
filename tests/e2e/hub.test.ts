@@ -132,6 +132,21 @@ test('права манифеста: fullscreen есть только у игр,
   await page.close();
 });
 
+test('"На весь экран" хаба: поверх игры - кнопка выхода, игра не перезагружается', async () => {
+  const page = await browser.newPage();
+  const game = await openGame(page, 'three-3d');
+  await game.evaluate(() => ((window as unknown as { gfProbe: number }).gfProbe = 1));
+  await page.getByRole('button', { name: 'На весь экран' }).click();
+  await page.getByTestId('exit-fullscreen').waitFor({ timeout: 3000 });
+  assert.equal(await page.evaluate(() => document.fullscreenElement?.contains(document.querySelector('iframe#game'))), true);
+  await page.getByTestId('exit-fullscreen').click();
+  await page.waitForFunction(() => document.fullscreenElement === null, null, { timeout: 3000 });
+  assert.equal(await page.getByTestId('exit-fullscreen').count(), 0);
+  // Тот же документ игры: iframe не пересоздавался при входе и выходе.
+  assert.equal(await game.evaluate(() => (window as unknown as { gfProbe?: number }).gfProbe), 1);
+  await page.close();
+});
+
 test('права манифеста: захват мыши и разворот экрана - только у игры, которая их просила', async () => {
   const page = await browser.newPage();
   await openGame(page, 'k8s-at-home');

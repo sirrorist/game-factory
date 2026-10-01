@@ -1,0 +1,13 @@
+// Знак хаба - тот же рисунок, что иконка вкладки (app/icon.svg): геймпад на тёмном квадрате.
+// Встроен в разметку, а не картинкой: без лишнего запроса и без мигания при загрузке.
+export function Logo({ size = 28 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 32 32" width={size} height={size} aria-hidden="true" className="shrink-0">
+      <rect width="32" height="32" rx="7" fill="#0d1117" />
+      <rect x="6" y="12" width="20" height="10" rx="5" fill="#58a6ff" />
+      <circle cx="12" cy="17" r="2" fill="#0d1117" />
+      <circle cx="21" cy="15.5" r="1.5" fill="#f2cc60" />
+      <circle cx="23.5" cy="18.5" r="1.5" fill="#7ee787" />
+    </svg>
+  );
+}
