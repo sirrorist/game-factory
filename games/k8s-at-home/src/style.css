@@ -1,24 +1,81 @@
+/*
+ * Вид - из дизайн-системы Game Factory (Claude Design; в хабе - globals.css и design.css).
+ * Игра - отдельный пакет со своего поддомена, поэтому токены и классы gf-* - копия нужной
+ * части, а не общий файл. Правка вида - сначала в системе, потом сюда.
+ * Тема одна - "Ночь": HUD лежит поверх 3D-сцены, светлой ему не бывает.
+ * Шрифты системы - свои файлы в fonts/ (те же, что в хабе: Fontsource, SIL OFL, лицензии рядом).
+ * Офлайн-сборка кладёт их в index.html data:-URL (~250 КБ), CSP игр это разрешает (font-src data:).
+ */
+@font-face { font-family: 'Unbounded'; font-style: normal; font-display: swap; font-weight: 200 900; src: url('./fonts/unbounded-cyrillic-wght-normal.woff2') format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: 'Unbounded'; font-style: normal; font-display: swap; font-weight: 200 900; src: url('./fonts/unbounded-latin-wght-normal.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Onest'; font-style: normal; font-display: swap; font-weight: 100 900; src: url('./fonts/onest-cyrillic-wght-normal.woff2') format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: 'Onest'; font-style: normal; font-display: swap; font-weight: 100 900; src: url('./fonts/onest-latin-wght-normal.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'JetBrains Mono'; font-style: normal; font-display: swap; font-weight: 100 800; src: url('./fonts/jetbrains-mono-cyrillic-wght-normal.woff2') format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: 'JetBrains Mono'; font-style: normal; font-display: swap; font-weight: 100 800; src: url('./fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 :root {
-  --panel: rgba(13, 17, 23, 0.82);
-  --line: rgba(255, 255, 255, 0.18);
-  --text: #e6edf3;
-  --muted: #9da7b3;
-  --accent: #58a6ff;
-  --danger: #f85149;
+  --bg-100: #121827;
+  --bg-200: #1a2235;
+  --bg-300: #232d45;
+  --line: #2e3956;
+  --line-strong: #5d6c92;
+  --ink: #eef2fb;
+  --ink-muted: #9ba7c1;
+  --ink-subtle: #7a87a4;
+  --brand: #58a6ff;
+  --brand-strong: #79b8ff;
+  --brand-ledge: #2a6cc4;
+  --on-brand: #06101f;
+  --coin: #f2cc60;
+  --oneup: #7ee787;
+  --danger: #ff7b72;
+  --on-danger: #2a0705;
+  --danger-ledge: #b8433b;
+  --scrim: rgba(5, 8, 14, 0.62);
+  --hud: rgba(8, 11, 18, 0.55);
+  --hud-ink: #eef2fb;
+  --hud-strong: rgba(8, 11, 18, 0.82);
+  --hud-line: rgba(255, 255, 255, 0.22);
+  --focus: var(--brand);
+  --shadow-panel: 0 24px 64px rgba(0, 0, 0, 0.6);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+
+  --dur-instant: 80ms;
+  --dur-fast: 200ms;
+  --dur-base: 320ms;
+  --dur-slow: 520ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --font-display: 'Unbounded', 'Arial Black', system-ui, sans-serif;
+  --font-body: 'Onest', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
+
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-l: env(safe-area-inset-left, 0px);
   --safe-r: env(safe-area-inset-right, 0px);
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 html, body {
   margin: 0;
   height: 100%;
   overflow: hidden;
   background: #000;
-  color: var(--text);
-  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--ink);
+  font: 14px/1.4 var(--font-body);
+  -webkit-font-smoothing: antialiased;
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
@@ -27,23 +84,146 @@ html, body {
 
 #app { position: fixed; inset: 0; overflow: hidden; touch-action: none; }
 #stage, #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+button { font: inherit; touch-action: manipulation; }
 
-button {
-  font: inherit;
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px 14px;
-  cursor: pointer;
-  touch-action: manipulation;
+/* ---------- Кнопка: аркадная клавиша с бортиком снизу (Button системы) ---------- */
+.gf-btn {
+  --ledge: var(--line-strong);
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  height: 40px; padding: 0 var(--space-4);
+  font: 600 15px/1 var(--font-body);
+  color: var(--ink);
+  background: var(--bg-300);
+  border: 0; border-radius: var(--radius-sm);
+  box-shadow: 0 3px 0 var(--ledge);
+  cursor: pointer; white-space: nowrap;
+  transition: background-color var(--dur-fast) var(--ease-out), transform var(--dur-base) var(--ease-spring),
+    box-shadow var(--dur-base) var(--ease-spring);
 }
-button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.16); }
-button:disabled { opacity: 0.5; cursor: default; }
-button.primary { background: var(--accent); border-color: var(--accent); color: #0d1117; font-weight: 600; }
-button.danger { border-color: rgba(248, 81, 73, 0.5); }
-button.danger.armed { background: var(--danger); color: #fff; }
+.gf-btn:hover { background: var(--bg-200); transform: translateY(-1px); box-shadow: 0 4px 0 var(--ledge); }
+.gf-btn:active { transform: translateY(3px); box-shadow: 0 0 0 var(--ledge); transition-duration: var(--dur-instant); }
+.gf-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.gf-btn[disabled] { opacity: 0.45; pointer-events: none; }
+.gf-btn svg { width: 18px; height: 18px; flex: none; }
+.gf-btn--primary { --ledge: var(--brand-ledge); background: var(--brand); color: var(--on-brand); }
+.gf-btn--primary:hover { background: var(--brand-strong); }
+.gf-btn--danger { --ledge: var(--danger-ledge); background: var(--danger); color: var(--on-danger); }
+.gf-btn--danger:hover { background: var(--danger); filter: brightness(1.08); }
+.gf-btn--sm { height: 32px; padding: 0 var(--space-3); font-size: 13px; }
+.gf-btn--lg { height: 48px; padding: 0 var(--space-5); font-size: 17px; }
 
+/* ---------- Круглая кнопка (IconButton) ---------- */
+.gf-icon-btn {
+  display: inline-grid; place-items: center;
+  width: 40px; height: 40px; padding: 0;
+  font: 600 18px/1 var(--font-body);
+  color: var(--ink); background: var(--bg-300);
+  border: 0; border-radius: var(--radius-pill); cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out), transform var(--dur-base) var(--ease-spring);
+}
+.gf-icon-btn:hover { background: var(--bg-200); transform: scale(1.06); }
+.gf-icon-btn:active { transform: scale(0.94); transition-duration: var(--dur-instant); }
+.gf-icon-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.gf-icon-btn svg { width: 20px; height: 20px; }
+.gf-icon-btn--hud { color: var(--hud-ink); background: var(--hud); backdrop-filter: blur(6px); }
+.gf-icon-btn--hud:hover { background: var(--hud); }
+.gf-icon-btn--on { color: var(--on-brand); background: var(--brand); }
+
+/* ---------- Иконки: обводка - цвет текста, пиксель - brand ---------- */
+.gf-icon { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.gf-icon .px { fill: var(--brand); stroke: none; }
+.gf-icon--coin .px { fill: var(--coin); }
+
+/* ---------- Тост ---------- */
+.gf-toast {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-4) var(--space-2) var(--space-3);
+  font-size: 13px; line-height: 20px; color: var(--hud-ink); background: var(--hud);
+  border-radius: var(--radius-sm); backdrop-filter: blur(8px);
+  animation: gf-rise var(--dur-base) var(--ease-out) both;
+}
+.gf-toast::before { content: ""; width: 8px; height: 8px; border-radius: 1px; background: var(--brand); flex: none; }
+.gf-toast--ok::before { background: var(--oneup); }
+.gf-toast--warn::before { background: var(--coin); }
+.gf-toast--err::before { background: var(--danger); }
+
+/* ---------- HUD: счётчики сверху, панель блоков снизу (Hotbar) ---------- */
+.gf-hud-top {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  padding: var(--space-1); background: var(--hud); border: 1px solid var(--hud-line);
+  border-radius: var(--radius-sm); backdrop-filter: blur(6px); color: var(--hud-ink);
+}
+.gf-hud-stat { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 var(--space-2); }
+.gf-hud-stat + .gf-hud-stat { box-shadow: inset 1px 0 0 var(--hud-line); }
+.gf-hud-stat svg { width: 16px; height: 16px; }
+.gf-hud-stat b { font: 600 14px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.gf-hud-stat span { font: 600 10px/1 var(--font-body); letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.7; }
+
+/* Лоток: ячейки утоплены, выбранная выезжает вверх и подсвечена пикселем снизу. */
+.gf-hotbar {
+  position: relative; display: inline-flex; align-items: flex-end; gap: 6px; padding: 8px 10px 10px;
+  background: var(--hud); border: 1px solid var(--hud-line); border-radius: var(--radius-lg);
+  backdrop-filter: blur(8px);
+}
+.gf-slot {
+  position: relative; display: grid; place-items: center;
+  width: 46px; height: 46px; padding: 7px;
+  background: rgba(0, 0, 0, 0.28); border: 0; border-radius: var(--radius-sm); cursor: pointer;
+  box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  opacity: 0.78;
+  transition: transform var(--dur-base) var(--ease-spring), opacity var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+.gf-slot:hover { opacity: 1; }
+.gf-slot[aria-pressed="true"] {
+  opacity: 1; transform: translateY(-6px) scale(1.1);
+  background: rgba(88, 166, 255, 0.2);
+  box-shadow: inset 0 0 0 2px var(--brand), 0 6px 14px rgba(0, 0, 0, 0.35);
+}
+.gf-slot[aria-pressed="true"]::after {
+  content: ""; position: absolute; bottom: -9px; left: 50%; width: 6px; height: 4px; margin-left: -3px;
+  background: var(--brand); border-radius: 1px;
+}
+.gf-slot__key { position: absolute; right: 4px; bottom: 3px; font: 600 9px/1 var(--font-mono); color: var(--hud-ink); opacity: 0.55; }
+.gf-slot img { width: 100%; height: 100%; image-rendering: pixelated; pointer-events: none; }
+.gf-hotbar__name {
+  /* По центру без transform: анимация gf-rise свой transform задаёт и сдвиг -50% затёрла бы (П-050). */
+  position: absolute; left: 0; right: 0; bottom: calc(100% + 10px); width: max-content; margin: 0 auto;
+  padding: 3px 10px; font: 600 12px/18px var(--font-body); color: var(--hud-ink); white-space: nowrap;
+  background: var(--hud-strong); border: 1px solid var(--hud-line); border-radius: var(--radius-pill);
+  pointer-events: none;
+  animation: gf-rise var(--dur-base) var(--ease-out) both;
+}
+
+/* ---------- Панель меню (MenuPanel) ---------- */
+.gf-panel {
+  width: min(420px, 100%); max-height: 100%; overflow: auto;
+  display: flex; flex-direction: column; gap: var(--space-3);
+  padding: var(--space-5); background: var(--bg-100); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel), inset 0 0 0 1px var(--line);
+  animation: gf-pop var(--dur-slow) var(--ease-spring) both;
+}
+.gf-panel__title { margin: 0; font: 700 28px/32px var(--font-display); letter-spacing: -0.015em; }
+h2.gf-panel__title { font-size: 20px; line-height: 24px; }
+.gf-panel__sub { margin: -6px 0 var(--space-1); font: 13px/20px var(--font-mono); color: var(--ink-muted); }
+.gf-panel__row { display: flex; align-items: center; gap: var(--space-2); }
+.gf-panel__row > span:first-child { flex: 1; color: var(--ink-muted); }
+.gf-stepper { display: inline-flex; align-items: center; gap: var(--space-1); }
+.gf-stepper .gf-icon-btn { width: 32px; height: 32px; }
+.gf-stepper b { min-width: 28px; text-align: center; font: 600 15px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
+.gf-panel__note { margin: 0; font-size: 12px; line-height: 16px; color: var(--ink-subtle); }
+
+@keyframes gf-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes gf-pop { from { opacity: 0; transform: scale(0.96) translateY(6px); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .gf-btn, .gf-icon-btn, .gf-slot { transition-duration: 0ms !important; }
+  .gf-toast, .gf-panel, .gf-hotbar__name { animation: none !important; }
+  .gf-btn:hover, .gf-icon-btn:hover { transform: none; }
+}
+
+/* ---------- Раскладка игры ---------- */
 #water { position: absolute; inset: 0; background: rgba(30, 80, 170, 0.35); pointer-events: none; }
 
 #crosshair {
@@ -54,103 +234,81 @@ button.danger.armed { background: var(--danger); color: #fff; }
 #crosshair::before { left: 10px; top: 0; width: 2px; height: 22px; }
 #crosshair::after { left: 0; top: 10px; width: 22px; height: 2px; }
 
-#hud {
-  position: absolute; left: calc(8px + var(--safe-l)); top: 8px;
-  display: flex; gap: 10px; padding: 4px 10px; border-radius: 8px;
-  background: rgba(0, 0, 0, 0.35); font-size: 13px; pointer-events: none;
-}
+#hud { position: absolute; left: calc(12px + var(--safe-l)); top: 12px; pointer-events: none; }
 #debug {
-  position: absolute; left: calc(8px + var(--safe-l)); top: 40px; margin: 0; padding: 6px 10px;
-  background: rgba(0, 0, 0, 0.5); border-radius: 8px; font: 12px/1.35 ui-monospace, monospace; pointer-events: none;
+  position: absolute; left: calc(12px + var(--safe-l)); top: 58px; margin: 0; padding: 6px 10px;
+  color: var(--hud-ink); background: var(--hud-strong); border-radius: var(--radius-sm);
+  font: 12px/1.35 var(--font-mono); pointer-events: none;
 }
-#corner { position: absolute; right: calc(8px + var(--safe-r)); top: 8px; display: flex; gap: 6px; }
-#corner button { width: 40px; height: 40px; padding: 0; font-size: 18px; background: rgba(0, 0, 0, 0.35); }
+#corner { position: absolute; right: calc(12px + var(--safe-r)); top: 12px; display: flex; gap: 6px; }
 
-#toast, #block-name {
-  position: absolute; left: 50%; transform: translateX(-50%);
-  padding: 4px 12px; border-radius: 8px; background: rgba(0, 0, 0, 0.55);
-  pointer-events: none; opacity: 0; transition: opacity 0.3s; white-space: nowrap; max-width: 92%;
-  overflow: hidden; text-overflow: ellipsis;
+#toast {
+  position: absolute; top: 60px; left: 0; right: 0; width: max-content; max-width: 92%; margin: 0 auto;
+  pointer-events: none;
 }
-#toast { top: 56px; }
-#block-name { bottom: calc(76px + var(--safe-b)); }
-#toast.show, #block-name.show { opacity: 1; }
 
 #bottom {
-  position: absolute; left: 50%; bottom: calc(8px + var(--safe-b)); transform: translateX(-50%);
-  display: flex; gap: 6px; align-items: center;
+  position: absolute; left: 0; right: 0; bottom: calc(14px + var(--safe-b));
+  display: flex; gap: var(--space-2); align-items: center; justify-content: center;
+  pointer-events: none;
 }
-#hotbar { display: flex; gap: 3px; padding: 3px; border-radius: 10px; background: rgba(0, 0, 0, 0.45); }
-.slot {
-  position: relative; width: 52px; height: 52px; padding: 4px; border-radius: 7px;
-  border: 2px solid transparent; background: rgba(255, 255, 255, 0.06);
-}
-.slot img { width: 100%; height: 100%; image-rendering: pixelated; pointer-events: none; }
-.slot.selected { border-color: #fff; background: rgba(255, 255, 255, 0.2); }
-.slot .key { position: absolute; left: 4px; top: 1px; font-size: 10px; color: var(--muted); }
-#btn-picker { width: 44px; height: 44px; padding: 0; font-size: 20px; background: rgba(0, 0, 0, 0.45); }
+#bottom > * { pointer-events: auto; }
 
-/* Узкий экран: девять ячеек должны влезть. */
-@media (max-width: 560px) {
-  .slot { width: calc((100vw - 90px) / 9); height: calc((100vw - 90px) / 9); padding: 2px; }
-  .slot .key { display: none; }
-  #block-name { bottom: calc(100vw / 9 + 20px + var(--safe-b)); }
+/* Узкий экран: девять ячеек и кнопка "Все блоки" должны влезть. */
+@media (max-width: 600px) {
+  .gf-hotbar { gap: 3px; padding: 6px 6px 8px; }
+  .gf-slot { width: calc((100vw - 110px) / 9); height: calc((100vw - 110px) / 9); padding: 3px; }
+  .gf-slot[aria-pressed="true"] { transform: translateY(-4px) scale(1.06); }
 }
 
 #touch { position: absolute; inset: 0; pointer-events: none; }
 #stick {
   position: absolute; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.35); background: rgba(0, 0, 0, 0.18); display: none;
+  border: 2px solid var(--hud-line); background: var(--hud); display: none;
 }
 #stick.active { display: block; }
 #knob {
   position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px;
   border-radius: 50%; background: rgba(255, 255, 255, 0.45);
 }
-#btn-jump, #btn-down {
-  position: absolute; pointer-events: auto; width: 64px; height: 64px; border-radius: 50%;
-  font-size: 26px; padding: 0; background: rgba(0, 0, 0, 0.35);
-}
-#btn-jump { right: calc(20px + var(--safe-r)); bottom: calc(90px + var(--safe-b)); }
-#btn-down { right: calc(96px + var(--safe-r)); bottom: calc(90px + var(--safe-b)); }
-#btn-jump.on, #btn-down.on { background: rgba(255, 255, 255, 0.3); }
+#btn-jump, #btn-down { position: absolute; pointer-events: auto; width: 64px; height: 64px; }
+#btn-jump svg, #btn-down svg { width: 28px; height: 28px; }
+/* Стрелки - иконка "Назад" из набора, повёрнутая: своей стрелки вверх в наборе нет. */
+#btn-jump svg { transform: rotate(90deg); }
+#btn-down svg { transform: rotate(-90deg); }
+#btn-jump { right: calc(20px + var(--safe-r)); bottom: calc(96px + var(--safe-b)); }
+#btn-down { right: calc(96px + var(--safe-r)); bottom: calc(96px + var(--safe-b)); }
+#btn-jump.on, #btn-down.on { color: var(--on-brand); background: var(--brand); }
 
 #menu, #picker {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  background: rgba(0, 0, 0, 0.35); padding: 12px; overflow: auto;
+  background: var(--scrim); padding: 12px; overflow: auto;
 }
-#menu[hidden], #picker[hidden], [hidden] { display: none !important; }
-.panel {
-  width: min(440px, 100%); max-height: 100%; overflow: auto; padding: 18px 20px; border-radius: 14px;
-  background: var(--panel); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px;
-  backdrop-filter: blur(6px);
-}
-.panel h1 { margin: 0; font-size: 28px; letter-spacing: 0.5px; }
-.panel h2 { margin: 0; font-size: 18px; }
-.sub { margin: -6px 0 4px; color: var(--muted); font-family: ui-monospace, monospace; font-size: 12px; }
-.row { display: flex; align-items: center; gap: 8px; }
-.row > span { flex: 1; color: var(--muted); }
-.row b { min-width: 24px; text-align: center; }
-.row button { flex: 0 0 auto; }
-.help p { margin: 4px 0; color: var(--muted); font-size: 13px; }
-.note { margin: 0; color: var(--muted); font-size: 12px; }
-.hint { margin: 0; color: var(--muted); font-size: 12px; }
+/* "Новый мир" в два нажатия: взведённая кнопка ярче и с рамкой - второе нажатие сотрёт мир. */
+#new-world.armed { filter: brightness(1.15); box-shadow: 0 3px 0 var(--ledge), 0 0 0 2px var(--ink); }
+.help p { margin: 4px 0; color: var(--ink-muted); font-size: 13px; }
+.help b { color: var(--ink); }
 
 #picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; }
 #picker-grid button {
-  padding: 6px 4px; min-height: 76px; display: flex; flex-direction: column; align-items: center;
-  justify-content: flex-start; gap: 4px; min-width: 0;
+  padding: 6px 4px; min-height: 76px; min-width: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 4px;
+  color: var(--ink); background: var(--bg-200); border: 0; border-radius: var(--radius-sm); cursor: pointer;
+  box-shadow: inset 0 0 0 1px var(--line);
+  transition: background-color var(--dur-fast) var(--ease-out);
 }
+#picker-grid button:hover { background: var(--bg-300); box-shadow: inset 0 0 0 1px var(--line-strong); }
+#picker-grid button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 #picker-grid img { width: 36px; height: 36px; flex: none; image-rendering: pixelated; pointer-events: none; }
 /* Длинные названия ("Заснеженная трава") переносятся по слогам и не вылезают из кнопки. */
 #picker-grid span {
-  font-size: 11px; color: var(--muted); line-height: 1.15; text-align: center;
+  font-size: 11px; color: var(--ink-muted); line-height: 1.15; text-align: center;
   max-width: 100%; overflow-wrap: anywhere; hyphens: auto;
 }
 
 /* Низкий экран телефона боком: меню компактнее. */
 @media (max-height: 480px) {
-  .panel { padding: 12px 14px; gap: 6px; }
-  .panel h1 { font-size: 22px; }
+  .gf-panel { padding: 14px 16px; gap: 8px; }
+  .gf-panel__title { font-size: 22px; line-height: 26px; }
   .help { display: none; }
 }

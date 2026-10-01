@@ -28,11 +28,15 @@ export default function CatalogPage() {
             <li key={entry.id} data-game-id={entry.id} className="flex">
               <Card className="w-full">
                 <CardCover>
-                  {coverUrl ? (
-                    // Обычный <img>: обложку отдаёт служебный хост игр, оптимизатор Next тут лишний.
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={coverUrl} alt="" width={320} height={180} />
-                  ) : null}
+                  {/* Обложка ведёт туда же, куда "Играть". Для клавиатуры и чтения с экрана это дубль
+                      кнопки - убираем его из обхода, чтобы игра не звучала дважды. */}
+                  <Link href={`/games/${entry.id}`} tabIndex={-1} aria-hidden="true" data-testid="cover-link">
+                    {coverUrl ? (
+                      // Обычный <img>: обложку отдаёт служебный хост игр, оптимизатор Next тут лишний.
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={coverUrl} alt="" width={320} height={180} />
+                    ) : null}
+                  </Link>
                 </CardCover>
                 <CardContent>
                   <h2 className="gf-card__title">{entry.manifest.title}</h2>

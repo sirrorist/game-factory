@@ -10,7 +10,7 @@ import { makeBody, raycast, stepBody, type MoveInput } from '../src/physics.ts';
 import { decodeEdits, encodeEdits, fromBase64, MAX_PARTS, PART_BYTES, parseMeta, splitParts, toBase64 } from '../src/save.ts';
 import { FallingBlocks } from '../src/falling.ts';
 import { FLOW_RANGE, WaterFlow } from '../src/water.ts';
-import { chunkKey, PAD_VOLUME, padIdx, World } from '../src/world.ts';
+import { chunkKey, meshInRange, meshVisible, PAD_VOLUME, padIdx, World } from '../src/world.ts';
 
 test('генерация детерминирована: один сид - один мир, другой сид - другой', () => {
   const a = new Generator(42).generate(3, -7);
@@ -272,4 +272,26 @@ test('песок: над дырой осыпается столбом, в вод
   for (let i = 0; i < 5; i++) fall.step(w, 32);
   assert.equal(w.at('2,2,0'), B.SAND);
   assert.equal(w.at('2,3,0'), B.WATER, 'вода поднялась на место утонувшего песка');
+});
+
+test('дальность: сетка снимается за дальностью, а не только с выгрузкой чанка', () => {
+  for (let rd = 2; rd <= 10; rd++) {
+    for (let dz = -rd - 3; dz <= rd + 3; dz++) {
+      for (let dx = -rd - 3; dx <= rd + 3; dx++) {
+        const d2 = dx * dx + dz * dz;
+        // Всё, что строит stream (круг rd + 0.5), остаётся - иначе сетка мигала бы.
+        if (d2 <= (rd + 0.5) ** 2) assert.ok(meshInRange(dx, dz, rd), `rd ${rd}: (${dx}, ${dz}) снята в круге построения`);
+        // Сетка не переживает свой чанк: круг снятия - внутри квадрата выгрузки rd + 2.
+        if (Math.abs(dx) > rd + 2 || Math.abs(dz) > rd + 2) assert.ok(!meshInRange(dx, dz, rd));
+        // Рисуется ровно круг построения; запас держит сетку, но не рисует её.
+        assert.equal(meshVisible(dx, dz, rd), d2 <= (rd + 0.5) ** 2);
+        if (meshVisible(dx, dz, rd)) assert.ok(meshInRange(dx, dz, rd));
+      }
+    }
+  }
+  // Дальность 6 → 2: сетки в 3-6 чанках от игрока больше не нужны, хотя чанки ещё не выгружены.
+  assert.ok(meshInRange(4, 0, 6));
+  assert.ok(!meshInRange(4, 0, 2));
+  assert.ok(!meshInRange(3, 3, 2));
+  assert.ok(meshInRange(3, 0, 2) && !meshVisible(3, 0, 2), 'чанк запаса: сетка есть, но не рисуется');
 });

@@ -2,7 +2,7 @@
   "$schema": "../../packages/manifest/game.schema.json",
   "id": "k8s-at-home",
   "title": "k8s at home",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Своя воксельная песочница: бесконечный мир из кубиков с биомами, пещерами и сменой дня и ночи. Ломай и строй, на ПК и на телефоне. Работает офлайн.",
   "kind": "static",
   "toolchain": "vite-ts",

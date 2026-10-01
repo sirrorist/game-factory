@@ -84,6 +84,14 @@ test('из каталога в игру: ссылка "Играть" откры�
   await page.close();
 });
 
+test('из каталога в игру: клик по обложке открывает страницу игры', async () => {
+  const page = await browser.newPage();
+  await page.goto(`${hub.origin}/`);
+  await page.locator('[data-game-id="snake"]').getByTestId('cover-link').click();
+  await page.waitForURL(`${hub.origin}/games/snake`);
+  await page.close();
+});
+
 for (const id of GAMES) {
   test(`${id}: в хабе - сохранения и рекорд уходят в хаб и видны на странице`, async () => {
     const page = await browser.newPage();

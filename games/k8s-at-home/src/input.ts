@@ -240,7 +240,7 @@ export class Input {
     $('touch').hidden = false;
     $('help-touch').hidden = false;
     $('help-desktop').hidden = true;
-    document.querySelectorAll<HTMLElement>('.slot .key').forEach((k) => (k.hidden = true));
+    document.querySelectorAll<HTMLElement>('.gf-slot__key').forEach((k) => (k.hidden = true));
   }
 
   private bindTouch(): void {

@@ -11,64 +11,65 @@
     <div id="water" hidden></div>
     <div id="crosshair"></div>
 
-    <header id="hud">
-      <span id="mode"></span>
-      <span>⛏ <b id="score">0</b></span>
-      <span>рекорд <b id="best">-</b></span>
+    <header id="hud" class="gf-hud-top">
+      <span class="gf-hud-stat"><span id="mode"></span></span>
+      <span class="gf-hud-stat" data-icon="blocks" title="Добыто блоков"><b id="score">0</b></span>
+      <span class="gf-hud-stat" data-icon="trophy"><span>рекорд</span><b id="best">-</b></span>
     </header>
     <pre id="debug" hidden></pre>
     <div id="corner">
-      <button id="btn-fs" type="button" title="На весь экран" hidden>⛶</button>
-      <button id="btn-menu" type="button" title="Меню">☰</button>
+      <button id="btn-fs" class="gf-icon-btn gf-icon-btn--hud" type="button" data-icon="fullscreen" aria-label="На весь экран" title="На весь экран" hidden></button>
+      <button id="btn-menu" class="gf-icon-btn gf-icon-btn--hud" type="button" data-icon="menu" aria-label="Меню" title="Меню"></button>
     </div>
 
-    <div id="toast"></div>
-    <div id="block-name"></div>
+    <div id="toast" class="gf-toast" hidden></div>
     <div id="bottom">
-      <div id="hotbar"></div>
-      <button id="btn-picker" type="button" title="Все блоки (E)">▦</button>
+      <div id="hotbar" class="gf-hotbar"></div>
+      <button id="btn-picker" class="gf-icon-btn gf-icon-btn--hud" type="button" data-icon="blocks" aria-label="Все блоки" title="Все блоки (E)"></button>
     </div>
 
     <div id="touch" hidden>
       <div id="stick"><div id="knob"></div></div>
-      <button id="btn-jump" type="button" title="Прыжок, дважды - полёт">⤒</button>
-      <button id="btn-down" type="button" title="Вниз" hidden>⤓</button>
+      <button id="btn-jump" class="gf-icon-btn gf-icon-btn--hud" type="button" data-icon="back" aria-label="Прыжок, дважды - полёт" title="Прыжок, дважды - полёт"></button>
+      <button id="btn-down" class="gf-icon-btn gf-icon-btn--hud" type="button" data-icon="back" aria-label="Вниз" title="Вниз" hidden></button>
     </div>
 
     <div id="picker" hidden>
-      <div class="panel">
-        <h2>Блоки</h2>
+      <div class="gf-panel" role="dialog" aria-label="Все блоки">
+        <h2 class="gf-panel__title">Блоки</h2>
         <div id="picker-grid"></div>
-        <p class="hint">Блок встанет в выбранную ячейку панели.</p>
-        <button id="picker-close" type="button">Готово</button>
+        <p class="gf-panel__note">Блок встанет в выбранную ячейку панели.</p>
+        <button id="picker-close" class="gf-btn gf-btn--primary" type="button">Готово</button>
       </div>
     </div>
 
     <div id="menu">
-      <div class="panel">
-        <h1>k8s at home</h1>
-        <p class="sub" id="status">kubectl apply -f world.yaml…</p>
-        <button id="play" type="button" class="primary" disabled>Играть</button>
-        <div class="row">
+      <div class="gf-panel" role="dialog" aria-label="Меню игры">
+        <h1 class="gf-panel__title">k8s at home</h1>
+        <p class="gf-panel__sub" id="status">kubectl apply -f world.yaml…</p>
+        <button id="play" type="button" class="gf-btn gf-btn--primary gf-btn--lg" data-icon="play" disabled><span id="play-label">Играть</span></button>
+        <div class="gf-panel__row">
           <span>Дальность</span>
-          <button id="rd-minus" type="button">-</button>
-          <b id="rd">5</b>
-          <button id="rd-plus" type="button">+</button>
+          <span class="gf-stepper">
+            <button id="rd-minus" class="gf-icon-btn" type="button" aria-label="Меньше">-</button>
+            <b id="rd">5</b>
+            <button id="rd-plus" class="gf-icon-btn" type="button" aria-label="Больше">+</button>
+          </span>
         </div>
-        <div class="row">
-          <button id="sound" type="button">Звук: вкл</button>
-          <button id="fs" type="button" hidden>На весь экран</button>
+        <div class="gf-panel__row">
+          <button id="sound" class="gf-btn gf-btn--sm" type="button" data-icon="sound-on"><span id="sound-label">Звук: вкл</span></button>
+          <button id="fs" class="gf-btn gf-btn--sm" type="button" data-icon="fullscreen" hidden><span id="fs-label">На весь экран</span></button>
         </div>
-        <button id="new-world" type="button" class="danger">Новый мир</button>
+        <button id="new-world" type="button" class="gf-btn gf-btn--danger gf-btn--sm">Новый мир</button>
         <div class="help" id="help-desktop">
           <p><b>WASD</b> - ходить, <b>пробел</b> - прыжок, дважды - полёт, <b>Shift</b> или <b>W</b> дважды - бег, <b>Shift</b> в полёте - вниз</p>
           <p><b>ЛКМ</b> - сломать, <b>ПКМ</b> - поставить, <b>колёсико</b> или <b>1-9</b> - блок, <b>E</b> - все блоки, <b>F3</b> - отладка</p>
         </div>
         <div class="help" id="help-touch" hidden>
           <p>Слева - джойстик (до упора - бег), справа - смотреть.</p>
-          <p><b>Касание</b> - поставить блок, <b>удержание</b> - сломать. <b>⤒</b> - прыжок, дважды - полёт.</p>
+          <p><b>Касание</b> - поставить блок, <b>удержание</b> - сломать. Стрелка вверх справа - прыжок, дважды - полёт.</p>
         </div>
-        <p class="note" id="persist"></p>
+        <p class="gf-panel__note" id="persist"></p>
       </div>
     </div>
   </div>

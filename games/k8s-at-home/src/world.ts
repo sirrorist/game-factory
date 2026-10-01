@@ -17,6 +17,21 @@ export function chunkKey(cx: number, cz: number): number {
   return (cx & 0xffff) | ((cz & 0xffff) << 16);
 }
 
+/**
+ * Нужна ли сетка чанку в (dx, dz) чанках от игрока при дальности rd. Строится она в круге
+ * rd + 0.5 (`stream`), снимается за rd + 1.5: запас в чанк - чтобы на границе сетка не
+ * пересобиралась на каждом шаге. Без этого снятия сетки после уменьшения дальности жили до
+ * выгрузки чанка (квадрат rd + 2) и рисовались под туманом - кадр не дешевел.
+ */
+export function meshInRange(dx: number, dz: number, rd: number): boolean {
+  return dx * dx + dz * dz <= (rd + 1.5) ** 2;
+}
+
+/** Рисовать ли сетку: только в круге построения. Сетки запаса (до rd + 1.5) ждут скрытыми. */
+export function meshVisible(dx: number, dz: number, rd: number): boolean {
+  return dx * dx + dz * dz <= (rd + 0.5) ** 2;
+}
+
 export const PAD_SIDE = CHUNK + 2;
 export const PAD_HEIGHT = HEIGHT + 2;
 export const PAD_VOLUME = PAD_SIDE * PAD_SIDE * PAD_HEIGHT;

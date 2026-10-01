@@ -4,6 +4,7 @@ import { Sound } from './audio.ts';
 import { blockIcon, buildAtlas, FACE_TILES, TILE } from './atlas.ts';
 import { B, BLOCKS, DEFAULT_HOTBAR, SOLID, type BlockId } from './blocks.ts';
 import { BIOME_NAMES, CHUNK, HEIGHT, SEA } from './gen.ts';
+import { fillIcons, setIcon } from './icons.ts';
 import { Input } from './input.ts';
 import { meshChunk, type MeshData } from './mesher.ts';
 import { bodyCollides, EYE, makeBody, raycast, stepBody, type Body, type Hit } from './physics.ts';
@@ -11,7 +12,7 @@ import { decodeEdits, encodeEdits, fromBase64, parseMeta, SAVE_VERSION, splitPar
 import { Sky } from './sky.ts';
 import { WaterFlow } from './water.ts';
 import { FallingBlocks } from './falling.ts';
-import { chunkKey, PAD_VOLUME, World } from './world.ts';
+import { chunkKey, meshInRange, meshVisible, PAD_VOLUME, World } from './world.ts';
 import './style.css';
 
 const $ = (id: string): HTMLElement => document.getElementById(id)!;
@@ -51,13 +52,23 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/** Перезапустить CSS-анимацию появления (gf-rise): элемент уже на экране, текст сменился. */
+function replay(el: HTMLElement): void {
+  el.style.animation = 'none';
+  void el.offsetWidth;
+  el.style.animation = '';
+}
+
 let toastTimer = 0;
-function toast(text: string, ms = 2200): void {
+/** Тон - цвет пикселя слева (Toast системы): ok - успех, warn - предупреждение, err - ошибка. */
+function toast(text: string, ms = 2200, tone: 'ok' | 'warn' | 'err' | null = null): void {
   const el = $('toast');
   el.textContent = text;
-  el.classList.add('show');
+  el.className = tone ? `gf-toast gf-toast--${tone}` : 'gf-toast';
+  el.hidden = false;
+  replay(el);
   clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => el.classList.remove('show'), ms);
+  toastTimer = window.setTimeout(() => (el.hidden = true), ms);
 }
 
 async function loadSave(session: Session): Promise<{ meta: WorldMeta; parts: string[] } | null> {
@@ -108,6 +119,8 @@ class Game {
   private submitted = 0;
   private best: number | null = null;
   private renderDistance = touchDevice ? 4 : 6;
+  /** Чанк игрока на последнем `unloadFar`: перешёл в другой - видимость сеток пересчитать сразу. */
+  private viewChunk = -1;
   private target: Hit | null = null;
   private breaking = false;
   private lastBreak = 0;
@@ -321,14 +334,32 @@ class Game {
     }
   }
 
+  /**
+   * Выгрузить чанки за запасом дальности, снять сетки за самой дальностью (`meshInRange`) и
+   * спрятать сетки запаса (`meshVisible`). Зовётся раз в секунду, при переходе в другой чанк
+   * и при смене дальности.
+   */
   private unloadFar(): void {
     const pcx = Math.floor(this.body.x) >> 4;
     const pcz = Math.floor(this.body.z) >> 4;
+    this.viewChunk = chunkKey(pcx, pcz);
     const keep = this.renderDistance + 2;
     for (const c of [...this.world.chunks.values()]) {
-      if (Math.abs(c.cx - pcx) > keep || Math.abs(c.cz - pcz) > keep) {
-        this.dropMesh(chunkKey(c.cx, c.cz));
+      const dx = c.cx - pcx;
+      const dz = c.cz - pcz;
+      const key = chunkKey(c.cx, c.cz);
+      if (Math.abs(dx) > keep || Math.abs(dz) > keep) {
+        this.dropMesh(key);
         this.world.unload(c.cx, c.cz);
+      } else if (!meshInRange(dx, dz, this.renderDistance) && this.meshes.has(key)) {
+        // Данные чанка остаются, сетку соберёт `stream`, когда игрок вернётся.
+        this.dropMesh(key);
+        c.dirty = true;
+      } else {
+        const m = this.meshes.get(key);
+        const on = meshVisible(dx, dz, this.renderDistance);
+        if (m?.solid) m.solid.visible = on;
+        if (m?.water) m.water.visible = on;
       }
     }
   }
@@ -555,7 +586,7 @@ class Game {
     const s0 = performance.now();
     this.stream(touchDevice ? 3 : 4);
     this.perf.stream += performance.now() - s0;
-    if (this.frame % 60 === 0) this.unloadFar();
+    if (this.frame % 60 === 0 || chunkKey(Math.floor(b.x) >> 4, Math.floor(b.z) >> 4) !== this.viewChunk) this.unloadFar();
 
     const view = this.renderDistance * CHUNK;
     const { daylight } = this.sky.update(this.time, cam, view, b.headInWater, dt);
@@ -621,7 +652,7 @@ class Game {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     if (this.input?.touchMode && h > w * 1.1 && !document.fullscreenElement) {
-      toast(document.fullscreenEnabled ? 'Удобнее боком: ⛶ - на весь экран с поворотом' : 'Поверни телефон боком - так удобнее', 3500);
+      toast(document.fullscreenEnabled ? 'Удобнее боком: кнопка справа вверху - на весь экран с поворотом' : 'Поверни телефон боком - так удобнее', 3500);
     }
   }
 
@@ -652,7 +683,7 @@ class Game {
     try {
       const parts = splitParts(encodeEdits(this.world.edits));
       if (!parts) {
-        toast('Мир не влезает в сохранение: последние постройки не сохранятся', 4000);
+        toast('Мир не влезает в сохранение: последние постройки не сохранятся', 4000, 'warn');
       } else {
         for (let i = 0; i < parts.length; i++) {
           if (this.savedParts[i] === parts[i]) continue;
@@ -685,28 +716,34 @@ class Game {
     this.showBlockName();
   }
 
+  /** Название блока над лотком: живёт в самом лотке, появляется при смене ячейки. */
+  private readonly blockName = Object.assign(document.createElement('span'), { className: 'gf-hotbar__name', hidden: true });
   private nameTimer = 0;
   private showBlockName(): void {
-    const el = $('block-name');
+    const el = this.blockName;
     el.textContent = BLOCKS[this.hotbar[this.slot]!]!.name;
-    el.classList.add('show');
+    el.hidden = false;
+    replay(el);
     clearTimeout(this.nameTimer);
-    this.nameTimer = window.setTimeout(() => el.classList.remove('show'), 1200);
+    this.nameTimer = window.setTimeout(() => (el.hidden = true), 1200);
   }
 
   private renderHotbar(): void {
     const bar = $('hotbar');
-    bar.replaceChildren(...this.hotbar.map((id, i) => {
+    bar.replaceChildren(this.blockName, ...this.hotbar.map((id, i) => {
       const s = document.createElement('button');
       s.type = 'button';
-      s.className = `slot${i === this.slot ? ' selected' : ''}`;
+      s.className = 'gf-slot';
+      s.setAttribute('aria-pressed', String(i === this.slot));
+      s.setAttribute('aria-label', BLOCKS[id]!.name);
       s.title = BLOCKS[id]!.name;
       const img = document.createElement('img');
       img.src = this.icons[id]!;
       img.alt = '';
       const key = document.createElement('span');
-      key.className = 'key';
+      key.className = 'gf-slot__key';
       key.textContent = String(i + 1);
+      // Номер клавиши на телефоне не нужен: клавиатуры нет.
       key.hidden = this.input.touchMode;
       s.append(img, key);
       s.addEventListener('click', () => this.selectSlot(i));
@@ -772,8 +809,9 @@ class Game {
 
   private updateMenu(): void {
     $('rd').textContent = String(this.renderDistance);
-    $('sound').textContent = `Звук: ${this.sound.enabled ? 'вкл' : 'выкл'}`;
-    $('play').textContent = this.started ? 'Продолжить' : 'Играть';
+    $('sound-label').textContent = `Звук: ${this.sound.enabled ? 'вкл' : 'выкл'}`;
+    setIcon($('sound'), this.sound.enabled ? 'sound-on' : 'sound-off');
+    $('play-label').textContent = this.started ? 'Продолжить' : 'Играть';
     ($('play') as HTMLButtonElement).disabled = !this.world;
     $('status').textContent = this.started ? 'кластер работает · все поды Running' : 'кластер развёрнут: 1/1 нода готова';
     $('persist').textContent = this.session.persistent
@@ -791,9 +829,13 @@ class Game {
 
   private syncFullscreenButtons(): void {
     const on = !!document.fullscreenElement;
-    $('btn-fs').textContent = on ? '✕' : '⛶';
-    $('btn-fs').title = on ? 'Выйти из полноэкранного режима' : 'На весь экран';
-    $('fs').textContent = on ? 'Выйти из полноэкранного' : 'На весь экран';
+    const name = on ? 'exit-fullscreen' : 'fullscreen';
+    const btn = $('btn-fs');
+    setIcon(btn, name);
+    btn.title = on ? 'Выйти из полноэкранного режима' : 'На весь экран';
+    btn.setAttribute('aria-label', btn.title);
+    setIcon($('fs'), name);
+    $('fs-label').textContent = on ? 'Выйти из полноэкранного' : 'На весь экран';
   }
 
   private async toggleFullscreen(): Promise<void> {
@@ -807,7 +849,7 @@ class Game {
       try {
         await document.exitFullscreen();
       } catch (e) {
-        toast(`Не вышло выйти (${e instanceof Error ? e.name : 'ошибка'}): кнопка "Назад" или Esc`, 4000);
+        toast(`Не вышло выйти (${e instanceof Error ? e.name : 'ошибка'}): кнопка "Назад" или Esc`, 4000, 'err');
       }
       return;
     }
@@ -823,7 +865,7 @@ class Game {
         await o.lock?.('landscape').catch(() => undefined);
       }
     } catch {
-      toast('Полноэкранный режим недоступен');
+      toast('Полноэкранный режим недоступен', 2200, 'err');
     }
   }
 
@@ -835,6 +877,8 @@ class Game {
     const setRd = (d: number): void => {
       this.renderDistance = Math.max(2, Math.min(MAX_RD, this.renderDistance + d));
       this.dirty = true;
+      // Меньше дальность - сразу меньше сеток, а не через секунду в цикле.
+      if (this.world) this.unloadFar();
       this.updateMenu();
     };
     $('rd-minus').addEventListener('click', () => setRd(-1));
@@ -885,12 +929,13 @@ class Game {
     this.dirty = true;
     await this.save();
     this.resume();
-    toast('Новый кластер развёрнут');
+    toast('Новый кластер развёрнут', 2200, 'ok');
   }
 }
 
 // Без top-level await: офлайн-сборка - классический скрипт (IIFE), там его нет.
 async function main(): Promise<void> {
+  fillIcons(document);
   const session = await GameFactory.init({ gameId: __GF_GAME_ID__ });
   $('mode').textContent = session.mode === 'hub' ? 'в хабе' : 'без хаба';
   const best = await session.bestScore();
