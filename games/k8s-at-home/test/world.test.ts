@@ -8,6 +8,7 @@ import { CHUNK, Generator, HEIGHT, idx, SEA } from '../src/gen.ts';
 import { meshChunk } from '../src/mesher.ts';
 import { makeBody, raycast, stepBody, type MoveInput } from '../src/physics.ts';
 import { decodeEdits, encodeEdits, fromBase64, MAX_PARTS, PART_BYTES, parseMeta, splitParts, toBase64 } from '../src/save.ts';
+import { FallingBlocks } from '../src/falling.ts';
 import { FLOW_RANGE, WaterFlow } from '../src/water.ts';
 import { chunkKey, PAD_VOLUME, padIdx, World } from '../src/world.ts';
 
@@ -251,4 +252,24 @@ test('мешинг: у полного блока воды рядом с опущ
     if (xs.every((x) => x === 4) && Math.min(...ys) === 20.875 && Math.max(...ys) === 21) strip = true;
   }
   assert.ok(strip, 'нет полоски воды над соседом');
+});
+
+test('песок: над дырой осыпается столбом, в воде тонет, без правки висит', () => {
+  // Столб песка y = 5..7 над воздухом y = 1..4, на дне камень; рядом песок над водой.
+  const cells: Record<string, number> = { '0,5,0': B.SAND, '0,6,0': B.SAND, '0,7,0': B.GRAVEL };
+  for (let y = 1; y <= 4; y++) cells[`0,${y},0`] = B.AIR;
+  cells['2,3,0'] = B.SAND;
+  cells['2,2,0'] = B.WATER;
+  const w = box(cells);
+  const fall = new FallingBlocks();
+  fall.step(w, 100);
+  assert.equal(w.at('0,5,0'), B.SAND, 'без правки песок висит');
+  fall.wake(w, 0, 4, 0); // как будто сломали блок под столбом
+  for (let i = 0; i < 30; i++) fall.step(w, 32);
+  assert.deepEqual([1, 2, 3].map((y) => w.at(`0,${y},0`)), [B.SAND, B.SAND, B.GRAVEL]);
+  assert.equal(w.at('0,4,0'), B.AIR);
+  fall.wake(w, 2, 3, 0); // поставленный над водой
+  for (let i = 0; i < 5; i++) fall.step(w, 32);
+  assert.equal(w.at('2,2,0'), B.SAND);
+  assert.equal(w.at('2,3,0'), B.WATER, 'вода поднялась на место утонувшего песка');
 });

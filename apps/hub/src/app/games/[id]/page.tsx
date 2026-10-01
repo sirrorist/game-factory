@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { frameAttributes } from '@gf/hub-bridge';
 import { DownloadLink } from '@/components/download-link.tsx';
+import { Icon } from '@/components/icons.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import { findGame } from '@/lib/catalog.ts';
 import { GameFrame } from './game-frame.tsx';
@@ -24,18 +25,21 @@ export default async function GamePage({ params }: Props) {
   const frame = frameAttributes(manifest.permissions);
 
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <Link href="/" className="text-sm text-muted-foreground hover:underline">
-          ← Каталог
+    <section className="flex flex-col gap-5">
+      <div className="flex flex-col gap-3">
+        <Link href="/" className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+          <Icon name="back" className="size-4" />
+          Каталог
         </Link>
-        <h1 className="text-2xl font-semibold tracking-tight">{manifest.title}</h1>
-        <span className="text-sm text-muted-foreground">v{entry.version}</span>
-        {manifest.tags.map((t) => (
-          <Badge key={t}>{t}</Badge>
-        ))}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">{manifest.title}</h1>
+          <Badge tone="version">v{entry.version}</Badge>
+          {manifest.tags.map((t) => (
+            <Badge key={t}>{t}</Badge>
+          ))}
+        </div>
+        {manifest.description ? <p className="max-w-prose text-muted-foreground">{manifest.description}</p> : null}
       </div>
-      {manifest.description ? <p className="max-w-prose text-sm text-muted-foreground">{manifest.description}</p> : null}
       <GameFrame
         gameId={entry.id}
         gameOrigin={gameOrigin}

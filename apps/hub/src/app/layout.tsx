@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Logo } from '@/components/logo.tsx';
+import { SiteNav } from '@/components/site-nav.tsx';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -13,15 +14,19 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ru">
       <body className="min-h-dvh">
-        <header className="border-b">
-          <div className="mx-auto flex h-14 max-w-5xl items-center px-4">
-            <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
+        {/* Фон шапки - во всю ширину, содержимое - в той же колонке, что и страница. */}
+        <header className="gf-header" style={{ padding: 0 }}>
+          <div className="mx-auto flex w-full max-w-5xl items-center gap-4 px-4 sm:gap-6">
+            <Link href="/" className="gf-logo">
               <Logo />
-              Game Factory
+              <span className="gf-logo__word">
+                Game <b>Factory</b>
+              </span>
             </Link>
+            <SiteNav />
           </div>
         </header>
-        <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
+        <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
       </body>
     </html>
   );

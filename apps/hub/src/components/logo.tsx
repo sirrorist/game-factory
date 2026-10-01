@@ -1,13 +1,17 @@
-// Знак хаба - тот же рисунок, что иконка вкладки (app/icon.svg): геймпад на тёмном квадрате.
-// Встроен в разметку, а не картинкой: без лишнего запроса и без мигания при загрузке.
-export function Logo({ size = 28 }: { size?: number }) {
+// Знак хаба - assets/Logos/gf-mark.svg дизайн-системы (он же app/icon.svg): геймпад с ручками,
+// крестовина слева, кнопки справа. Встроен в разметку: без лишнего запроса и мигания.
+export function Logo({ size = 32 }: { size?: number }) {
   return (
-    <svg viewBox="0 0 32 32" width={size} height={size} aria-hidden="true" className="shrink-0">
+    <svg viewBox="0 0 32 32" width={size} height={size} aria-hidden="true">
       <rect width="32" height="32" rx="7" fill="#0d1117" />
-      <rect x="6" y="12" width="20" height="10" rx="5" fill="#58a6ff" />
-      <circle cx="12" cy="17" r="2" fill="#0d1117" />
-      <circle cx="21" cy="15.5" r="1.5" fill="#f2cc60" />
-      <circle cx="23.5" cy="18.5" r="1.5" fill="#7ee787" />
+      <path
+        d="M10 9.5h12a6 6 0 0 1 6 6.6l-.6 4.6a3 3 0 0 1-5.2 1.6L20 20h-8l-2.2 2.3a3 3 0 0 1-5.2-1.6L4 16.1a6 6 0 0 1 6-6.6z"
+        fill="#58a6ff"
+      />
+      <rect x="8.5" y="13" width="2.5" height="7" rx="0.6" fill="#0d1117" />
+      <rect x="6.25" y="15.25" width="7" height="2.5" rx="0.6" fill="#0d1117" />
+      <circle cx="21.6" cy="14.6" r="1.7" fill="#f2cc60" />
+      <circle cx="24.4" cy="17.6" r="1.7" fill="#7ee787" />
     </svg>
   );
 }

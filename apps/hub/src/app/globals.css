@@ -1,40 +1,127 @@
 @import 'tailwindcss';
+@import './fonts.css';
+@import './design.css';
 
-/* Токены в духе shadcn/ui: компоненты берут цвета отсюда, тема — тёмная. */
+/*
+ * Токены дизайн-системы Game Factory (Claude Design, тема "Ночь" - основная, "День" - по системе).
+ * Имена и значения - как в tokens.json системы: правим там и переносим сюда, а не наоборот.
+ *
+ * Шрифты: Unbounded, Onest, JetBrains Mono, Press Start 2P (все с кириллицей, OFL) - своими файлами,
+ * @font-face в fonts.css. Сторонний хост шрифтов не подключаем: хаб на проде без интернета (D-038).
+ */
 :root {
-  --background: oklch(0.16 0.01 260);
-  --foreground: oklch(0.95 0.01 260);
-  --card: oklch(0.2 0.01 260);
-  --card-foreground: var(--foreground);
-  --muted: oklch(0.26 0.01 260);
-  --muted-foreground: oklch(0.7 0.02 260);
-  --primary: oklch(0.72 0.15 250);
-  --primary-foreground: oklch(0.16 0.01 260);
-  --secondary: oklch(0.3 0.01 260);
-  --secondary-foreground: var(--foreground);
-  --border: oklch(0.32 0.01 260);
-  --ring: oklch(0.72 0.15 250);
-  --radius: 0.75rem;
+  --bg-000: #0b0f17;
+  --bg-100: #121827;
+  --bg-200: #1a2235;
+  --bg-300: #232d45;
+  --line: #2e3956;
+  --line-strong: #5d6c92;
+  --ink: #eef2fb;
+  --ink-muted: #9ba7c1;
+  --ink-subtle: #7a87a4;
+  --brand: #58a6ff;
+  --brand-strong: #79b8ff;
+  --brand-ledge: #2a6cc4;
+  --on-brand: #06101f;
+  --coin: #f2cc60;
+  --on-coin: #1f1600;
+  --oneup: #7ee787;
+  --danger: #ff7b72;
+  --on-danger: #2a0705;
+  --danger-ledge: #b8433b;
+  --scrim: rgba(5, 8, 14, 0.62);
+  --hud: rgba(8, 11, 18, 0.55);
+  --hud-ink: #eef2fb;
+  --hud-strong: rgba(8, 11, 18, 0.82);
+  --hud-line: rgba(255, 255, 255, 0.22);
+  --focus: var(--brand);
+
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 2px 6px rgba(0, 0, 0, 0.35);
+  --shadow-lift: 0 14px 32px rgba(0, 0, 0, 0.5);
+  --shadow-panel: 0 24px 64px rgba(0, 0, 0, 0.6);
+  --glow-brand: 0 0 0 2px #58a6ff, 0 0 18px rgba(88, 166, 255, 0.45);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+
+  --dur-instant: 80ms;
+  --dur-fast: 200ms;
+  --dur-base: 320ms;
+  --dur-slow: 520ms;
+  --dur-scene: 640ms;
+  --dur-shine: 360ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  --font-display: 'Unbounded', 'Arial Black', system-ui, sans-serif;
+  --font-body: 'Onest', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
+  --font-pixel: 'Press Start 2P', 'JetBrains Mono', monospace;
+
   color-scheme: dark;
 }
 
+/* "День" - для тех, у кого светлая тема системы. Меняются только цвета и тени. */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg-000: #f4f6fb;
+    --bg-100: #ffffff;
+    --bg-200: #edf0f7;
+    --bg-300: #e1e6f1;
+    --line: #cdd4e3;
+    --line-strong: #7e8aa5;
+    --ink: #0e1525;
+    --ink-muted: #4a5670;
+    --ink-subtle: #5f6b86;
+    --brand: #1b63d6;
+    --brand-strong: #174fae;
+    --brand-ledge: #103a80;
+    --on-brand: #ffffff;
+    --coin: #e3b341;
+    --oneup: #1a7f37;
+    --danger: #cf222e;
+    --on-danger: #ffffff;
+    --danger-ledge: #8a1520;
+    --scrim: rgba(14, 21, 37, 0.38);
+    --shadow-card: 0 1px 2px rgba(14, 21, 37, 0.08), 0 2px 8px rgba(14, 21, 37, 0.06);
+    --shadow-lift: 0 14px 32px rgba(14, 21, 37, 0.16);
+    --shadow-panel: 0 24px 64px rgba(14, 21, 37, 0.22);
+    --glow-brand: 0 0 0 2px #1b63d6, 0 0 14px rgba(27, 99, 214, 0.3);
+    color-scheme: light;
+  }
+}
+
+/* Утилиты Tailwind поверх токенов: bg-background, text-muted-foreground и т. п. */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-border: var(--border);
-  --color-ring: var(--ring);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --color-background: var(--bg-000);
+  --color-foreground: var(--ink);
+  --color-card: var(--bg-100);
+  --color-card-foreground: var(--ink);
+  --color-muted: var(--bg-300);
+  --color-muted-foreground: var(--ink-muted);
+  --color-primary: var(--brand);
+  --color-primary-foreground: var(--on-brand);
+  --color-secondary: var(--bg-300);
+  --color-secondary-foreground: var(--ink);
+  --color-border: var(--line);
+  --color-ring: var(--focus);
+  /* rounded-sm/md/lg и font-mono берут наши --radius-* и --font-mono: те же имена, объявлены выше
+     вне слоёв и потому сильнее значений Tailwind по умолчанию. Повторять их здесь нельзя - цикл. */
+  --font-sans: var(--font-body);
+  /* Утилита font-display: значение литералом - ссылка на одноимённую переменную дала бы цикл. */
+  --font-display: 'Unbounded', 'Arial Black', system-ui, sans-serif;
 }
 
 @layer base {
@@ -43,5 +130,11 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
+    font-family: var(--font-body);
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
   }
 }

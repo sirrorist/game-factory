@@ -163,6 +163,12 @@ Turbopack считает такое выражение ссылкой на ре�
 пути к файлам данных - в отдельном модуле, который хаб не импортирует (`packages/db/src/migrations.ts`),
 либо с пометкой `/*turbopackIgnore: true*/`, как в `apps/hub/src/lib/config.ts`.
 
+
+**П-049. В образе хаба нет файлов из `apps/hub/public/` - шрифты на проде отдают 404.**
+Причина: `output: 'standalone'` (D-027) собирает сервер и `.next/static`, а `public/` по документации
+Next копируется руками. `next start` в e2e его видит, поэтому тесты зелёные и без копии.
+Обход: `COPY … apps/hub/public` в стадии `hub` корневого `Dockerfile`. Держится: строка Dockerfile;
+проверка на проде - `curl -sI https://games.youranus.ru/fonts/onest-latin-wght-normal.woff2` → 200.
 ## Браузер (e2e)
 
 **П-023. WebGL в безголовом Chromium: "Automatic fallback to software WebGL has been deprecated".**

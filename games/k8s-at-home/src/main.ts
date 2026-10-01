@@ -10,6 +10,7 @@ import { bodyCollides, EYE, makeBody, raycast, stepBody, type Body, type Hit } f
 import { decodeEdits, encodeEdits, fromBase64, parseMeta, SAVE_VERSION, splitParts, type WorldMeta } from './save.ts';
 import { Sky } from './sky.ts';
 import { WaterFlow } from './water.ts';
+import { FallingBlocks } from './falling.ts';
 import { chunkKey, PAD_VOLUME, World } from './world.ts';
 import './style.css';
 
@@ -95,6 +96,8 @@ class Game {
   private readonly padBuf = new Uint8Array(PAD_VOLUME);
   private readonly water = new WaterFlow();
   private lastFlow = 0;
+  private readonly falling = new FallingBlocks();
+  private lastFall = 0;
 
   private world!: World;
   private body!: Body;
@@ -384,6 +387,8 @@ class Game {
     if (!this.world.set(t.x, t.y, t.z, B.AIR)) return;
     // Соседняя вода затекает в дыру и дальше по воздуху (water.ts).
     this.water.wake(this.world, t.x, t.y, t.z);
+    // Песок и гравий над дырой осыпаются (falling.ts).
+    this.falling.wake(this.world, t.x, t.y, t.z);
     this.mined++;
     $('score').textContent = String(this.mined);
     this.dirty = true;
@@ -403,6 +408,7 @@ class Game {
     const b = this.body;
     if (SOLID[id] && bodyCollides(b.x, b.y, b.z, (bx, by, bz) => bx === x && by === y && bz === z)) return;
     if (!this.world.set(x, y, z, id)) return;
+    this.falling.wake(this.world, x, y, z);
     this.dirty = true;
     this.sound.place(BLOCKS[id]!.pitch);
     if (id === B.SERVER) toast('Нода добавлена в кластер');
@@ -540,6 +546,11 @@ class Game {
     if (this.water.pending && now - this.lastFlow > 140) {
       this.lastFlow = now;
       if (this.water.step(this.world, 24)) this.dirty = true;
+    }
+    // Сыпучие падают быстрее, чем течёт вода: клетка за 60 мс.
+    if (this.falling.pending && now - this.lastFall > 60) {
+      this.lastFall = now;
+      if (this.falling.step(this.world, 32)) this.dirty = true;
     }
     const s0 = performance.now();
     this.stream(touchDevice ? 3 : 4);
@@ -864,6 +875,7 @@ class Game {
   private async newWorld(): Promise<void> {
     for (const key of [...this.meshes.keys()]) this.dropMesh(key);
     this.water.clear();
+    this.falling.clear();
     this.world = new World(Math.floor(Math.random() * 2 ** 31));
     this.body = this.findSpawn();
     this.time = 0.3;

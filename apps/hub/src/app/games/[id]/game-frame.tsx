@@ -5,6 +5,7 @@
 
 import { connectGame, storageHandlers, type GameDataHandlers } from '@gf/hub-bridge';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Icon } from '@/components/icons.tsx';
 import { Button } from '@/components/ui/button.tsx';
 
 interface Props {
@@ -68,14 +69,20 @@ export function GameFrame({ gameId, gameOrigin, title, sandbox, allow, fullscree
   return (
     // Рамка игры - во всю ширину колонки хаба: игры сами центруют себя внутри iframe.
     <div className="flex w-full flex-col gap-3" data-game-ready={ready ? '1' : undefined}>
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="text-sm">
-          Твой рекорд: <b data-testid="hub-best">{best === null ? '-' : best}</b>
+      <div className="gf-toolbar">
+        <span className={best === null ? 'gf-record' : 'gf-record gf-record--bump'}>
+          <Icon name="trophy" />
+          <span className="gf-record__label">Твой рекорд</span>
+          {/* key - число перерисовывается при новом рекорде, и анимация прыжка играет снова. */}
+          <b key={best ?? 'none'} className="gf-record__value" data-testid="hub-best">
+            {best === null ? '-' : best}
+          </b>
         </span>
         {!ready ? <span className="text-sm text-muted-foreground">загрузка…</span> : null}
-        <span className="flex-1" />
+        <span className="gf-toolbar__spacer" />
         {fullscreen ? (
-          <Button variant="secondary" size="sm" onClick={() => void wrapRef.current?.requestFullscreen().catch(() => undefined)}>
+          <Button variant="outline" size="sm" onClick={() => void wrapRef.current?.requestFullscreen().catch(() => undefined)}>
+            <Icon name="fullscreen" />
             На весь экран
           </Button>
         ) : null}
@@ -92,18 +99,18 @@ export function GameFrame({ gameId, gameOrigin, title, sandbox, allow, fullscree
           sandbox={sandbox}
           allow={allow}
           referrerPolicy="no-referrer"
-          className={isFullscreen ? 'h-full w-full bg-black' : 'h-[min(75dvh,680px)] min-h-[420px] w-full rounded-lg border bg-black'}
+          className={isFullscreen ? 'h-full w-full bg-black' : 'h-[min(75dvh,680px)] min-h-[420px] w-full rounded-md border bg-black'}
         />
         {isFullscreen ? (
-          <Button
-            variant="secondary"
-            size="sm"
+          <button
+            type="button"
             data-testid="exit-fullscreen"
-            className="absolute left-1/2 top-2 -translate-x-1/2 opacity-80"
+            className="gf-exit-pill"
             onClick={() => void document.exitFullscreen().catch(() => undefined)}
           >
-            ✕ Выйти
-          </Button>
+            <Icon name="exit-fullscreen" />
+            Выйти
+          </button>
         ) : null}
       </div>
     </div>

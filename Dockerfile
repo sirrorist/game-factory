@@ -26,6 +26,8 @@ ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0 GF_
 WORKDIR /app
 COPY --from=hub-build /repo/apps/hub/.next/standalone ./
 COPY --from=hub-build /repo/apps/hub/.next/static ./apps/hub/.next/static
+# public/ (шрифты) standalone-сборка сама не кладёт - без этой строки на проде 404 (П-049).
+COPY --from=hub-build /repo/apps/hub/public ./apps/hub/public
 USER node
 EXPOSE 3000
 CMD ["node", "apps/hub/server.js"]

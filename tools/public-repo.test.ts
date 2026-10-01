@@ -20,6 +20,8 @@ const PATH_RE = /\/(?:srv|home)\/[\w.-]/g;
 // называет, поэтому журнал решений по словам не проверяется - только по адресам и путям.
 const WORD_RE = /\b(?:swap|ufw)\b|аудит/giu;
 const WORDS_EXEMPT = new Set(['docs/DECISIONS.md']);
+// `font-display: swap` - режим загрузки шрифта в CSS, к памяти сервера отношения не имеет.
+const NOT_SERVER = /font-display:\s*swap/giu;
 
 function tracked(): string[] {
   // И ещё не добавленные: новый документ ловится до `git add`, а не после коммита.
@@ -46,7 +48,7 @@ test('в репозитории нет деталей сервера сверх 
       }
       for (const [path] of line.matchAll(PATH_RE)) found.push(`${at}: путь ${path}…`);
       if (!WORDS_EXEMPT.has(file)) {
-        for (const [word] of line.matchAll(WORD_RE)) found.push(`${at}: "${word}"`);
+        for (const [word] of line.replace(NOT_SERVER, '').matchAll(WORD_RE)) found.push(`${at}: "${word}"`);
       }
     });
   }

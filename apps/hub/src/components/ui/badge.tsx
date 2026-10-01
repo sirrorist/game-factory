@@ -1,11 +1,9 @@
 import type { ComponentProps } from 'react';
 import { cn } from '@/lib/utils.ts';
 
-export function Badge({ className, ...props }: ComponentProps<'span'>) {
-  return (
-    <span
-      className={cn('inline-flex items-center rounded-sm bg-muted px-2 py-0.5 text-xs text-muted-foreground', className)}
-      {...props}
-    />
-  );
+const TONE = { tag: '', version: 'gf-badge--version', live: 'gf-badge--live', new: 'gf-badge--new' } as const;
+
+/** Метка: тег игры, версия (моноширинная), статус, NEW (классы gf-badge). */
+export function Badge({ className, tone = 'tag', ...props }: ComponentProps<'span'> & { tone?: keyof typeof TONE }) {
+  return <span className={cn('gf-badge', TONE[tone], className)} {...props} />;
 }
