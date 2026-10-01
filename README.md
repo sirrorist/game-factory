@@ -1,14 +1,14 @@
 # Game Factory
 
 Хаб браузерных игр: каталог, запуск каждой игры в изолированной песочнице, скачивание
-простых игр офлайн-архивом. Дальше — админка, игры с бэкендом и ИИ-студия, которая
-собирает игры из шаблонов и наборов скиллов.
+простых игр офлайн-архивом. Дальше - вход и сохранения на сервере (этап 1), админка, игры
+с бэкендом и ИИ-студия, которая собирает игры из шаблонов и наборов скиллов.
 
-- Хаб: `games.youranus.ru` (план, ещё не развёрнут)
-- Игры: `<id>.play.youranus.ru` — у каждой игры свой origin
+- Хаб: <https://games.youranus.ru>
+- Игры: `https://<id>.play.youranus.ru` - у каждой игры свой origin
 
-> Состояние проекта, что сделано и что дальше — [`docs/STATE.md`](docs/STATE.md).
-> Карта всей документации — [`docs/README.md`](docs/README.md).
+> Состояние проекта, что сделано и что дальше - [`docs/STATE.md`](docs/STATE.md).
+> Карта всей документации - [`docs/README.md`](docs/README.md).
 
 ## Быстрый старт
 
@@ -16,31 +16,35 @@
 
 ```bash
 pnpm install          # зависимости рабочей области (lockfile обязателен)
-pnpm check            # типы, юнит-тесты, сборка игр, архивы, сборка хаба, e2e
+pnpm check            # типы, юнит-тесты, тесты базы, сборка игр, архивы, сборка хаба, e2e
 pnpm play             # сервер игр на :4100 (в одном терминале)
 pnpm hub              # хаб на :3000 (в другом)
 ```
 
-Открой <http://localhost:3000>: каталог, игра в песочнице, кнопка «Скачать».
-Игры живут на `http://<id>.play.localhost:4100/` — `*.localhost` браузеры резолвят
+Открой <http://localhost:3000>: каталог, игра в песочнице, кнопка "Скачать".
+Игры живут на `http://<id>.play.localhost:4100/` - `*.localhost` браузеры резолвят
 в 127.0.0.1 сами, DNS не нужен. Архив распакуй и открой `index.html` двойным кликом.
 
 То же в контейнерах: `pnpm games:build && pnpm games:export && docker compose up --build`.
+Базы в локальном стенде нет: хаб работает гостем, `/healthz` отвечает 503 - так и задумано.
 
 ## Что где
 
 ```
 apps/play-server/     сервер игр: раздача по поддоменам, заголовки песочницы
-apps/hub/             хаб на Next.js: каталог, страница игры с iframe и мостом
+apps/hub/             хаб на Next.js: каталог, страница игры с iframe и мостом, /healthz
 packages/manifest/    схема game.json и валидатор
 packages/registry/    реестр опубликованных игр и раскладка хранилища
 packages/game-sdk/    SDK для игр (классический скрипт, работает на file://)
 packages/hub-bridge/  сторона хаба в протоколе SDK, атрибуты iframe из прав манифеста
+packages/db/          база хаба: схема, SQL-миграции, подключение (Drizzle + Postgres)
 packages/vite-config/ общий Vite-конфиг игр: офлайн-сборка в один HTML
 templates/vite-ts/    шаблон игры на TypeScript + Vite (pnpm gf new <id>)
 tools/gf.ts           CLI: list, validate, build, export, new, check-prod
-games/                игры; каждая — папка с game.json
+games/                игры; каждая - папка с game.json
 tests/e2e/            браузерные тесты: офлайн, эталонный хаб, настоящий хаб
+deploy/               прод: compose, скрипт и таймер выкладки (ставятся копиями root)
+.github/workflows/    CI, проверка образов, публикация образов в GHCR
 docs/                 документация
 ```
 
@@ -57,13 +61,15 @@ docs/                 документация
 | `pnpm play` | сервер игр |
 | `pnpm hub` | хаб в режиме разработки (`next dev`, :3000) |
 | `pnpm hub:build` / `pnpm hub:start` | сборка хаба / запуск собранного |
-| `docker compose up --build` | хаб и сервер игр в контейнерах (игры — из `.data/` хоста) |
+| `docker compose up --build` | хаб и сервер игр в контейнерах (игры - из `.data/` хоста) |
 | `pnpm typecheck` | tsc без эмита |
 | `pnpm test` | юнит-тесты (`node --test`) |
+| `pnpm test:db` | тесты базы на PGlite, без Docker (пик памяти ~1,3 ГБ, П-043) |
 | `pnpm test:e2e` | браузерные тесты (Playwright, Chromium) |
 | `pnpm check` | всё сразу, как в CI |
 
 ## Правила работы
 
-Правила агента общие для всех проектов приезжают из `global-agent-kit`, правила
-этого проекта — в [`CLAUDE.md`](CLAUDE.md). Порядок работы — [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
+Правила агента, общие для всех проектов, приезжают из `global-agent-kit`, правила
+этого проекта - в [`CLAUDE.md`](CLAUDE.md). Порядок работы - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md),
+работа с продом руками - [`docs/OPERATIONS.md`](docs/OPERATIONS.md).

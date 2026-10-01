@@ -29,13 +29,13 @@
 | CSP игры: `object-src 'none'`, `base-uri 'none'`, `form-action 'none'` | ✅ | `server.test.ts` |
 | `script-src 'unsafe-inline'` | ⚠️ | нужен офлайн-сборкам; XSS не выходит за origin игры |
 | Permissions-Policy: камера, микрофон, геолокация, платежи и т. п. закрыты | ✅ | `server.test.ts` |
-| Разрешения из манифеста → атрибут `allow` у iframe | 🔜 этап 0б | хаб |
+| Разрешения из манифеста → атрибут `allow` у iframe | ✅ | `frameAttributes` в `hub-bridge`; `frame.test.ts`, e2e `hub.test.ts` (мутация проверена, TESTING.md) |
 | `X-Content-Type-Options: nosniff`, MIME по белому списку | ✅ | `server.test.ts` |
 | `Referrer-Policy: no-referrer`, COOP `same-origin`, CORP `same-origin` | ✅ | `server.test.ts` |
 | Service Worker запрещён (403 на `Service-Worker: script`) | ✅ | `server.test.ts`, D-018 |
 | Обложки (SVG) со служебного хоста - CSP `sandbox` | ✅ | `server.test.ts` |
 | Долгий кеш обложки (`immutable`, год) - только при `?v=` = текущей версии; иначе `no-cache` + `ETag`. Снятая или заменённая версия не залипает в кеше под адресом без версии (D-041) | ✅ | `server.test.ts` (мутации проверены), e2e адрес в хабе |
-| Метаданные игры (название, описание) санитизируются в хабе | 🔜 этап 0б | React экранирует; markdown не рендерить без санитайзера |
+| Метаданные игры (название, описание) не исполняются в хабе | 🟢 | React экранирует, `dangerouslySetInnerHTML` в хабе нет; markdown не рендерить без санитайзера |
 
 ## Протокол хаб ↔ игра
 
@@ -76,7 +76,7 @@
 | Docker-сокет не смонтирован ни в один наш контейнер | 🟢 | `deploy/compose.prod.yml` |
 | Прод-конфиг и скрипт выкладки - копии `root`, не файлы рабочей копии | 🟢 | D-035 |
 | В GitHub нет ключей от сервера; публикация образов - только после зелёного CI с `main` | 🟢 | `publish.yml`, П-033 |
-| Критерии приёмки спецификации (заголовки, изоляция, порты) проверены на проде | 🔜 | `specs/deploy-vps.md` |
+| Критерии приёмки спецификации (заголовки, изоляция, порты) проверены на проде | 🟢 | `specs/deploy-vps.md`; принято 2026-09-26: `curl`/`openssl` по критериям 1-8 и 10, критерий 9 (откат) - со слов владельца |
 
 ## Загрузка игр (этап 2)
 

@@ -1,7 +1,7 @@
-# Домены, CI/CD и будущий деплой
+# Домены, CI/CD и выкладка на прод
 
-> Деплой на VPS-1 - D-033…D-037, задание - [`specs/deploy-vps.md`](specs/deploy-vps.md),
-> работа руками - [OPERATIONS.md](OPERATIONS.md).
+> Как устроено. Почему так - D-033…D-038, D-051; исходное задание - [`specs/deploy-vps.md`](specs/deploy-vps.md)
+> (выполнено); работа руками - [OPERATIONS.md](OPERATIONS.md).
 
 ## Домены
 
@@ -40,40 +40,50 @@ AAAA не заводится.
 Задача `check`:
 
 1. `pnpm install --frozen-lockfile` - lockfile обязателен
-2. `pnpm typecheck` → `pnpm test` → `pnpm games:build` → `pnpm games:export` → `pnpm hub:build`
+2. `pnpm typecheck` → `pnpm test` → `pnpm test:db` → `pnpm games:build` → `gf check-prod`
+   (та же `version`, что на проде, - то же содержимое, D-044) → `pnpm games:export` →
+   `pnpm hub:build`
 3. Chromium → `pnpm test:e2e` (эталонный хаб, настоящий хаб, офлайн через `file://`)
 4. Офлайн-архивы игр - артефакт `offline-games` на 14 дней
 
-Workflow `docker.yml`: `docker compose build` - образы `hub` и `play` собираются
-(не публикуются), только при изменении Docker-файлов или lockfile и вручную (D-031).
-CI не запускается на коммиты, где правлена только документация.
+CI не запускается на коммиты, где правлена только документация (D-031); вручную - кнопкой
+Run workflow (П-038).
 
-Права workflow - `contents: read`. Dependabot - раз в месяц для npm и Actions,
-минорные и патчи пачкой (D-031).
+Workflow `docker.yml` - только при изменении `Dockerfile`, compose-файлов, `deploy/`,
+`packages/db/`, lockfile и вручную (D-031). Образы собираются, но не публикуются; кроме того:
 
-## CD - как устроено (D-034…D-037)
+- `deploy/compose.prod.yml` разбирается (`config`);
+- образ `games` публикует игры в том, а повторный запуск в тот же том говорит "без изменений";
+- `db` поднимается ровно по `compose.prod.yml`, миграции проходят дважды, таблицы на месте;
+- зонд сети: `migrate` видит базу, `play` - нет ни по имени, ни по адресу.
+
+Права workflow - `contents: read`. Dependabot - раз в месяц, в ветку `dev`: npm (минорные и
+патчи пачкой), Actions, образ базы в `deploy/` (по digest); мажор Postgres не предлагается -
+это решение, а не PR (D-051).
+
+## CD - как устроено (D-034…D-038, D-051)
 
 Руками с этим работать - [OPERATIONS.md](OPERATIONS.md). Здесь - устройство.
 
-1. **Образы.** `publish.yml` по зелёному `CI` на `main` собирает цели `hub`, `play`, `games`
-   (`linux/amd64`, VPS-1 - x86_64) и кладёт в GHCR с тегами `<sha>` и `main`. Права
+1. **Образы.** `publish.yml` по зелёному `CI` на `main` собирает цели `hub`, `play`, `games`,
+   `migrate` (`linux/amd64`, VPS-1 - x86_64) и кладёт в GHCR с тегами `<sha>` и `main`. Права
    `packages: write` - только у этого workflow. Пакеты GHCR публичные: токен на сервере не нужен.
+   База - `postgres:17-alpine`, закреплённая digest'ом в `compose.prod.yml`.
 2. **Игры собираются в CI**, в образ `games` (D-034). На сервере одноразовый контейнер
    только публикует их в постоянный том `gf-data` (`gf build --prebuilt && gf export`):
    ни pnpm, ни Vite на VPS-1 нет, а неизменяемость версий проверяется тем же кодом.
 3. **Доставка - таймер на VPS-1** (вариант А спецификации): `gf-update.timer` раз в 5 минут
-   тянет образы; если сменились - `games`, и только при его успехе `up -d play hub`.
-   В GitHub нет ключей от сервера, входящих соединений нет.
+   тянет образы. Если сменились: `games` → `db` → дамп базы в `/var/backups/game-factory`
+   (через `.part`, последние 10, П-046) → `migrate` → `up -d db play hub`. Упал любой шаг -
+   выкладка стоит, работают прежние образы. В GitHub нет ключей от сервера, входящих
+   соединений нет.
 4. **Прод-конфиг - копии root** в `/etc/docker/containers/game-factory/` и
    `/usr/local/sbin/gf-update` (D-035), а не файлы рабочей копии.
 5. **Traefik** владельца (provider docker): маршруты - метками в
-   `deploy/compose.prod.yml`, общая с ним сеть - `gf-edge` (D-038). Портов наружу у
-   контейнеров нет.
+   `deploy/compose.prod.yml`, общая с ним сеть - `gf-edge` (D-038). База - в своей сети
+   `gf-db`, где только `db`, `migrate` и хаб (D-051). Портов наружу у контейнеров нет.
 6. **Откат** - `GF_IMAGE_TAG=<sha>` в `.env` и `gf-update --force`; он же заморозка.
-
-Workflow `docker.yml` (на PR и при правке Docker-файлов/`deploy/`) дополнительно проверяет,
-что `compose.prod.yml` разбирается и что образ `games` при повторном запуске в тот же том
-говорит "без изменений".
+   Миграции только расширяющие (D-051), поэтому прежний хаб работает на новой схеме.
 
 Все команды для VPS готовит агент блоками (машина, пользователь, оболочка; откат -
 отдельным блоком), выполняет владелец - правило кита про чужие машины.
