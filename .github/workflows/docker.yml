@@ -27,12 +27,15 @@ jobs:
 
       - run: docker compose build
 
-      # Пароль базы для CI - случайный, в файле, как на проде (секрет compose).
+      # Секреты для CI - случайные, в файлах, как на проде (секреты compose): пароль базы,
+      # пароль роли хаба gf_hub и секрет входа (слайс 1.2).
       - name: compose.prod.yml разбирается
         run: |
           mkdir -p deploy/secrets
           head -c 24 /dev/urandom | base64 > deploy/secrets/db_password
-          chmod 0644 deploy/secrets/db_password
+          head -c 24 /dev/urandom | base64 > deploy/secrets/db_hub_password
+          head -c 48 /dev/urandom | base64 > deploy/secrets/auth_secret
+          chmod 0644 deploy/secrets/db_password deploy/secrets/db_hub_password deploy/secrets/auth_secret
           GF_IMAGE_TAG=ci docker compose -f deploy/compose.prod.yml --profile publish config --quiet
 
       # Публикатор прода: второй прогон в тот же том - "без изменений", а не отказ (D-034).
@@ -58,7 +61,10 @@ jobs:
           $c run --rm migrate
           $c run --rm migrate
           $c exec -T db psql -U gf -d gf -Atc "select string_agg(tablename, ',' order by tablename) from pg_tables where schemaname = 'public'" | tee tables.txt
-          grep -qx 'game_saves,scores' tables.txt
+          grep -qx 'account,game_saves,passkey,scores,session,user,verification' tables.txt
+          # Роль хаба заведена migrate и не суперпользователь (D-051, D-058).
+          $c exec -T db psql -U gf -d gf -Atc "select rolsuper::text || ',' || rolcanlogin::text from pg_roles where rolname = 'gf_hub'" | tee role.txt
+          grep -qx 'false,true' role.txt
 
           # Изоляция (D-038, D-051): play не в gf-db - базу не видит ни по имени, ни по адресу.
           # migrate в gf-db - видит: без этой контрольной пары "закрыто" могло бы значить

@@ -152,7 +152,7 @@ test('роль хаба: данные - можно, схему и програм
   await assert.rejects(ensureHubRole(db, 'short'), /короче 16/);
   await assert.rejects(ensureHubRole(db, 'hub password with spaces'), /ASCII/);
   await ensureHubRole(db, "hub'pass'with'quotes-123");
-  await ensureHubRole(db, 'hub password second run'); // повторный запуск - смена пароля, не ошибка
+  await ensureHubRole(db, 'hub-password-second-run'); // повторный запуск - смена пароля, не ошибка
   // В базу уходит SCRAM-верификатор, а не пароль: открытого пароля нет ни в pg_authid, ни в журнале.
   const stored = await db.execute(sql`select rolpassword from pg_authid where rolname = ${HUB_ROLE}`);
   assert.match(String((stored.rows[0] as { rolpassword: string }).rolpassword), /^SCRAM-SHA-256\$4096:/);
