@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { Logo } from '@/components/logo.tsx';
 import { SiteNav } from '@/components/site-nav.tsx';
 import { UserMenu } from '@/components/user-menu.tsx';
+import { currentOwner } from '@/lib/session.ts';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -15,7 +16,8 @@ export const metadata: Metadata = {
 // опускает кнопку выхода ниже выреза камеры (.gf-exit-pill), а страница в ландшафте - "чёлку" по бокам.
 export const viewport: Viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover' };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const owner = (await currentOwner()) !== null;
   return (
     <html lang="ru">
       <body className="min-h-dvh">
@@ -28,7 +30,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                 Game <b>Factory</b>
               </span>
             </Link>
-            <SiteNav />
+            <SiteNav owner={owner} />
             <div className="gf-header__end">
               <UserMenu />
             </div>
