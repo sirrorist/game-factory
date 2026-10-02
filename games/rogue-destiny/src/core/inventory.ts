@@ -28,6 +28,8 @@ export function createInventory(width = 5, height = 4): InventoryGrid {
   };
 }
 
+const ROTATIONS: InventoryItem['rotation'][] = [0, 90, 180, 270];
+
 export function getRotatedCoords(
   shape: readonly GridCoord[],
   rotation: 0 | 90 | 180 | 270,
@@ -117,6 +119,58 @@ export function placeItem(
   grid.items.set(item.id, item);
 
   return true;
+}
+
+/**
+ * Положить новый предмет в первое место, где он помещается, перебирая и повороты.
+ * Возвращает false, если места нет ни в одном повороте; тогда предмет не меняется.
+ */
+export function autoPlaceItem(grid: InventoryGrid, item: InventoryItem): boolean {
+  const original = item.rotation;
+  for (const rotation of [original, ...ROTATIONS.filter((r) => r !== original)]) {
+    item.rotation = rotation;
+    for (let y = 0; y < grid.height; y++) {
+      for (let x = 0; x < grid.width; x++) {
+        if (canPlaceItem(grid, item, x, y)) return placeItem(grid, item, x, y);
+      }
+    }
+  }
+  item.rotation = original;
+  return false;
+}
+
+/**
+ * Вернуть предмет на прежнее место после неудачного перетаскивания. Если игрок повернул
+ * его на лету и в повороте он туда не лезет - на место в прежнем повороте, иначе в любое
+ * свободное: раньше такой предмет пропадал из ранца.
+ */
+export function restoreItem(
+  grid: InventoryGrid,
+  item: InventoryItem,
+  originX: number,
+  originY: number,
+  originRotation: InventoryItem['rotation'],
+): boolean {
+  if (placeItem(grid, item, originX, originY)) return true;
+  item.rotation = originRotation;
+  if (placeItem(grid, item, originX, originY)) return true;
+  return autoPlaceItem(grid, item);
+}
+
+/** Пересекаются ли предметы в сетке - проверка целостности для тестов и отладки. */
+export function findOverlaps(grid: InventoryGrid): string[] {
+  const owner = new Map<string, string>();
+  const clashes: string[] = [];
+  for (const item of grid.items.values()) {
+    if (item.gridX === undefined || item.gridY === undefined) continue;
+    for (const c of getItemOccupiedCells(item, item.gridX, item.gridY)) {
+      const key = `${c.x},${c.y}`;
+      const prev = owner.get(key);
+      if (prev && prev !== item.id) clashes.push(`${key}: ${prev} / ${item.id}`);
+      owner.set(key, item.id);
+    }
+  }
+  return clashes;
 }
 
 export function removeItem(grid: InventoryGrid, itemId: string): boolean {

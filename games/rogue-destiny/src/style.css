@@ -1,4 +1,4 @@
-/* Rogue Destiny — Стили тёмного комикс-нуара Cel-Shaded на базе дизайн-системы Game Factory */
+/* Rogue Destiny - Стили тёмного комикс-нуара Cel-Shaded на базе дизайн-системы Game Factory */
 
 :root {
   /* Game Factory Web Kit Tokens */
@@ -305,6 +305,11 @@ body, html {
   color: #f59e0b;
 }
 
+.score-best {
+  color: var(--ink-muted);
+  font-size: 0.9em;
+}
+
 #hud-minimap {
   border: 1px solid #334155;
   border-radius: 4px;
@@ -428,6 +433,7 @@ body, html {
 }
 
 .inventory-window {
+  position: relative;
   background: var(--bg-100);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-md);
@@ -473,18 +479,48 @@ body, html {
 }
 
 .inv-grid-board {
+  --cell: 64px;
   position: relative;
   display: grid;
-  grid-template-columns: repeat(var(--cols), 64px);
-  grid-template-rows: repeat(var(--rows), 64px);
+  grid-template-columns: repeat(var(--cols), var(--cell));
+  grid-template-rows: repeat(var(--rows), var(--cell));
   gap: 0px;
-  width: calc(var(--cols) * 64px);
-  height: calc(var(--rows) * 64px);
+  width: calc(var(--cols) * var(--cell));
+  height: calc(var(--rows) * var(--cell));
+  touch-action: none;
+}
+
+.grid-item-composite {
+  position: absolute;
+  z-index: 5;
+  cursor: grab;
+  touch-action: none;
+}
+
+.grid-item-composite.dragging {
+  z-index: 50;
+  opacity: 0.85;
+  pointer-events: none;
+  cursor: grabbing;
+}
+
+.inv-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-300);
+  color: var(--ink);
+  font-size: 16px;
+  cursor: pointer;
 }
 
 .grid-cell {
-  width: 64px;
-  height: 64px;
+  width: var(--cell);
+  height: var(--cell);
   border: 1px solid #1e293b;
   background: rgba(15, 23, 42, 0.4);
   transition: background 0.1s;
@@ -507,6 +543,7 @@ body, html {
 
 .grid-item {
   position: absolute;
+  overflow: hidden;
   background: #1e293b;
   border: 2px solid #475569;
   border-radius: 4px;
@@ -527,6 +564,9 @@ body, html {
   font-size: 11px;
   font-weight: 700;
   color: #f1f5f9;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+  line-height: 1.15;
 }
 
 .item-info {
@@ -735,6 +775,7 @@ body, html {
 .qte-cursor {
   position: absolute;
   top: 0;
+  transform: translateX(-50%);
   width: 6px;
   height: 100%;
   background: #f8fafc;
@@ -1087,85 +1128,83 @@ body, html {
 }
 
 /* ==================== МОБИЛЬНОЕ СЕНСОРНОЕ УПРАВЛЕНИЕ ==================== */
+/* По образцу k8s-at-home: джойстик появляется под пальцем, кнопки - справа снизу,
+   отступы - с учётом выреза камеры (safe-area). Раскладку включает body.touch-enabled. */
+:root {
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+}
+
+html, body, #app-canvas {
+  touch-action: none;
+  overscroll-behavior: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
 .mobile-touch-overlay {
   position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: 90;
+}
+
+.mobile-touch-overlay[hidden] {
+  display: none;
+}
+
+.touch-stick {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  margin: -60px 0 0 -60px;
+  border-radius: 50%;
+  border: 2px solid rgba(148, 163, 184, 0.45);
+  background: rgba(15, 23, 42, 0.4);
+  display: none;
+}
+
+.touch-stick.active {
   display: block;
 }
 
-.touch-joystick-zone {
+.touch-knob {
   position: absolute;
-  bottom: 24px;
-  left: 24px;
-  width: 140px;
-  height: 140px;
-  pointer-events: auto;
-  touch-action: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.touch-joystick-base {
-  position: relative;
-  width: 110px;
-  height: 110px;
-  border-radius: 50%;
-  background: rgba(15, 23, 42, 0.45);
-  backdrop-filter: blur(4px);
-  border: 2px solid rgba(56, 189, 248, 0.4);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-}
-
-.touch-joystick-knob {
-  position: absolute;
-  top: 50%;
   left: 50%;
-  width: 44px;
-  height: 44px;
+  top: 50%;
+  width: 52px;
+  height: 52px;
+  margin: -26px 0 0 -26px;
   border-radius: 50%;
-  background: radial-gradient(circle, #38bdf8 0%, #0284c7 100%);
-  border: 2px solid #f8fafc;
-  box-shadow: 0 0 10px rgba(56, 189, 248, 0.8);
-  transform: translate(-50%, -50%);
-  transition: transform 0.05s ease-out;
+  background: rgba(255, 255, 255, 0.45);
 }
 
 .touch-action-pad {
   position: absolute;
-  bottom: 24px;
-  right: 24px;
-  display: flex;
-  flex-direction: column;
+  right: calc(16px + var(--safe-r));
+  bottom: calc(16px + var(--safe-b));
+  display: grid;
+  grid-template-columns: repeat(3, 52px);
   gap: 10px;
-  pointer-events: auto;
-  touch-action: none;
-}
-
-.touch-row,
-.touch-row-main {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
+  pointer-events: none;
 }
 
 .touch-btn {
-  width: 48px;
-  height: 48px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   background: rgba(15, 23, 42, 0.65);
-  backdrop-filter: blur(6px);
   border: 2px solid #334155;
-  color: #f1f5f9;
-  font-size: 20px;
+  color: #f8fafc;
+  font-size: 22px;
+  line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-  user-select: none;
-  touch-action: manipulation;
+  pointer-events: auto;
+  touch-action: none;
 }
 
 .touch-btn:active,
@@ -1173,28 +1212,120 @@ body, html {
   transform: scale(0.92);
   background: rgba(56, 189, 248, 0.35);
   border-color: #38bdf8;
-  box-shadow: 0 0 14px rgba(56, 189, 248, 0.6);
 }
 
-.touch-btn-attack {
-  width: 58px;
-  height: 58px;
-  font-size: 24px;
-  background: rgba(220, 38, 38, 0.3);
-  border-color: #ef4444;
+.touch-btn-magic {
+  border-color: #a855f7;
 }
 
 .touch-btn-parry {
-  width: 54px;
-  height: 54px;
-  font-size: 22px;
-  background: rgba(2, 132, 199, 0.3);
   border-color: #38bdf8;
+  background: rgba(2, 132, 199, 0.3);
 }
 
-@media (min-width: 1024px) {
-  body:not(.touch-enabled) .mobile-touch-overlay {
-    display: none;
+.touch-btn-inv {
+  position: absolute;
+  right: calc(16px + var(--safe-r));
+  bottom: calc(150px + var(--safe-b));
+}
+
+/* Подсказки: на ПК - клавиши, на телефоне - жесты */
+.controls-touch,
+.inv-hint-touch,
+.qte-hint-touch {
+  display: none;
+}
+
+body.touch-enabled .controls-desktop,
+body.touch-enabled .inv-hint-desktop,
+body.touch-enabled .qte-hint-desktop {
+  display: none;
+}
+
+body.touch-enabled .controls-touch,
+body.touch-enabled .inv-hint-touch,
+body.touch-enabled .qte-hint-touch {
+  display: block;
+}
+
+body.touch-enabled .controls-touch {
+  display: flex;
+}
+
+/* Телефон боком: экран низкий - HUD компактнее, быстрые слоты заменяют кнопки справа */
+body.touch-enabled .hud-quick-slots {
+  display: none;
+}
+
+body.touch-enabled .cue-banner {
+  bottom: calc(16px + var(--safe-b));
+  max-width: 46vw;
+  font-size: 12px;
+  padding: 6px 12px;
+}
+
+@media (max-height: 520px), (max-width: 760px) {
+  .hud-panel-top-left {
+    top: calc(8px + var(--safe-t));
+    left: calc(8px + var(--safe-l));
+    width: 210px;
+    gap: 5px;
+    padding: 8px;
+  }
+
+  .hud-panel-top-left .bar-header {
+    font-size: 9px;
+  }
+
+  .hud-panel-top-left .bar-track {
+    height: 7px;
+  }
+
+  .hud-panel-top-right {
+    top: calc(8px + var(--safe-t));
+    right: calc(8px + var(--safe-r));
+    padding: 6px;
+    gap: 4px;
+  }
+
+  #hud-minimap {
+    width: 110px;
+    height: 82px;
+  }
+
+  .notifications-stack .notification-toast {
+    font-size: 11px;
+    padding: 6px 8px;
+  }
+
+  .inventory-modal {
+    align-items: flex-start;
+    overflow: auto;
+  }
+
+  .inventory-window {
+    width: auto;
+    max-width: calc(100vw - 16px);
+    margin: 8px auto;
+    padding: 12px;
+  }
+
+  .inv-body {
+    flex-direction: row;
+    gap: 10px;
+  }
+
+  .inv-grid-board {
+    --cell: 46px;
+  }
+
+  .inv-sidebar {
+    max-height: calc(100vh - 110px);
+    overflow: auto;
+  }
+
+  .qte-card {
+    max-width: calc(100vw - 32px);
   }
 }
 

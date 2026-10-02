@@ -22,7 +22,11 @@ export interface CryptWorld {
   portals: AncientPortal3D[];
 }
 
-export function buildCryptWorld(scene: THREE.Scene, floor: DungeonFloor): CryptWorld {
+/**
+ * `lowPower` - телефон: свет даёт каждый второй факел (пламя видно у всех). Каждый точечный
+ * свет утяжеляет шейдер всех материалов, а на этаже их 12+ только от факелов.
+ */
+export function buildCryptWorld(scene: THREE.Scene, floor: DungeonFloor, lowPower = false): CryptWorld {
   const materials = createCryptMaterials();
   const worldGroup = new THREE.Group();
   const aetherRifts: THREE.Mesh[] = [];
@@ -185,7 +189,7 @@ export function buildCryptWorld(scene: THREE.Scene, floor: DungeonFloor): CryptW
   const torchTipGeo = new THREE.ConeGeometry(0.07, 0.22, 5);
   const torchTipMat = new THREE.MeshBasicMaterial({ color: '#ef4444' });
 
-  function createTorchPost(x: number, z: number, phase: number): THREE.Group {
+  function createTorchPost(x: number, z: number, phase: number, withLight: boolean): THREE.Group {
     const torchGroup = new THREE.Group();
     torchGroup.position.set(x, 0, z);
 
@@ -211,11 +215,12 @@ export function buildCryptWorld(scene: THREE.Scene, floor: DungeonFloor): CryptW
     torchGroup.add(tip);
 
     // Теплый янтарный источник света для освещения пути
-    const light = new THREE.PointLight('#f59e0b', 1.8, 14, 1.6);
-    light.position.y = 2.35;
-    torchGroup.add(light);
-
-    torchLights.push({ light, baseIntensity: 1.8, phase });
+    if (withLight) {
+      const light = new THREE.PointLight('#f59e0b', 1.8, 14, 1.6);
+      light.position.y = 2.35;
+      torchGroup.add(light);
+      torchLights.push({ light, baseIntensity: 1.8, phase });
+    }
     return torchGroup;
   }
 
@@ -250,7 +255,7 @@ export function buildCryptWorld(scene: THREE.Scene, floor: DungeonFloor): CryptW
       const torchX = px + nx * side;
       const torchZ = pz + nz * side;
 
-      const torch = createTorchPost(torchX, torchZ, i * 1.3);
+      const torch = createTorchPost(torchX, torchZ, i * 1.3, !lowPower || i % 2 === 1);
       worldGroup.add(torch);
     }
   }

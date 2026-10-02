@@ -1,6 +1,8 @@
 /**
  * Модуль сценарных энкаунтеров: Стелс-проверки, QTE-взлом мимика и диалог Эфирного Разлома.
  */
+import { QTE_ZONE, qteHit, qteSpeed, qteStep } from '../core/qte.ts';
+import { pruneNotifications, pushNotification, type Notice } from '../core/notifications.ts';
 export interface StealthChoice {
   text: string;
   risk: 'low' | 'medium' | 'high';
@@ -44,26 +46,51 @@ export function createEncountersUI(): EncountersUI {
   notifStack.className = 'notifications-stack';
   document.body.appendChild(notifStack);
 
-  function notify(text: string) {
-    const toast = document.createElement('div');
-    toast.className = 'notification-toast';
-    toast.textContent = text;
+  let notices: Notice[] = [];
+  let pruneTimer = 0;
 
-    // Ограничение: максимум 3 уведомления одновременно
-    while (notifStack.children.length >= 3) {
-      notifStack.firstElementChild?.remove();
-    }
-
-    notifStack.appendChild(toast);
-
-    // Увеличенное время показа: 4.2 секунды
-    setTimeout(() => {
-      toast.classList.add('fading');
-      setTimeout(() => {
-        toast.remove();
-      }, 350);
-    }, 4200);
+  /** Стек - сразу под панелью статистики, какой бы высоты она ни была (ПК, телефон). */
+  function placeStack() {
+    const panel = document.querySelector('.hud-panel-top-left');
+    if (!panel) return;
+    const r = panel.getBoundingClientRect();
+    notifStack.style.top = `${Math.round(r.bottom + 8)}px`;
+    notifStack.style.left = `${Math.round(r.left)}px`;
+    notifStack.style.width = `${Math.round(r.width)}px`;
   }
+
+  function renderNotices() {
+    const now = performance.now();
+    notices = pruneNotifications(notices, now);
+    placeStack();
+    const keep = new Set(notices.map((n) => String(n.id)));
+    for (const el of Array.from(notifStack.children) as HTMLElement[]) {
+      if (!keep.has(el.dataset.id ?? '')) el.remove();
+    }
+    for (const n of notices) {
+      let el = notifStack.querySelector<HTMLElement>(`[data-id="${n.id}"]`);
+      if (!el) {
+        el = document.createElement('div');
+        el.className = 'notification-toast';
+        el.dataset.id = String(n.id);
+        notifStack.appendChild(el);
+      }
+      el.textContent = n.count > 1 ? `${n.text} ×${n.count}` : n.text;
+      el.classList.toggle('fading', n.expiresAt - now < 400);
+    }
+    clearTimeout(pruneTimer);
+    if (notices.length > 0) {
+      const soonest = Math.min(...notices.map((n) => n.expiresAt - 400));
+      pruneTimer = window.setTimeout(renderNotices, Math.max(50, soonest - now));
+    }
+  }
+
+  function notify(text: string) {
+    notices = pushNotification(notices, text, performance.now());
+    renderNotices();
+  }
+
+  window.addEventListener('resize', placeStack);
 
   return {
     showNotification: notify,
@@ -106,104 +133,101 @@ export function createEncountersUI(): EncountersUI {
       let stage = 0;
       overlay.innerHTML = `
         <div class="encounter-card qte-card">
-          <div class="enc-header">📦 СПОРОВЫЙ МИМИК — ОСТОРОЖНЫЙ ВЗЛОМ</div>
-          <div class="enc-desc">Нажмите ПРОБЕЛ или кликните ЛКМ точно в зелёной зоне, чтобы срезать усики!</div>
+          <div class="enc-header">📦 СПОРОВЫЙ МИМИК - ОСТОРОЖНЫЙ ВЗЛОМ</div>
+          <div class="enc-desc">Срежьте усик, когда ползунок в зелёной зоне. Три усика - три среза.</div>
           <div id="qte-track-el" class="qte-track">
-            <div id="qte-zone" class="qte-zone"></div>
+            <div id="qte-zone" class="qte-zone" style="left: ${QTE_ZONE.from}%; width: ${QTE_ZONE.to - QTE_ZONE.from}%"></div>
             <div id="qte-cursor" class="qte-cursor"></div>
           </div>
           <div id="qte-stage" class="qte-stage">Усик: 1 / 3</div>
-          <div class="qte-hint">Клавиша [ПРОБЕЛ] или [ЛКМ] в любом месте экрана</div>
+          <div class="qte-hint qte-hint-desktop">[ПРОБЕЛ] или [ЛКМ] - срез</div>
+          <div class="qte-hint qte-hint-touch">Коснитесь экрана - срез</div>
         </div>
       `;
+      // Захват мыши не снимаем: курсор в QTE не нужен, а после снятия захвата часть систем
+      // (Chromium на Wayland) глотает первый клик, пока мышь не сдвинется (приёмка, пункт 8).
       overlay.classList.remove('hidden');
-      document.exitPointerLock();
-      setTimeout(() => {
-        if (document.pointerLockElement) document.exitPointerLock();
-      }, 20);
 
       const cursor = overlay.querySelector('#qte-cursor') as HTMLElement;
       const stageText = overlay.querySelector('#qte-stage') as HTMLElement;
       const trackEl = overlay.querySelector('#qte-track-el') as HTMLElement;
-      let pos = 10;
-      let speed = 1.15; // Комфортная скорость ползунка
-      let animId: number;
-      let cutCooldown = false;
+      let pos = 4;
+      let dir = 1;
+      let lastFrame = performance.now();
+      let animId = 0;
+      let cutLockedUntil = 0;
       let isCompleted = false;
+      // Тот же клик приходит и как pointerdown, и как mousedown - считаем один раз.
+      let lastInputAt = -1;
 
-      function loop() {
-        pos += speed;
-        if (pos >= 98) {
-          pos = 98;
-          speed = -Math.abs(speed);
-        } else if (pos <= 2) {
-          pos = 2;
-          speed = Math.abs(speed);
-        }
+      function loop(now: number) {
+        // Скорость - в процентах дорожки за секунду, а не за кадр: на мониторе 144 Гц
+        // ползунок раньше бежал в 2.4 раза быстрее, чем на 60 Гц (приёмка, пункт 3).
+        const dt = Math.min(0.05, (now - lastFrame) / 1000);
+        lastFrame = now;
+        const next = qteStep(pos, dir, qteSpeed(stage), dt);
+        pos = next.pos;
+        dir = next.dir;
         cursor.style.left = `${pos}%`;
-        if (!isCompleted) {
-          animId = requestAnimationFrame(loop);
-        }
+        if (!isCompleted) animId = requestAnimationFrame(loop);
       }
       animId = requestAnimationFrame(loop);
 
       function attemptCut() {
-        if (cutCooldown || isCompleted) return;
+        const now = performance.now();
+        if (isCompleted || now < cutLockedUntil) return;
 
-        // Зеленая зона среза: 36%..68%
-        if (pos >= 36 && pos <= 68) {
+        if (qteHit(pos)) {
           stage += 1;
-          cutCooldown = true;
           trackEl.classList.add('qte-flash-hit');
           setTimeout(() => trackEl.classList.remove('qte-flash-hit'), 220);
 
           if (stage >= 3) {
             isCompleted = true;
             cleanup();
-            notify('✨ Реликварий вскрыт без шума! Получена ценная добыча.');
             onSuccess();
           } else {
             stageText.textContent = `Усик: ${stage + 1} / 3`;
-            notify(`✓ Усик ${stage}/3 аккуратно срезан!`);
-            // Небольшое ускорение на следующем усике
-            speed = (Math.abs(speed) + 0.25) * Math.sign(speed);
-            setTimeout(() => {
-              cutCooldown = false;
-            }, 300);
+            cutLockedUntil = now + 300;
           }
         } else {
           isCompleted = true;
           trackEl.classList.add('qte-flash-miss');
           cleanup();
-          notify('💥 ОШИБКА: Мимик проснулся с яростным ревом!');
           onFailure();
         }
       }
 
+      function onInput(e: Event) {
+        if (e.timeStamp - lastInputAt < 50) return;
+        lastInputAt = e.timeStamp;
+        e.preventDefault();
+        e.stopPropagation();
+        attemptCut();
+      }
+
       function handleKey(e: KeyboardEvent) {
-        if (e.repeat) return; // Защита от автоповтора при зажатии пробела
-        if (e.code === 'Space') {
-          e.preventDefault();
-          attemptCut();
-        }
+        if (e.code !== 'Space') return;
+        e.preventDefault();
+        if (e.repeat) return; // зажатый пробел не режет все усики подряд
+        onInput(e);
       }
 
       function handlePointer(e: PointerEvent | MouseEvent) {
-        if (e.button === 0) {
-          e.preventDefault();
-          attemptCut();
-        }
+        if (e.button === 0) onInput(e);
       }
 
       function cleanup() {
         cancelAnimationFrame(animId);
-        window.removeEventListener('keydown', handleKey);
-        window.removeEventListener('pointerdown', handlePointer);
+        window.removeEventListener('keydown', handleKey, true);
+        window.removeEventListener('pointerdown', handlePointer, true);
+        window.removeEventListener('mousedown', handlePointer, true);
         overlay.classList.add('hidden');
       }
 
-      window.addEventListener('keydown', handleKey);
-      window.addEventListener('pointerdown', handlePointer);
+      window.addEventListener('keydown', handleKey, true);
+      window.addEventListener('pointerdown', handlePointer, true);
+      window.addEventListener('mousedown', handlePointer, true);
     },
 
     showAetherRiftModal: (onRest, onSave, onLeave) => {

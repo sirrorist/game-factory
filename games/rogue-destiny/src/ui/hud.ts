@@ -17,6 +17,7 @@ export interface HudElements {
   threadsContainer: HTMLElement;
   lightBar: HTMLElement;
   scoreText: HTMLElement;
+  bestText: HTMLElement;
   floorText: HTMLElement;
   cueBanner: HTMLElement;
   cueText: HTMLElement;
@@ -90,7 +91,8 @@ export function createHud(): HudElements {
     <div class="hud-panel-top-right">
       <div class="floor-badge">
         <span id="hud-floor-text">ЭТАЖ 1: КРИПТЫ</span>
-        <span id="hud-score-text" class="score-badge">0 ОЧКОВ</span>
+        <span id="hud-score-text" class="score-badge" title="Счёт текущего забега">0 ОЧКОВ</span>
+        <span id="hud-best-text" class="score-badge score-best" title="Лучший забег за всё время">РЕКОРД: 0</span>
       </div>
       <canvas id="hud-minimap" width="160" height="120"></canvas>
     </div>
@@ -141,6 +143,7 @@ export function createHud(): HudElements {
     threadsContainer: container.querySelector('#hud-threads')!,
     lightBar: container.querySelector('#hud-light-fill')!,
     scoreText: container.querySelector('#hud-score-text')!,
+    bestText: container.querySelector('#hud-best-text')!,
     floorText: container.querySelector('#hud-floor-text')!,
     cueBanner: container.querySelector('#hud-cue-banner')!,
     cueText: container.querySelector('#hud-cue-text')!,
@@ -183,7 +186,7 @@ export function updateHud(hud: HudElements, player: PlayerState, floor: DungeonF
 
   // Очки и этаж
   const totalScore = calculateScore(player);
-  hud.scoreText.textContent = `СЧЁТ: ${totalScore}`;
+  hud.scoreText.textContent = `ЗАБЕГ: ${totalScore}`;
   hud.scoreText.title = `Итоговый расчётный счёт: ${totalScore} (Очки открытий: ${player.score})`;
   hud.floorText.textContent = `ЭТАЖ ${player.currentFloor}: КРИПТЫ`;
 }
@@ -257,4 +260,12 @@ export function triggerFateFlash(hud: HudElements): void {
   hud.fateFlash.classList.remove('active');
   void hud.fateFlash.offsetWidth;
   hud.fateFlash.classList.add('active');
+}
+
+/**
+ * Рекорд рядом со счётом забега: это разные числа - текущий забег и лучший за всё время
+ * (вопрос владельца на приёмке: "260 над миникартой, а рекорд 795").
+ */
+export function setHudBest(hud: HudElements, best: number): void {
+  hud.bestText.textContent = `РЕКОРД: ${best}`;
 }

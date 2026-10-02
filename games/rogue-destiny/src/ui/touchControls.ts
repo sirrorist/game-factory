@@ -1,6 +1,9 @@
 /**
- * Модуль сенсорного управления для мобильных устройств и планшетов.
- * Включает виртуальный джойстик перемещения, кнопки действий и свайп для вращения камеры.
+ * Сенсорное управление - по образцу k8s-at-home (games/k8s-at-home/src/input.ts):
+ * левая часть экрана - плавающий джойстик там, где коснулись (дальше края - бег),
+ * правая - вести пальцем = камера, коснуться без сдвига = удар посохом.
+ * Кнопки - только то, чему нет жеста: парирование (держать), магия, действие, бинт,
+ * свиток, сброс перегрева, ранец.
  */
 
 export interface TouchControlsCallbacks {
@@ -12,226 +15,179 @@ export interface TouchControlsCallbacks {
   onInteract: () => void;
   onInventory: () => void;
   onHeal: () => void;
+  onScroll: () => void;
+  onVent: () => void;
+  /** Ввод в мир разрешён: закрыты ранец и окна сцен. */
+  isActive: () => boolean;
 }
 
-export function isMobileOrTouch(): boolean {
-  return (
-    'ontouchstart' in window ||
-    navigator.maxTouchPoints > 0 ||
-    window.innerWidth <= 840 ||
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-  );
+const STICK_R = 50;
+const LOOK_SENS = 0.0055;
+const TAP_SLOP = 12; // пикселей: сдвиг больше - это поворот камеры, а не удар
+const TAP_MS = 320;
+const STICK_ZONE = 0.42; // доля ширины экрана слева под джойстик
+
+/**
+ * Телефон или планшет: основной указатель - палец. Ширина окна и строка браузера
+ * не годятся: узкое окно на ПК и ноутбук с сенсорным экраном получали тач-раскладку.
+ */
+export function prefersTouch(): boolean {
+  return typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 }
 
-export function createTouchControls(callbacks: TouchControlsCallbacks): {
+export interface TouchControls {
   container: HTMLDivElement;
-  destroy: () => void;
-} {
+  /** Включить раскладку (первое касание пальцем на любом устройстве тоже включает). */
+  enable: () => void;
+  readonly enabled: boolean;
+  /** Отпустить всё: окно сцены открылось посреди жеста. */
+  release: () => void;
+}
+
+export function createTouchControls(canvas: HTMLCanvasElement, cb: TouchControlsCallbacks): TouchControls {
   const container = document.createElement('div');
   container.id = 'mobile-touch-overlay';
   container.className = 'mobile-touch-overlay';
+  container.hidden = true;
   container.innerHTML = `
-    <!-- Зона виртуального джойстика (слева снизу) -->
-    <div id="touch-joystick-zone" class="touch-joystick-zone">
-      <div id="touch-joystick-base" class="touch-joystick-base">
-        <div id="touch-joystick-knob" class="touch-joystick-knob"></div>
-      </div>
-    </div>
-
-    <!-- Кнопки действий (справа снизу) -->
+    <div id="touch-stick" class="touch-stick"><div id="touch-knob" class="touch-knob"></div></div>
+    <button id="touch-btn-inv" class="touch-btn touch-btn-inv" type="button" aria-label="Ранец">🎒</button>
     <div class="touch-action-pad">
-      <div class="touch-row">
-        <button id="touch-btn-magic" class="touch-btn touch-btn-magic" title="Магия [Q]">⚡</button>
-        <button id="touch-btn-interact" class="touch-btn touch-btn-interact" title="Действие [E]">🖐️</button>
-      </div>
-      <div class="touch-row">
-        <button id="touch-btn-heal" class="touch-btn touch-btn-heal" title="Бинт [3]">🩹</button>
-        <button id="touch-btn-inv" class="touch-btn touch-btn-inv" title="Ранец [TAB]">🎒</button>
-      </div>
-      <div class="touch-row-main">
-        <button id="touch-btn-parry" class="touch-btn touch-btn-parry" title="Парирование [ПКМ]">🛡️</button>
-        <button id="touch-btn-attack" class="touch-btn touch-btn-attack" title="Удар посохом [ЛКМ]">⚔️</button>
-      </div>
+      <button id="touch-btn-scroll" class="touch-btn" type="button" aria-label="Свиток света">📜</button>
+      <button id="touch-btn-heal" class="touch-btn" type="button" aria-label="Бинт">🩹</button>
+      <button id="touch-btn-vent" class="touch-btn" type="button" aria-label="Сброс перегрева">🔥</button>
+      <button id="touch-btn-interact" class="touch-btn" type="button" aria-label="Действие">🖐️</button>
+      <button id="touch-btn-magic" class="touch-btn touch-btn-magic" type="button" aria-label="Магия">⚡</button>
+      <button id="touch-btn-parry" class="touch-btn touch-btn-parry" type="button" aria-label="Парирование">🛡️</button>
     </div>
   `;
-
   document.body.appendChild(container);
 
-  // Обработка виртуального джойстика
-  const joystickZone = container.querySelector('#touch-joystick-zone') as HTMLElement;
-  const joystickKnob = container.querySelector('#touch-joystick-knob') as HTMLElement;
-  const baseRadius = 55;
-  let activeTouchId: number | null = null;
-  let centerX = 0;
-  let centerY = 0;
+  const stickEl = container.querySelector('#touch-stick') as HTMLElement;
+  const knob = container.querySelector('#touch-knob') as HTMLElement;
 
-  function handleTouchStart(e: TouchEvent) {
-    if (activeTouchId !== null) return;
-    const touch = e.changedTouches[0];
-    if (!touch) return;
+  let enabled = false;
+  const stick = { id: -1, x0: 0, y0: 0 };
+  const look = { id: -1, x: 0, y: 0, sx: 0, sy: 0, t: 0, moved: false };
 
-    activeTouchId = touch.identifier;
-    const rect = joystickZone.getBoundingClientRect();
-    centerX = rect.left + rect.width / 2;
-    centerY = rect.top + rect.height / 2;
-    updateJoystick(touch.clientX, touch.clientY);
+  function enable(): void {
+    if (enabled) return;
+    enabled = true;
+    container.hidden = false;
+    document.body.classList.add('touch-enabled');
   }
 
-  function handleTouchMove(e: TouchEvent) {
-    if (activeTouchId === null) return;
-    for (const touch of Array.from(e.changedTouches)) {
-      if (touch.identifier === activeTouchId) {
-        updateJoystick(touch.clientX, touch.clientY);
-        break;
-      }
+  function stopStick(): void {
+    if (stick.id < 0) return;
+    stick.id = -1;
+    stickEl.classList.remove('active');
+    knob.style.transform = '';
+    cb.onMove(0, 0, false);
+  }
+
+  function release(): void {
+    stopStick();
+    look.id = -1;
+  }
+
+  // Жесты - на холсте: кнопки и окна лежат поверх и до холста касание не пропускают.
+  canvas.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch') return;
+    enable();
+    if (!cb.isActive()) return;
+    if (e.clientX < window.innerWidth * STICK_ZONE) {
+      if (stick.id >= 0) return;
+      stick.id = e.pointerId;
+      stick.x0 = e.clientX;
+      stick.y0 = e.clientY;
+      stickEl.style.left = `${e.clientX}px`;
+      stickEl.style.top = `${e.clientY}px`;
+      knob.style.transform = '';
+      stickEl.classList.add('active');
+    } else {
+      if (look.id >= 0) return;
+      look.id = e.pointerId;
+      look.x = look.sx = e.clientX;
+      look.y = look.sy = e.clientY;
+      look.t = performance.now();
+      look.moved = false;
     }
-  }
+  });
 
-  function handleTouchEnd(e: TouchEvent) {
-    if (activeTouchId === null) return;
-    for (const touch of Array.from(e.changedTouches)) {
-      if (touch.identifier === activeTouchId) {
-        activeTouchId = null;
-        joystickKnob.style.transform = 'translate(-50%, -50%)';
-        callbacks.onMove(0, 0, false);
-        break;
-      }
+  window.addEventListener('pointermove', (e) => {
+    if (e.pointerType !== 'touch') return;
+    if (e.pointerId === stick.id) {
+      const dx = e.clientX - stick.x0;
+      const dy = e.clientY - stick.y0;
+      const len = Math.hypot(dx, dy);
+      const k = len > STICK_R ? STICK_R / len : 1;
+      knob.style.transform = `translate(${dx * k}px, ${dy * k}px)`;
+      cb.onMove((dx * k) / STICK_R, (dy * k) / STICK_R, len > STICK_R * 1.15);
+    } else if (e.pointerId === look.id) {
+      cb.onLook((e.clientX - look.x) * LOOK_SENS, (e.clientY - look.y) * LOOK_SENS);
+      look.x = e.clientX;
+      look.y = e.clientY;
+      if (Math.hypot(look.x - look.sx, look.y - look.sy) > TAP_SLOP) look.moved = true;
     }
-  }
-
-  function updateJoystick(clientX: number, clientY: number) {
-    const rawDx = clientX - centerX;
-    const rawDy = clientY - centerY;
-    const dist = Math.hypot(rawDx, rawDy);
-    const angle = Math.atan2(rawDy, rawDx);
-
-    const clampedDist = Math.min(dist, baseRadius);
-    const knobX = Math.cos(angle) * clampedDist;
-    const knobY = Math.sin(angle) * clampedDist;
-
-    joystickKnob.style.transform = `translate(calc(-50% + ${knobX}px), calc(-50% + ${knobY}px))`;
-
-    const normX = knobX / baseRadius;
-    const normY = knobY / baseRadius;
-    const isSprint = clampedDist > baseRadius * 0.85;
-
-    callbacks.onMove(normX, normY, isSprint);
-  }
-
-  joystickZone.addEventListener('touchstart', handleTouchStart, { passive: true });
-  window.addEventListener('touchmove', handleTouchMove, { passive: true });
-  window.addEventListener('touchend', handleTouchEnd, { passive: true });
-  window.addEventListener('touchcancel', handleTouchEnd, { passive: true });
-
-  // Кнопки действий
-  const btnAttack = container.querySelector('#touch-btn-attack') as HTMLElement;
-  const btnParry = container.querySelector('#touch-btn-parry') as HTMLElement;
-  const btnMagic = container.querySelector('#touch-btn-magic') as HTMLElement;
-  const btnInteract = container.querySelector('#touch-btn-interact') as HTMLElement;
-  const btnInv = container.querySelector('#touch-btn-inv') as HTMLElement;
-  const btnHeal = container.querySelector('#touch-btn-heal') as HTMLElement;
-
-  btnAttack.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    callbacks.onAttack();
   });
 
-  let parryHeld = false;
-  btnParry.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    parryHeld = !parryHeld;
-    btnParry.classList.toggle('active', parryHeld);
-    callbacks.onParry(parryHeld);
-  });
-
-  btnMagic.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    callbacks.onMagic();
-  });
-
-  btnInteract.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    callbacks.onInteract();
-  });
-
-  btnInv.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    callbacks.onInventory();
-  });
-
-  btnHeal.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    callbacks.onHeal();
-  });
-
-  // Вращение камеры пальцем по свободной области экрана
-  let lookTouchId: number | null = null;
-  let lastLookX = 0;
-  let lastLookY = 0;
-
-  function handleWindowTouchStart(e: TouchEvent) {
-    for (const touch of Array.from(e.changedTouches)) {
-      // Если касание не на джойстике и не на кнопках
-      const target = touch.target as HTMLElement | null;
-      if (
-        target &&
-        (target.closest('.touch-joystick-zone') ||
-          target.closest('.touch-action-pad') ||
-          target.closest('.inventory-modal') ||
-          target.closest('.encounter-overlay'))
-      ) {
-        continue;
-      }
-      if (lookTouchId === null) {
-        lookTouchId = touch.identifier;
-        lastLookX = touch.clientX;
-        lastLookY = touch.clientY;
-        break;
-      }
+  const end = (e: PointerEvent): void => {
+    if (e.pointerType !== 'touch') return;
+    if (e.pointerId === stick.id) {
+      stopStick();
+    } else if (e.pointerId === look.id) {
+      const tap = !look.moved && performance.now() - look.t < TAP_MS;
+      look.id = -1;
+      if (tap && e.type === 'pointerup' && cb.isActive()) cb.onAttack();
     }
+  };
+  window.addEventListener('pointerup', end);
+  window.addEventListener('pointercancel', end);
+
+  // Кнопки: срабатывают на касание, а не на отпускание - в бою отпускание запаздывает.
+  function press(id: string, fn: () => void): void {
+    const el = container.querySelector(`#${id}`) as HTMLElement;
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      enable();
+      fn();
+    });
   }
+  press('touch-btn-inv', () => cb.onInventory());
+  press('touch-btn-scroll', () => cb.isActive() && cb.onScroll());
+  press('touch-btn-heal', () => cb.isActive() && cb.onHeal());
+  press('touch-btn-vent', () => cb.isActive() && cb.onVent());
+  press('touch-btn-interact', () => cb.isActive() && cb.onInteract());
+  press('touch-btn-magic', () => cb.isActive() && cb.onMagic());
 
-  function handleWindowTouchMove(e: TouchEvent) {
-    if (lookTouchId === null) return;
-    for (const touch of Array.from(e.changedTouches)) {
-      if (touch.identifier === lookTouchId) {
-        const dx = touch.clientX - lastLookX;
-        const dy = touch.clientY - lastLookY;
-        lastLookX = touch.clientX;
-        lastLookY = touch.clientY;
+  // Парирование - пока палец на кнопке, как ПКМ на ПК
+  const parryBtn = container.querySelector('#touch-btn-parry') as HTMLElement;
+  parryBtn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!cb.isActive()) return;
+    parryBtn.setPointerCapture(e.pointerId);
+    parryBtn.classList.add('active');
+    cb.onParry(true);
+  });
+  const parryOff = (): void => {
+    if (!parryBtn.classList.contains('active')) return;
+    parryBtn.classList.remove('active');
+    cb.onParry(false);
+  };
+  parryBtn.addEventListener('pointerup', parryOff);
+  parryBtn.addEventListener('pointercancel', parryOff);
+  parryBtn.addEventListener('lostpointercapture', parryOff);
 
-        callbacks.onLook(dx * 0.005, dy * 0.005);
-        break;
-      }
-    }
-  }
-
-  function handleWindowTouchEnd(e: TouchEvent) {
-    if (lookTouchId === null) return;
-    for (const touch of Array.from(e.changedTouches)) {
-      if (touch.identifier === lookTouchId) {
-        lookTouchId = null;
-        break;
-      }
-    }
-  }
-
-  window.addEventListener('touchstart', handleWindowTouchStart, { passive: true });
-  window.addEventListener('touchmove', handleWindowTouchMove, { passive: true });
-  window.addEventListener('touchend', handleWindowTouchEnd, { passive: true });
-  window.addEventListener('touchcancel', handleWindowTouchEnd, { passive: true });
+  if (prefersTouch()) enable();
 
   return {
     container,
-    destroy: () => {
-      container.remove();
-      window.removeEventListener('touchmove', handleTouchMove);
-      window.removeEventListener('touchend', handleTouchEnd);
-      window.removeEventListener('touchcancel', handleTouchEnd);
-      window.removeEventListener('touchstart', handleWindowTouchStart);
-      window.removeEventListener('touchmove', handleWindowTouchMove);
-      window.removeEventListener('touchend', handleWindowTouchEnd);
-      window.removeEventListener('touchcancel', handleWindowTouchEnd);
+    enable,
+    get enabled() {
+      return enabled;
     },
+    release,
   };
 }

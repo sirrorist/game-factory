@@ -18,7 +18,7 @@ import {
   forceVentHeat,
   calculateScore,
 } from './core/player.ts';
-import { createInventory, placeItem, canPlaceItem, calculateInventoryStats } from './core/inventory.ts';
+import { createInventory, placeItem, autoPlaceItem, calculateInventoryStats } from './core/inventory.ts';
 import { generateFloor, enterRoom } from './core/dungeon.ts';
 import type { InventoryItem, WeightClass } from './core/types.ts';
 
@@ -26,10 +26,10 @@ import { createCryptMaterials } from './render/materials.ts';
 import { buildCryptWorld, type SporeMimic3D } from './render/environment.ts';
 import { createPlayerCharacter, createSylvanEnemy, type EnemySylvan3D } from './render/character.ts';
 import { createCombatTextManager } from './render/combatText.ts';
-import { createHud, updateHud, drawMinimap, triggerDamageFlash, triggerFateFlash } from './ui/hud.ts';
+import { createHud, updateHud, setHudBest, drawMinimap, triggerDamageFlash, triggerFateFlash } from './ui/hud.ts';
 import { createInventoryView } from './ui/inventoryView.ts';
 import { createEncountersUI, type StealthChoice, type ScoreBreakdown } from './ui/encounters.ts';
-import { createTouchControls, isMobileOrTouch } from './ui/touchControls.ts';
+import { createTouchControls, prefersTouch } from './ui/touchControls.ts';
 
 async function main(): Promise<void> {
   const session = await GameFactory.init({ gameId: __GF_GAME_ID__ });
@@ -191,13 +191,17 @@ async function main(): Promise<void> {
 
   // 2. Инициализация Three.js
   const canvas = document.getElementById('app-canvas') as HTMLCanvasElement;
+  // Телефон: без сглаживания, плотность пикселей до 1.5, без теней от точечных
+  // светильников и с половиной факельного света - как k8s-at-home держит fps.
+  const lowPower = prefersTouch();
+  const maxPixelRatio = lowPower ? 1.5 : 2;
   const renderer = new THREE.WebGLRenderer({
     canvas,
-    antialias: true,
+    antialias: !lowPower,
     powerPreference: 'high-performance',
   });
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxPixelRatio));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
 
@@ -209,10 +213,10 @@ async function main(): Promise<void> {
   scene.add(ambientLight);
 
   const materials = createCryptMaterials();
-  let world = buildCryptWorld(scene, floor);
+  let world = buildCryptWorld(scene, floor, lowPower);
 
   // 3. Создание персонажа и врагов
-  const playerChar = createPlayerCharacter(materials);
+  const playerChar = createPlayerCharacter(materials, lowPower);
   scene.add(playerChar.mesh);
   playerChar.mesh.position.set(0, 0, 0);
 
@@ -236,6 +240,7 @@ async function main(): Promise<void> {
   const combatText = createCombatTextManager();
 
   updateHud(hud, player, floor);
+  setHudBest(hud, meta.highScore);
   drawMinimap(hud.minimapCanvas, floor);
   if (isRunRestored) {
     encountersUI.showNotification(`📜 Загружен сохранённый забег: Этаж ${player.currentFloor}!`);
@@ -251,7 +256,7 @@ async function main(): Promise<void> {
   }
 
   function buildWorldForFloor(): void {
-    world = buildCryptWorld(scene, floor);
+    world = buildCryptWorld(scene, floor, lowPower);
     enemies.push(
       createSylvanEnemy(`sylvan_f${floor.floorNumber}_1`, 34, -6, materials),
       createSylvanEnemy(`sylvan_f${floor.floorNumber}_2`, 36, -8, materials),
@@ -281,6 +286,7 @@ async function main(): Promise<void> {
       meta.highScore = totalScore;
       isNewRecord = true;
     }
+    setHudBest(hud, meta.highScore);
     await session.save('meta_progress', meta).catch(() => {});
     // При окончательной смерти сохранённый забег стирается
     await session.save('run_progress', null).catch(() => {});
@@ -327,6 +333,7 @@ async function main(): Promise<void> {
       meta.highScore = totalScore;
       isNewRecord = true;
     }
+    setHudBest(hud, meta.highScore);
     await session.save('meta_progress', meta).catch(() => {});
 
     const breakdown: ScoreBreakdown = {
@@ -387,7 +394,7 @@ async function main(): Promise<void> {
     updateHud(hud, player, floor);
     drawMinimap(hud.minimapCanvas, floor);
     isTacticalPause = false;
-    canvas.requestPointerLock();
+    lockPointer();
     encountersUI.showNotification('✨ Новое перерождение мага в Затопленных Криптах!');
   }
 
@@ -414,16 +421,20 @@ async function main(): Promise<void> {
     updateHud(hud, player, floor);
     drawMinimap(hud.minimapCanvas, floor);
     isTacticalPause = false;
-    canvas.requestPointerLock();
+    lockPointer();
     encountersUI.showNotification(`🌀 Спуск на Этаж ${player.currentFloor}: древняя магия сгущается!`);
   }
 
-  let lastQuickSlotTime = 0;
+  // Задержка - у каждого слота своя: общая не давала наложить бинт сразу после удара.
+  // Удар посохом - не чаще, чем длится его анимация.
+  const QUICK_SLOT_COOLDOWN_MS = [320, 250, 400, 400];
+  const lastQuickSlotTime = [0, 0, 0, 0];
 
   function activateQuickSlot(slotNum: number): void {
     const now = performance.now();
-    if (now - lastQuickSlotTime < 320) return;
-    lastQuickSlotTime = now;
+    const i = slotNum - 1;
+    if (now - (lastQuickSlotTime[i] ?? 0) < (QUICK_SLOT_COOLDOWN_MS[i] ?? 320)) return;
+    lastQuickSlotTime[i] = now;
 
     const slotEl = hud.quickSlotElements[slotNum - 1];
     if (slotEl) {
@@ -526,6 +537,21 @@ async function main(): Promise<void> {
     });
   });
 
+  /** Захват мыши - только на ПК: на телефоне его нет, а отказ браузера - не ошибка игры. */
+  function lockPointer(): void {
+    if (touch?.enabled || document.pointerLockElement === canvas) return;
+    try {
+      const r = canvas.requestPointerLock() as unknown;
+      if (r instanceof Promise) r.catch(() => undefined);
+    } catch {
+      // нет захвата - игрок кликнет ещё раз
+    }
+  }
+
+  // QTE мимика идёт с захваченной мышью: курсор там не нужен, а снятие захвата
+  // съедало первый клик (приёмка, пункт 8). Остальные окна курсор отпускают.
+  let qteActive = false;
+
   // 6. Управление: WASD + мышь (PointerLock)
   let isTacticalPause = false;
   const keys = {
@@ -541,14 +567,29 @@ async function main(): Promise<void> {
     keys.forward = keys.backward = keys.left = keys.right = keys.shift = false;
   });
 
+  function toggleInventory(): void {
+    invView.toggle();
+    playerChar.setBrowsing(invView.isOpen);
+    if (invView.isOpen) {
+      touch.release();
+      document.exitPointerLock();
+      setTimeout(() => {
+        if (document.pointerLockElement) document.exitPointerLock();
+      }, 20);
+    } else {
+      lockPointer();
+    }
+  }
+  invView.onClose(() => {
+    if (invView.isOpen) toggleInventory();
+  });
+
   window.addEventListener('keydown', (e) => {
     // Закрытие открытого инвентаря или окна Разлома по Escape
     if (e.code === 'Escape') {
       if (invView.isOpen) {
         e.preventDefault();
-        invView.close();
-        playerChar.setBrowsing(false);
-        canvas.requestPointerLock();
+        toggleInventory();
         return;
       }
       const overlay = document.getElementById('encounter-overlay');
@@ -558,7 +599,7 @@ async function main(): Promise<void> {
           e.preventDefault();
           overlay.classList.add('hidden');
           isTacticalPause = false;
-          canvas.requestPointerLock();
+          lockPointer();
           return;
         }
       }
@@ -569,18 +610,7 @@ async function main(): Promise<void> {
     // Открытие/закрытие инвентаря на TAB или I (персонаж достаёт карту, бег на WASD не блокируется!)
     if (e.code === 'Tab' || e.code === 'KeyI') {
       e.preventDefault();
-      invView.toggle();
-      playerChar.setBrowsing(invView.isOpen);
-      if (invView.isOpen) {
-        document.exitPointerLock();
-        setTimeout(() => {
-          if (document.pointerLockElement) {
-            document.exitPointerLock();
-          }
-        }, 20);
-      } else {
-        canvas.requestPointerLock();
-      }
+      toggleInventory();
       return;
     }
 
@@ -609,15 +639,7 @@ async function main(): Promise<void> {
     }
 
     // Сброс тепла клавишей [V] (ценой ожога плоти в серое HP)
-    if (e.code === 'KeyV') {
-      if (player.aetherHeat > 15) {
-        const vent = forceVentHeat(player);
-        updateHud(hud, player, floor);
-        combatText.spawn(playerChar.mesh.position, `⚡ -${vent.heatVented}%`, 'vent');
-        combatText.spawn(playerChar.mesh.position, `-${vent.healthBurned}`, 'damage_player');
-        encountersUI.showNotification(`⚠️ Сброс тепла (-${vent.heatVented}%): ожог каналов (-${vent.healthBurned} HP)`);
-      }
-    }
+    if (e.code === 'KeyV' && !e.repeat) ventHeat();
 
     // Каст боевого заклинания на клавишу [Q]
     if (e.code === 'KeyQ') {
@@ -629,6 +651,18 @@ async function main(): Promise<void> {
       triggerNearbyInteraction();
     }
   });
+
+  function ventHeat(): void {
+    if (player.aetherHeat <= 15) {
+      encountersUI.showNotification('🔥 Перегрев ниже 15% - сбрасывать нечего');
+      return;
+    }
+    const vent = forceVentHeat(player);
+    updateHud(hud, player, floor);
+    combatText.spawn(playerChar.mesh.position, `⚡ -${vent.heatVented}%`, 'vent');
+    combatText.spawn(playerChar.mesh.position, `-${vent.healthBurned}`, 'damage_player');
+    encountersUI.showNotification(`⚠️ Сброс тепла (-${vent.heatVented}%): ожог каналов (-${vent.healthBurned} HP)`);
+  }
 
   function triggerMagicCast(): void {
     const castRes = castMagic(player, 25);
@@ -714,7 +748,7 @@ async function main(): Promise<void> {
         async () => {
           // Отдых у Разлома
           isTacticalPause = false;
-          canvas.requestPointerLock();
+          lockPointer();
           player.greyHp = 0;
           player.hp = player.maxHp;
           player.aetherHeat = 0;
@@ -728,14 +762,14 @@ async function main(): Promise<void> {
         async () => {
           // Сохранение через SDK
           isTacticalPause = false;
-          canvas.requestPointerLock();
+          lockPointer();
           await saveCurrentRun();
           encountersUI.showNotification('💾 Прогресс забега сохранён в кристалле Разлома!');
         },
         () => {
           // Выход из диалога Разлома
           isTacticalPause = false;
-          canvas.requestPointerLock();
+          lockPointer();
         },
       );
     }
@@ -754,7 +788,7 @@ async function main(): Promise<void> {
     if (invView.isOpen || isTacticalPause) return;
 
     if (document.pointerLockElement !== canvas) {
-      canvas.requestPointerLock();
+      lockPointer();
       return;
     }
 
@@ -786,7 +820,7 @@ async function main(): Promise<void> {
   });
 
   window.addEventListener('mousemove', (e) => {
-    if (document.pointerLockElement === canvas) {
+    if (document.pointerLockElement === canvas && !isTacticalPause) {
       cameraYaw -= e.movementX * 0.0025;
       cameraPitch = Math.max(-0.45, Math.min(0.65, cameraPitch + e.movementY * 0.0025));
     }
@@ -796,60 +830,62 @@ async function main(): Promise<void> {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxPixelRatio));
   });
 
   // Автоматический сброс PointerLock при открытых окнах (защита для Wayland/Chromium)
   document.addEventListener('pointerlockchange', () => {
-    if (document.pointerLockElement && (invView.isOpen || isTacticalPause)) {
+    if (document.pointerLockElement && (invView.isOpen || (isTacticalPause && !qteActive))) {
       document.exitPointerLock();
     }
   });
 
-  // Экранное сенсорное управление (джойстик + кнопки) для смартфонов и планшетов
-  if (isMobileOrTouch()) {
-    document.body.classList.add('touch-enabled');
-    createTouchControls({
-      onMove: (dx, dy, isSprint) => {
-        keys.forward = dy < -0.22;
-        keys.backward = dy > 0.22;
-        keys.left = dx < -0.22;
-        keys.right = dx > 0.22;
-        keys.shift = isSprint;
-      },
-      onLook: (deltaYaw, deltaPitch) => {
-        cameraYaw -= deltaYaw;
-        cameraPitch = Math.max(-0.45, Math.min(0.65, cameraPitch + deltaPitch));
-      },
-      onAttack: () => activateQuickSlot(1),
-      onParry: (active) => {
-        playerChar.setParry(active);
-        const slotEl = hud.quickSlotElements[1];
-        if (slotEl) slotEl.classList.toggle('active', active);
-      },
-      onMagic: () => triggerMagicCast(),
-      onInteract: () => triggerNearbyInteraction(),
-      onInventory: () => {
-        invView.toggle();
-        playerChar.setBrowsing(invView.isOpen);
-        if (invView.isOpen) document.exitPointerLock();
-      },
-      onHeal: () => activateQuickSlot(3),
-    });
-  }
+  // Сенсорное управление - по образцу k8s-at-home: включается на телефоне сразу,
+  // а на любом другом устройстве - с первого касания пальцем.
+  const touch = createTouchControls(canvas, {
+    onMove: (dx, dy, isSprint) => {
+      keys.forward = dy < -0.22;
+      keys.backward = dy > 0.22;
+      keys.left = dx < -0.22;
+      keys.right = dx > 0.22;
+      keys.shift = isSprint;
+    },
+    onLook: (deltaYaw, deltaPitch) => {
+      cameraYaw -= deltaYaw;
+      cameraPitch = Math.max(-0.45, Math.min(0.65, cameraPitch + deltaPitch));
+    },
+    onAttack: () => activateQuickSlot(1),
+    onParry: (active) => {
+      playerChar.setParry(active);
+      const slotEl = hud.quickSlotElements[1];
+      if (slotEl) slotEl.classList.toggle('active', active);
+    },
+    onMagic: () => triggerMagicCast(),
+    onInteract: () => triggerNearbyInteraction(),
+    onInventory: () => {
+      if (isTacticalPause) return;
+      toggleInventory();
+    },
+    onHeal: () => activateQuickSlot(3),
+    onScroll: () => activateQuickSlot(4),
+    onVent: () => ventHeat(),
+    isActive: () => !isTacticalPause && !invView.isOpen,
+  });
 
-  // Вспомогательная функция размещения предмета в рюкзаке
-  function tryAddItem(item: InventoryItem): boolean {
-    for (let y = 0; y < inventory.height; y++) {
-      for (let x = 0; x < inventory.width; x++) {
-        if (canPlaceItem(inventory, item, x, y)) {
-          placeItem(inventory, item, x, y);
-          invView.render();
-          return true;
-        }
-      }
+  // Телефон держат боком: стоя половину экрана закрывают кнопки
+  function portraitHint(): void {
+    if (touch.enabled && window.innerHeight > window.innerWidth * 1.1) {
+      encountersUI.showNotification('📱 Поверните телефон боком - так удобнее');
     }
-    return false;
+  }
+  window.addEventListener('orientationchange', () => setTimeout(portraitHint, 300));
+  portraitHint();
+
+  // Новый предмет - в первое свободное место, перебирая повороты (core/inventory.ts)
+  function tryAddItem(item: InventoryItem): boolean {
+    const added = autoPlaceItem(inventory, item);
+    if (added) invView.render();
+    return added;
   }
 
   // Запуск тактической стелс-паузы и сценарного выбора
@@ -868,7 +904,7 @@ async function main(): Promise<void> {
         reward: '+50 очков и Руна древнего мха',
         action: () => {
           isTacticalPause = false;
-          canvas.requestPointerLock();
+          lockPointer();
 
           if (Math.random() <= assassinateChance) {
             player.score += 50;
@@ -895,7 +931,7 @@ async function main(): Promise<void> {
             encountersUI.showNotification(
               added
                 ? '🗡️ БЕСШУМНОЕ УСТРАНЕНИЕ: Страж сражён! (+50 очков, Руна мха получена в рюкзак)'
-                : '🗡️ БЕСШУМНОЕ УСТРАНЕНИЕ: Страж сражён! (+50 очков, рюкзак полон — руна оставлена)',
+                : '🗡️ БЕСШУМНОЕ УСТРАНЕНИЕ: Страж сражён! (+50 очков, рюкзак полон - руна оставлена)',
             );
           } else {
             const dmgRes = applyDamage(player, 12);
@@ -925,7 +961,7 @@ async function main(): Promise<void> {
         reward: '+35 очков и сохранение скрытности',
         action: () => {
           isTacticalPause = false;
-          canvas.requestPointerLock();
+          lockPointer();
 
           if (Math.random() <= harvestChance) {
             player.score += 35;
@@ -946,7 +982,7 @@ async function main(): Promise<void> {
         reward: 'Отвлечение стража на 6 метров',
         action: () => {
           isTacticalPause = false;
-          canvas.requestPointerLock();
+          lockPointer();
 
           const forward = new THREE.Vector3();
           enemy.mesh.getWorldDirection(forward);
@@ -968,14 +1004,16 @@ async function main(): Promise<void> {
     if (!mimic.triggerQteAvailable || isTacticalPause) return;
 
     isTacticalPause = true;
+    qteActive = true;
     keys.forward = keys.backward = keys.left = keys.right = keys.shift = false;
-    document.exitPointerLock();
+    touch.release();
 
     encountersUI.showMimicQte(
       () => {
         // Успех взлома
         isTacticalPause = false;
-        canvas.requestPointerLock();
+        qteActive = false;
+        lockPointer();
         mimic.openChest();
 
         player.score += 75;
@@ -1006,7 +1044,8 @@ async function main(): Promise<void> {
       () => {
         // Провал: пробуждение и яростный укус мимика
         isTacticalPause = false;
-        canvas.requestPointerLock();
+        qteActive = false;
+        lockPointer();
         mimic.awakenMimic();
 
         const dmgRes = applyDamage(player, 22);
@@ -1045,7 +1084,7 @@ async function main(): Promise<void> {
     const delta = Math.min((now - lastTime) / 1000, 0.1);
     lastTime = now;
 
-    // Вектор перемещения (A — влево на экране (+X в Three.js при Z-forward), D — вправо (-X))
+    // Вектор перемещения (A - влево на экране (+X в Three.js при Z-forward), D - вправо (-X))
     tempMoveDir.set(0, 0, 0);
     if (keys.forward) tempMoveDir.z += 1;
     if (keys.backward) tempMoveDir.z -= 1;
@@ -1174,7 +1213,7 @@ async function main(): Promise<void> {
       if (mimic.triggerQteAvailable) {
         const dist = playerChar.mesh.position.distanceTo(mimic.worldPosition);
         if (dist <= 3.2) {
-          nearbyCue = '📦 [E] — Осторожно взломать споровый реликварий';
+          nearbyCue = '📦 [E] - Осторожно взломать споровый реликварий';
           if (dist <= 1.4 && !isTacticalPause && !invView.isOpen) {
             triggerMimicEncounter(mimic);
           }
@@ -1193,7 +1232,7 @@ async function main(): Promise<void> {
           playerChar.mesh.position.z - riftWorldPos.z,
         );
         if (distToRift <= 4.8) {
-          nearbyCue = '⚡ [E] — Коснуться Эфирного Разлома (Отдых и Сохранение)';
+          nearbyCue = '⚡ [E] - Коснуться Эфирного Разлома (Отдых и Сохранение)';
           break;
         }
       }
@@ -1204,7 +1243,7 @@ async function main(): Promise<void> {
       for (const p of world.portals) {
         const distToPortal = playerChar.mesh.position.distanceTo(p.worldPosition);
         if (distToPortal <= 4.2) {
-          nearbyCue = '🌀 [E] — Активировать Древний Портал (Завершить этаж)';
+          nearbyCue = '🌀 [E] - Активировать Древний Портал (Завершить этаж)';
           break;
         }
       }

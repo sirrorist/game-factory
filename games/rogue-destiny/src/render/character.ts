@@ -6,6 +6,32 @@
 import * as THREE from 'three';
 import { createCryptMaterials } from './materials.ts';
 
+export const ARM_LENGTH = 0.55;
+export const STAFF_LENGTH = 2.0;
+export const STAFF_GRIP = 0.35;
+const ATTACK_TIME = 0.32;
+const BUCKLER_REST = { x: -0.16, y: -0.2, z: 0.08 };
+const BUCKLER_REST_YAW = -1.2;
+
+/** Поза руки в момент t (0..1) удара посохом: плечо, наклон посоха в мире, увод к центру. */
+export function attackPose(t: number): { shoulder: number; staff: number; inward: number } {
+  const lerp = (a: number, b: number, p: number): number => a + (b - a) * p;
+  if (t < 0.3) {
+    // Замах: рука вверх, навершие уходит за плечо
+    const p = t / 0.3;
+    return { shoulder: lerp(-0.3, -2.6, p), staff: lerp(0, -0.6, p), inward: 0 };
+  }
+  if (t < 0.65) {
+    // Удар: рубящая дуга сверху вниз перед собой, навершие - вперёд и вниз
+    const p = (t - 0.3) / 0.35;
+    const e = 1 - (1 - p) * (1 - p);
+    return { shoulder: lerp(-2.6, -1.2, e), staff: lerp(-0.6, 1.9, e), inward: lerp(0, 0.3, e) };
+  }
+  // Возврат в стойку
+  const p = (t - 0.65) / 0.35;
+  return { shoulder: lerp(-1.2, -0.3, p), staff: lerp(1.9, 0, p), inward: lerp(0.3, 0, p) };
+}
+
 export interface Character3D {
   mesh: THREE.Group;
   staffLight: THREE.PointLight;
@@ -20,7 +46,10 @@ export interface Character3D {
   isParrying: boolean;
 }
 
-export function createPlayerCharacter(materials: ReturnType<typeof createCryptMaterials>): Character3D {
+export function createPlayerCharacter(
+  materials: ReturnType<typeof createCryptMaterials>,
+  lowPower = false,
+): Character3D {
   const group = new THREE.Group();
 
   // Торс и роба
@@ -71,34 +100,45 @@ export function createPlayerCharacter(materials: ReturnType<typeof createCryptMa
   cape.rotation.x = 0.1;
   group.add(cape);
 
-  // Рукав правой руки с посохом
-  const rightArmGeo = new THREE.CylinderGeometry(0.09, 0.12, 0.55, 6);
+  // Правая рука - от плеча: удар идёт поворотом плеча, а посох держится в кисти.
+  // Раньше посох вращался вокруг своей середины отдельно от руки, и нижний конец
+  // при ударе проходил сквозь мага (приёмка владельца, пункт 5).
+  const shoulderR = new THREE.Group();
+  shoulderR.position.set(0.4, 1.42, 0.05);
+  const rightArmGeo = new THREE.CylinderGeometry(0.09, 0.12, ARM_LENGTH, 6);
   const rightArm = new THREE.Mesh(rightArmGeo, materials.mageCloth);
-  rightArm.position.set(0.38, 1.15, 0.08);
-  rightArm.rotation.x = 0.25;
-  group.add(rightArm);
+  rightArm.position.y = -ARM_LENGTH / 2;
+  shoulderR.add(rightArm);
+  group.add(shoulderR);
 
-  // Боевой посох в правой руке
+  // Посох в кисти: хват на 0.35 м от нижнего конца, ось поворота - кисть
   const staffGroup = new THREE.Group();
-  staffGroup.position.set(0.48, 1.1, 0.2);
+  staffGroup.position.y = -ARM_LENGTH;
+  shoulderR.add(staffGroup);
 
-  const staffShaftGeo = new THREE.CylinderGeometry(0.04, 0.05, 2.0, 6);
+  const staffShaftGeo = new THREE.CylinderGeometry(0.04, 0.05, STAFF_LENGTH, 6);
   const staffShaft = new THREE.Mesh(staffShaftGeo, materials.staffWood);
+  staffShaft.position.y = STAFF_LENGTH / 2 - STAFF_GRIP;
   staffGroup.add(staffShaft);
 
   // Лазурный кристалл навершия
   const crystalGeo = new THREE.OctahedronGeometry(0.14, 0);
   const crystalMesh = new THREE.Mesh(crystalGeo, materials.aetherCrystal);
-  crystalMesh.position.y = 1.05;
+  crystalMesh.position.y = STAFF_LENGTH - STAFF_GRIP + 0.05;
   staffGroup.add(crystalMesh);
 
-  // Динамический свет посоха
+  // Динамический свет посоха. Тень от точечного света - шесть проходов рендера за кадр:
+  // на телефоне это ощутимо, поэтому тень - только на ПК.
   const staffLight = new THREE.PointLight('#38bdf8', 2.0, 16, 1.8);
-  staffLight.position.y = 1.05;
-  staffLight.castShadow = true;
+  staffLight.position.y = crystalMesh.position.y;
+  staffLight.castShadow = !lowPower;
   staffGroup.add(staffLight);
 
-  group.add(staffGroup);
+  /** Поза руки: угол плеча (минус - рука вперёд), наклон посоха в мире и увод к центру. */
+  function pose(shoulder: number, staffWorld: number, inward = 0): void {
+    shoulderR.rotation.set(shoulder, 0, -inward);
+    staffGroup.rotation.set(staffWorld - shoulder, 0, inward);
+  }
 
   // Левая рука персонажа
   const leftArmGroup = new THREE.Group();
@@ -110,10 +150,11 @@ export function createPlayerCharacter(materials: ReturnType<typeof createCryptMa
   leftArm.rotation.x = 0.35;
   leftArmGroup.add(leftArm);
 
-  // Физический круглый щит-баклер (постоянно виден на руке, даже в покое!)
+  // Щит-баклер на внешней стороне предплечья, лицом наружу: камера стоит сзади-сбоку, и щит,
+  // смотревший вперёд, наполовину уходил в робу - со спины его было не видно (приёмка, пункт 9).
   const bucklerGroup = new THREE.Group();
-  bucklerGroup.position.set(-0.08, -0.22, 0.22);
-  bucklerGroup.rotation.set(0, -0.35, -0.15);
+  bucklerGroup.position.set(BUCKLER_REST.x, BUCKLER_REST.y, BUCKLER_REST.z);
+  bucklerGroup.rotation.set(0, BUCKLER_REST_YAW, 0);
 
   // Деревянный диск щита
   const bucklerGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.06, 12);
@@ -135,6 +176,12 @@ export function createPlayerCharacter(materials: ReturnType<typeof createCryptMa
 
   leftArmGroup.add(bucklerGroup);
   group.add(leftArmGroup);
+
+  function restLeftArm(isMoving: boolean): void {
+    leftArmGroup.position.set(-0.38, 1.12 + (isMoving ? -Math.sin(walkCycle * 0.5) * 0.06 : 0), 0.05);
+    bucklerGroup.position.set(BUCKLER_REST.x, BUCKLER_REST.y, BUCKLER_REST.z);
+    bucklerGroup.rotation.set(0, BUCKLER_REST_YAW, 0);
+  }
 
   // Эфирный энергетический барьер парирования (активируется при поднятии щита)
   const parryShieldGeo = new THREE.RingGeometry(0.2, 0.85, 16);
@@ -182,7 +229,7 @@ export function createPlayerCharacter(materials: ReturnType<typeof createCryptMa
       return isParrying;
     },
     triggerAttack: () => {
-      if (attackTimer <= 0) attackTimer = 0.32;
+      if (attackTimer <= 0) attackTimer = ATTACK_TIME;
     },
     triggerCast: () => {
       if (castTimer <= 0) castTimer = 0.4;
@@ -213,40 +260,23 @@ export function createPlayerCharacter(materials: ReturnType<typeof createCryptMa
         cape.rotation.x = 0.1;
       }
 
-      // 1. Состояние: Атака посохом (рубящий вертикально-диагональный взмах спереди)
+      // 1. Состояние: Атака посохом - рубящий удар от плеча перед собой
       if (attackTimer > 0) {
         attackTimer -= delta;
-        const progress = 1 - attackTimer / 0.32;
-
-        if (progress < 0.25) {
-          // Замах: посох отводится назад-вверх за правое плечо
-          const p = progress / 0.25;
-          staffGroup.position.set(0.48 + p * 0.06, 1.1 + p * 0.35, 0.2 - p * 0.25);
-          staffGroup.rotation.set(-p * 0.6, 0, -p * 0.3);
-        } else if (progress < 0.65) {
-          // Удар: мощный рубящий дуговой взмах сверху-вниз прямо перед собой
-          const p = (progress - 0.25) / 0.4;
-          const pitch = -0.6 + p * 1.8;
-          staffGroup.position.set(0.54 - p * 0.32, 1.45 - p * 0.6, -0.05 + p * 0.65);
-          staffGroup.rotation.set(pitch, -p * 0.4, -0.3 + p * 0.55);
-        } else {
-          // Возврат в базовую стойку
-          const p = (progress - 0.65) / 0.35;
-          staffGroup.position.set(0.22 + p * 0.26, 0.85 + p * 0.25, 0.6 - p * 0.4);
-          staffGroup.rotation.set(1.2 * (1 - p), -0.4 * (1 - p), 0.25 * (1 - p));
-        }
+        const a = attackPose(Math.min(1, 1 - attackTimer / ATTACK_TIME));
+        pose(a.shoulder, a.staff, a.inward);
+        restLeftArm(isMoving);
       }
-      // 2. Состояние: Каст магии
+      // 2. Состояние: Каст магии - посох вскинут над головой
       else if (castTimer > 0) {
         castTimer -= delta;
-        staffGroup.position.set(0.3, 1.7, 0.2);
-        staffGroup.rotation.set(-0.2, 0, -0.4);
+        pose(-2.2, -0.1);
         staffLight.intensity = 4.5;
+        restLeftArm(isMoving);
       }
       // 3. Состояние: Парирование щитом (щит выносится перед грудью)
       else if (isParrying) {
-        staffGroup.position.set(0.38, 1.05, 0.2);
-        staffGroup.rotation.set(0.2, 0, 0);
+        pose(-0.5, 0.2);
         staffLight.intensity = 3.0;
 
         leftArmGroup.position.set(-0.18, 1.25, 0.32);
@@ -255,27 +285,17 @@ export function createPlayerCharacter(materials: ReturnType<typeof createCryptMa
       }
       // 4. Состояние: Осмотр рюкзака / карты на ходу (TAB)
       else if (isBrowsing) {
-        staffGroup.position.set(0.35, 0.9, -0.1);
-        staffGroup.rotation.set(0.4, 0, 0);
+        pose(-0.1, 0.4);
         mapGroup.position.y = 1.25 + Math.sin(walkCycle * 0.5) * 0.04;
 
         leftArmGroup.position.set(-0.38, 1.0, 0.0);
-        bucklerGroup.rotation.set(0, -0.4, -0.2);
+        bucklerGroup.rotation.set(0, -1.2, 0);
       }
       // 5. Стандартный покой / шаг
       else {
-        staffGroup.position.set(0.48, 1.1 + (isMoving ? Math.sin(walkCycle * 0.5) * 0.08 : 0), 0.2);
-        staffGroup.rotation.set(0, 0, 0);
+        pose(-0.3 + (isMoving ? Math.sin(walkCycle * 0.5) * 0.12 : 0), 0);
         staffLight.intensity = 2.0;
-
-        // Щит спокойно лежит на предплечье слева, всегда отчетливо виден
-        leftArmGroup.position.set(
-          -0.38,
-          1.12 + (isMoving ? -Math.sin(walkCycle * 0.5) * 0.06 : 0),
-          0.05,
-        );
-        bucklerGroup.position.set(-0.08, -0.22, 0.22);
-        bucklerGroup.rotation.set(0, -0.35, -0.15);
+        restLeftArm(isMoving);
       }
     },
   };
