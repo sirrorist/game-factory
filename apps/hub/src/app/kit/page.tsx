@@ -4,7 +4,7 @@ import { Icon, ICON_NAMES } from '@/components/icons.tsx';
 import { Logo } from '@/components/logo.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
-import { HotbarDemo, Replay } from './demos.tsx';
+import { HotbarDemo, Replay, RogueDestinyHudDemo } from './demos.tsx';
 
 export const metadata: Metadata = { title: 'Web kit' };
 
@@ -238,6 +238,15 @@ export default function KitPage() {
             </div>
           </div>
         </Replay>
+      </Section>
+
+      <Section
+        title="Rogue Destiny — Souls-like Roguelite"
+        note="Специализированные компоненты хардкорного сурвайвала: интерактивная шкала Эфирного Перегрева мага с красной чертой риска (80-95%), механика серого здоровья (неизлечимой травмы плоти) и Нити Судьбы."
+      >
+        <Scene className="flex items-center justify-center p-8 min-h-[260px]">
+          <RogueDestinyHudDemo />
+        </Scene>
       </Section>
     </div>
   );

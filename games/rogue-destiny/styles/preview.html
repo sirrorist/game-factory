@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Rogue Destiny - Концепты 3D-стилей</title>
+  <style>
+    body {
+      background: #111418;
+      color: #e0e6ed;
+      font-family: system-ui, -apple-system, sans-serif;
+      margin: 0;
+      padding: 30px 20px;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 40px;
+      color: #4da6ff;
+    }
+    .grid {
+      display: flex;
+      flex-direction: column;
+      gap: 50px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    .card {
+      background: #1a202c;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      border: 1px solid #2d3748;
+    }
+    .card img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .card-content {
+      padding: 20px;
+    }
+    .card-title {
+      font-size: 22px;
+      font-weight: bold;
+      color: #63b3ed;
+      margin-bottom: 10px;
+    }
+    .card-desc {
+      color: #cbd5e0;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <h1>Rogue Destiny — Выбор визуального стиля 3D</h1>
+  <div class="grid">
+    <div class="card">
+      <div class="card-content">
+        <div class="card-title">1. Dark Cel-Shaded / Souls-Comic (Рекомендуемый)</div>
+        <div class="card-desc">Контрастные контуры (ink-lines), глубокие тени, сочные вспышки лазурной магии и искр. Скрывает простоту геометрии и выглядит как тёмная интерактивная графическая новелла.</div>
+      </div>
+      <img src="./style_celshaded_1790940908244.jpg" alt="Cel-Shaded">
+    </div>
+
+    <div class="card">
+      <div class="card-content">
+        <div class="card-title">2. Мрачный Low-Poly Souls</div>
+        <div class="card-desc">Гранёные полигоны (flat shading), минимализм, густой туман и факелы. Максимальный FPS и мгновенная загрузка.</div>
+      </div>
+      <img src="./style_lowpoly_1790940927501.jpg" alt="Low-Poly">
+    </div>
+
+    <div class="card">
+      <div class="card-content">
+        <div class="card-title">3. Retro-PS1 / Bloodborne Demake</div>
+        <div class="card-desc">Аутентичный ретро-стиль 90-х: зернистость, псевдо-пикселизация, дрожание текстур и гнетущая хоррор-атмосфера.</div>
+      </div>
+      <img src="./style_ps1retro_1790940950543.jpg" alt="Retro PS1">
+    </div>
+  </div>
+</body>
+</html>
