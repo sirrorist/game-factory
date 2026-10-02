@@ -257,6 +257,44 @@ done
 доступ после первого Publish; если приватный - в GitHub: Packages → `game-factory-migrate` →
 Package settings → Change visibility → Public.
 
+## Вход владельца (слайс 1.2) - секреты и заведение, один раз
+
+До выкладки слайса 1.2: два новых секрета рядом с `db_password`. Без них `migrate` и хаб не
+стартуют - выкладка встанет на `migrate`, прод останется на прежних образах.
+VPS-1, `root`, bash; ввод скрытый:
+
+```bash
+cd /etc/docker/containers/game-factory
+read -rs -p 'пароль gf_hub (≥ 16, ASCII без пробелов): ' P; echo
+printf '%s' "$P" > secrets/db_hub_password; unset P
+openssl rand -base64 48 | tr -d '\n' > secrets/auth_secret
+chmod 0644 secrets/db_hub_password secrets/auth_secret
+wc -c secrets/db_hub_password secrets/auth_secret
+```
+
+`auth_secret` подписывает куки сессий: смена - все входы недействительны. Пароль роли
+меняется так же - новый файл и `gf-update --force` (`migrate` ставит его роли заново).
+
+После выкладки - завести владельца (почта и имя - не секрет, пароль - скрытым вводом в
+контейнере). VPS-1, `root`, bash:
+
+```bash
+cd /etc/docker/containers/game-factory
+read -r -p 'почта владельца: ' E
+read -r -p 'имя в шапке хаба: ' N
+docker compose run --rm -it migrate node src/admin.ts create-owner --email "$E" --name "$N"
+```
+
+Забыт пароль (писем у хаба нет) - тем же контейнером, сессии при этом сбрасываются:
+
+```bash
+cd /etc/docker/containers/game-factory
+read -r -p 'почта владельца: ' E
+docker compose run --rm -it migrate node src/admin.ts set-password --email "$E"
+```
+
+Passkey добавляется на странице `/account` после входа паролем.
+
 ## База хаба - бэкап и восстановление
 
 Перед каждой миграцией `gf-update` сам снимает дамп в `/var/backups/game-factory/`

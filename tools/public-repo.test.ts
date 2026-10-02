@@ -13,6 +13,8 @@ const SELF = 'tools/public-repo.test.ts';
 
 // Веб-адрес сервера виден в DNS (D-036), остальные - не адреса сервера.
 const ALLOWED_IPS = new Set(['2.26.198.231', '127.0.0.1', '0.0.0.0']);
+// Адреса для документации (RFC 5737): ничьи и никогда не маршрутизируются - ими пишут тесты.
+const DOC_NETS = ['192.0.2.', '198.51.100.', '203.0.113.'];
 const IP_RE = /(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])/g;
 // Пути вне проекта: рабочая копия агента, база инфраструктуры, домашние каталоги.
 const PATH_RE = /\/(?:srv|home)\/[\w.-]/g;
@@ -44,7 +46,7 @@ test('в репозитории нет деталей сервера сверх 
     lines.forEach((line, i) => {
       const at = `${file}:${i + 1}`;
       for (const [ip] of line.matchAll(IP_RE)) {
-        if (!ALLOWED_IPS.has(ip)) found.push(`${at}: адрес ${ip}`);
+        if (!ALLOWED_IPS.has(ip) && !DOC_NETS.some((n) => ip.startsWith(n))) found.push(`${at}: адрес ${ip}`);
       }
       for (const [path] of line.matchAll(PATH_RE)) found.push(`${at}: путь ${path}…`);
       if (!WORDS_EXEMPT.has(file)) {

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Logo } from '@/components/logo.tsx';
 import { SiteNav } from '@/components/site-nav.tsx';
+import { UserMenu } from '@/components/user-menu.tsx';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -28,6 +29,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               </span>
             </Link>
             <SiteNav />
+            <div className="gf-header__end">
+              <UserMenu />
+            </div>
           </div>
         </header>
         <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>

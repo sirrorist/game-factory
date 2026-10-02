@@ -23,6 +23,18 @@ jobs:
     name: typecheck · unit · build · export · e2e
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    # Postgres для e2e входа (слайс 1.2): тот же образ по digest, что db в deploy/compose.prod.yml.
+    # Пароль - тестовый, база живёт только на время прогона.
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+        env:
+          POSTGRES_USER: gf
+          POSTGRES_DB: gf
+          POSTGRES_PASSWORD: gf-ci-only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U gf -d gf" --health-interval 2s --health-timeout 3s --health-retries 30
     steps:
       - uses: actions/checkout@v7
 
@@ -61,6 +73,8 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - run: pnpm test:e2e
+        env:
+          GF_E2E_PG: postgres://gf:gf-ci-only@127.0.0.1:5432/gf
 
       - name: Офлайн-архивы игр
         uses: actions/upload-artifact@v7

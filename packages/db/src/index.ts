@@ -3,14 +3,19 @@
 
 import { readFileSync } from 'node:fs';
 import { sql, type SQL } from 'drizzle-orm';
+import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from './schema.ts';
 
 export * from './schema.ts';
+export { HUB_ROLE } from './roles.ts';
+export { MIN_PASSWORD_LENGTH } from './policy.ts';
 export { schema };
 
 export type Db = PostgresJsDatabase<typeof schema>;
+/** Любой драйвер Postgres со схемой хаба: postgres.js в проде, PGlite в тестах. */
+export type AnyDb = PgDatabase<PgQueryResultHKT, typeof schema>;
 
 /**
  * Адрес базы из окружения или null, если база не настроена.

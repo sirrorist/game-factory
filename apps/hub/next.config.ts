@@ -5,7 +5,7 @@ import type { NextConfig } from 'next';
 const repoRoot = resolve(import.meta.dirname, '..', '..');
 
 // Хаб не встраивается никуда: ни на чужие сайты, ни в игры (кликджекинг).
-// Полная CSP для самого хаба - этап 1, вместе с авторизацией (нужны nonce для скриптов Next).
+// Полная CSP для самого хаба (нужны nonce для скриптов Next) - запланирована, SECURITY.md "Хаб и админка".
 const securityHeaders = [
   { key: 'Content-Security-Policy', value: "frame-ancestors 'none'; object-src 'none'; base-uri 'self'" },
   { key: 'X-Content-Type-Options', value: 'nosniff' },

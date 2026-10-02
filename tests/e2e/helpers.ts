@@ -1,7 +1,8 @@
 // Общий стенд e2e: собранные данные, сервер игр и эталонный хаб.
 
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { stripTypeScriptTypes } from 'node:module';
 import { chromium, type Browser } from 'playwright';
@@ -94,7 +95,7 @@ export interface Hub {
  * Настоящий хаб (apps/hub) из готовой сборки `pnpm hub:build`: так e2e проверяет то же,
  * что поедет на сервер, а не режим разработки.
  */
-export async function startHub(opts: { port: number; dataDir: string; playPort: number }): Promise<Hub> {
+export async function startHub(opts: { port: number; dataDir: string; playPort: number; env?: Record<string, string> }): Promise<Hub> {
   const dir = join(ROOT, 'apps/hub');
   if (!existsSync(join(dir, '.next/BUILD_ID'))) throw new Error('хаб не собран: сначала pnpm hub:build');
   const child: ChildProcess = spawn(
@@ -107,6 +108,7 @@ export async function startHub(opts: { port: number; dataDir: string; playPort: 
         NEXT_TELEMETRY_DISABLED: '1',
         GF_DATA_DIR: opts.dataDir,
         GF_PLAY_PUBLIC_ORIGIN_TEMPLATE: `http://{id}.play.localhost:${opts.playPort}`,
+        ...opts.env,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     },
@@ -140,4 +142,38 @@ export async function startHub(opts: { port: number; dataDir: string; playPort: 
         child.kill();
       }),
   };
+}
+
+export const OWNER = { email: 'owner@e2e.test', name: 'Владелец', password: 'e2e owner password 1' };
+
+/**
+ * База для e2e входа: настоящий Postgres из GF_E2E_PG (в CI - сервис той же версии, что прод).
+ * Миграции и роль хаба - как на проде (migrate.ts), владелец - командой admin.ts; хаб потом
+ * ходит в базу ролью gf_hub, не владельцем. Возвращает окружение для startHub.
+ */
+export function prepareAuthDb(hubOrigin: string): Record<string, string> {
+  const owner = process.env.GF_E2E_PG;
+  if (!owner) throw new Error('GF_E2E_PG не задан: e2e входа нужен Postgres (в CI - сервис postgres)');
+  const dir = mkdtempSync(join(tmpdir(), 'gf-e2e-auth-'));
+  const hubPassword = randomBytes(18).toString('base64url');
+  const files = { hub: join(dir, 'hub'), secret: join(dir, 'secret'), admin: join(dir, 'admin') };
+  writeFileSync(files.hub, hubPassword);
+  writeFileSync(files.secret, randomBytes(32).toString('base64url'));
+  writeFileSync(files.admin, OWNER.password);
+  const db = join(ROOT, 'packages/db/src');
+  const run = (args: string[], env: Record<string, string>): void => {
+    const r = spawnSync(process.execPath, args, { cwd: join(ROOT, 'packages/db'), env: { ...process.env, GF_DATABASE_URL: owner, ...env }, encoding: 'utf8' });
+    if (r.status !== 0) throw new Error(`${args.join(' ')}: ${r.stderr}${r.stdout}`);
+  };
+  run([join(db, 'migrate.ts')], { GF_DB_HUB_PASSWORD_FILE: files.hub });
+  // Владелец мог остаться от прошлого файла тестов - тогда только пароль.
+  try {
+    run([join(db, 'admin.ts'), 'create-owner', '--email', OWNER.email, '--name', OWNER.name], { GF_ADMIN_PASSWORD_FILE: files.admin });
+  } catch {
+    run([join(db, 'admin.ts'), 'set-password', '--email', OWNER.email], { GF_ADMIN_PASSWORD_FILE: files.admin });
+  }
+  const url = new URL(owner);
+  url.username = 'gf_hub';
+  url.password = hubPassword;
+  return { GF_DATABASE_URL: url.toString(), GF_HUB_ORIGIN: hubOrigin, GF_AUTH_SECRET_FILE: files.secret };
 }

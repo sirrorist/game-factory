@@ -16,17 +16,26 @@ const DEFAULT_TEMPLATE = 'http://{id}.play.localhost:4100';
 
 export function hubConfig(env: NodeJS.ProcessEnv = process.env): HubConfig {
   const template = env.GF_PLAY_PUBLIC_ORIGIN_TEMPLATE || DEFAULT_TEMPLATE;
-  // Игра — ровно поддомен служебного хоста: шаблон вида <схема>://{id}.<хост>[:порт].
+  // Игра - ровно поддомен служебного хоста: шаблон вида <схема>://{id}.<хост>[:порт].
   if (!/^https?:\/\/\{id\}\.[a-z0-9.-]+(:\d+)?\/?$/.test(template)) {
-    throw new Error(`GF_PLAY_PUBLIC_ORIGIN_TEMPLATE: "${template}" — нужен вид http(s)://{id}.<хост>[:порт]`);
+    throw new Error(`GF_PLAY_PUBLIC_ORIGIN_TEMPLATE: "${template}" - нужен вид http(s)://{id}.<хост>[:порт]`);
   }
   const playRootOrigin = new URL(template.replace('{id}.', '')).origin;
   return {
-    // pnpm запускает хаб из apps/hub, данные по умолчанию — в корне репозитория, как у play-server.
-    // turbopackIgnore: путь — данные во время работы, а не файлы сборки; без пометки Next
+    // pnpm запускает хаб из apps/hub, данные по умолчанию - в корне репозитория, как у play-server.
+    // turbopackIgnore: путь - данные во время работы, а не файлы сборки; без пометки Next
     // решит, что нужен весь проект, и потащит его в standalone-сборку.
     dataDir: resolve(/*turbopackIgnore: true*/ env.GF_DATA_DIR || resolve(/*turbopackIgnore: true*/ process.cwd(), '..', '..', '.data')),
     gameOrigin: (id) => new URL(template.replace('{id}', id)).origin,
     playRootOrigin,
   };
+}
+
+/** Origin хаба, как его видит браузер (https://games.youranus.ru); null - не задан. */
+export function hubOrigin(env: NodeJS.ProcessEnv = process.env): string | null {
+  const raw = env.GF_HUB_ORIGIN;
+  if (!raw) return null;
+  const url = new URL(raw);
+  if (url.origin !== raw.replace(/\/$/, '')) throw new Error(`GF_HUB_ORIGIN: "${raw}" - нужен только origin, без пути`);
+  return url.origin;
 }

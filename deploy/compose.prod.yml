@@ -65,6 +65,8 @@ services:
       retries: 6
 
   # Одноразовый: миграции схемы до старта хаба (packages/db). Упала - хаб остаётся прежним.
+  # Ролью владельца базы; после миграций заводит роль хаба gf_hub (только данные, D-051) и
+  # выдаёт ей права. Здесь же - команды владельца: заведение и пароль (OPERATIONS.md, admin.ts).
   migrate:
     <<: *hardening
     image: ghcr.io/sirrorist/game-factory-migrate:${GF_IMAGE_TAG:?GF_IMAGE_TAG в .env}
@@ -73,7 +75,8 @@ services:
     environment:
       GF_DB_HOST: db
       GF_DB_PASSWORD_FILE: /run/secrets/gf_db_password
-    secrets: [gf_db_password]
+      GF_DB_HUB_PASSWORD_FILE: /run/secrets/gf_db_hub_password
+    secrets: [gf_db_password, gf_db_hub_password]
     networks: [gf-db]
     depends_on:
       db:
@@ -123,9 +126,15 @@ services:
     mem_limit: 384m
     environment:
       GF_PLAY_PUBLIC_ORIGIN_TEMPLATE: https://{id}.play.youranus.ru
+      # Origin хаба для входа: CSRF (proxy.ts), trustedOrigins и passkey (rpID) - ровно он.
+      GF_HUB_ORIGIN: https://games.youranus.ru
       GF_DB_HOST: db
-      GF_DB_PASSWORD_FILE: /run/secrets/gf_db_password
-    secrets: [gf_db_password]
+      # Не владелец базы: роль только на select/insert/update/delete своих таблиц (D-051).
+      GF_DB_USER: gf_hub
+      GF_DB_PASSWORD_FILE: /run/secrets/gf_db_hub_password
+      GF_AUTH_SECRET_FILE: /run/secrets/gf_auth_secret
+    # Пароля владельца базы у хаба нет вовсе: он только у db и migrate.
+    secrets: [gf_db_hub_password, gf_auth_secret]
     volumes:
       - gf-data:/data:ro
     tmpfs:
@@ -154,6 +163,12 @@ secrets:
   # закрыт. Создаётся владельцем скрытым вводом (OPERATIONS.md).
   gf_db_password:
     file: ./secrets/db_password
+  # Пароль роли хаба gf_hub: migrate ставит его роли, хаб им входит в базу.
+  gf_db_hub_password:
+    file: ./secrets/db_hub_password
+  # Секрет Better Auth: подпись куки сессии. Смена - все сессии недействительны.
+  gf_auth_secret:
+    file: ./secrets/auth_secret
 
 networks:
   # Своя внутренняя сеть, общая только с Traefik (D-038): без интернета и без соседей
