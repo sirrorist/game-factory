@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" width="320" height="180">
+  <defs>
+    <!-- Минималистичный градиент склепа в стиле k8s-at-home -->
+    <linearGradient id="abyss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#080e18" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+  </defs>
+
+  <!-- Фон -->
+  <rect width="320" height="180" fill="url(#abyss)" />
+
+  <!-- Лаконичные декоративные линии в левой части -->
+  <rect x="24" y="128" width="48" height="3" fill="#1e293b" opacity="0.8" />
+  <rect x="24" y="136" width="24" height="2" fill="#334155" opacity="0.6" />
+
+  <!-- Минималистичная типографика: ТОЛЬКО название игры rogue destiny -->
+  <text x="24" y="68" fill="#38bdf8" font-family="ui-monospace, monospace" font-size="28" font-weight="700" letter-spacing="-0.5">rogue</text>
+  <text x="24" y="102" fill="#f8fafc" font-family="ui-monospace, monospace" font-size="28" font-weight="700" letter-spacing="-0.5">destiny</text>
+
+  <!-- ==================== ИЗОМЕТРИЧЕСКИЙ СКЛЕП И ПОРТАЛ СПРАВА ==================== -->
+  
+  <!-- Затопленный фундамент (тёмная вода) -->
+  <g>
+    <!-- Водный блок 1 -->
+    <polygon points="210,130 236,143 210,156 184,143" fill="#083344" />
+    <polygon points="184,143 210,156 210,166 184,153" fill="#052431" />
+    <polygon points="210,156 236,143 236,153 210,166" fill="#031720" />
+
+    <!-- Водный блок 2 -->
+    <polygon points="236,117 262,130 236,143 210,130" fill="#0c4a5e" />
+    <polygon points="210,130 236,143 236,153 210,140" fill="#072d3a" />
+    <polygon points="236,143 262,130 262,140 236,153" fill="#041a22" />
+
+    <!-- Водный блок 3 -->
+    <polygon points="184,117 210,130 184,143 158,130" fill="#0c4a5e" />
+    <polygon points="158,130 184,143 184,153 158,140" fill="#072d3a" />
+    <polygon points="184,143 210,130 210,140 184,153" fill="#041a22" />
+
+    <!-- Рябь на воде -->
+    <line x1="170" y1="136" x2="198" y2="150" stroke="#38bdf8" stroke-width="0.8" opacity="0.6" />
+    <line x1="222" y1="148" x2="250" y2="134" stroke="#38bdf8" stroke-width="0.8" opacity="0.6" />
+  </g>
+
+  <!-- Каменные плиты склепа (ступенька 1) -->
+  <g>
+    <polygon points="210,105 232,116 210,127 188,116" fill="#475569" />
+    <polygon points="188,116 210,127 210,138 188,127" fill="#334155" />
+    <polygon points="210,127 232,116 232,127 210,138" fill="#1e293b" />
+  </g>
+
+  <!-- Каменные колонны склепа (левая и правая) -->
+  <!-- Левая колонна -->
+  <g>
+    <polygon points="172,60 186,67 172,74 158,67" fill="#64748b" />
+    <polygon points="158,67 172,74 172,120 158,113" fill="#334155" />
+    <polygon points="172,74 186,67 186,113 172,120" fill="#1e293b" />
+    <!-- Руна на левой колонне -->
+    <line x1="165" y1="84" x2="165" y2="100" stroke="#38bdf8" stroke-width="1.2" opacity="0.8" />
+    <line x1="162" y1="88" x2="168" y2="92" stroke="#38bdf8" stroke-width="1.2" opacity="0.8" />
+  </g>
+
+  <!-- Правая колонна -->
+  <g>
+    <polygon points="248,60 262,67 248,74 234,67" fill="#64748b" />
+    <polygon points="234,67 248,74 248,120 234,113" fill="#334155" />
+    <polygon points="248,74 262,67 262,113 248,120" fill="#1e293b" />
+    <!-- Руна на правой колонне -->
+    <line x1="255" y1="84" x2="255" y2="100" stroke="#c084fc" stroke-width="1.2" opacity="0.8" />
+    <line x1="252" y1="92" x2="258" y2="88" stroke="#c084fc" stroke-width="1.2" opacity="0.8" />
+  </g>
+
+  <!-- Портальная арка соединяющая колонны -->
+  <polygon points="172,52 210,33 248,52 248,60 210,41 172,60" fill="#475569" />
+  <polygon points="172,60 210,41 210,47 172,66" fill="#334155" />
+  <polygon points="210,41 248,60 248,66 210,47" fill="#1e293b" />
+
+  <!-- Парящий Изометрический Вихрь Портала (эллиптические кольца) -->
+  <ellipse cx="210" cy="74" rx="26" ry="16" fill="none" stroke="#a855f7" stroke-width="2" stroke-dasharray="8 4" opacity="0.8" />
+  <ellipse cx="210" cy="74" rx="18" ry="11" fill="none" stroke="#e879f9" stroke-width="1.5" stroke-dasharray="5 3" opacity="0.9" />
+
+  <!-- Левитирующий Эфирный Кристалл по центру портала -->
+  <g>
+    <!-- Верх кристалла (свет) -->
+    <polygon points="210,54 219,65 210,72 201,65" fill="#f0f9ff" />
+    <!-- Левая грань (лазурь) -->
+    <polygon points="201,65 210,72 210,88 201,77" fill="#38bdf8" />
+    <!-- Правая грань (глубокий кобальт) -->
+    <polygon points="210,72 219,65 219,77 210,88" fill="#0284c7" />
+    <!-- Нижний обратный конус кристалла -->
+    <polygon points="201,77 210,88 210,95" fill="#0369a1" />
+    <polygon points="210,88 219,77 210,95" fill="#075985" />
+  </g>
+
+  <!-- Искры и споры в изометрии -->
+  <circle cx="210" cy="46" r="1.5" fill="#38bdf8" />
+  <circle cx="196" cy="56" r="1.2" fill="#c084fc" />
+  <circle cx="225" cy="58" r="1.2" fill="#38bdf8" />
+  <circle cx="204" cy="98" r="1" fill="#4ade80" />
+  <circle cx="218" cy="102" r="1.2" fill="#38bdf8" />
+  <circle cx="236" cy="112" r="1" fill="#f59e0b" />
+
+  <!-- Аккуратная тонкая внешняя рамка -->
+  <rect width="320" height="180" fill="none" stroke="#1e293b" stroke-width="2" />
+</svg>

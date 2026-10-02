@@ -5,12 +5,14 @@ import { Badge } from '@/components/ui/badge.tsx';
 import { buttonVariants } from '@/components/ui/button.tsx';
 import { Card, CardContent, CardCover, CardFooter } from '@/components/ui/card.tsx';
 import { listGames } from '@/lib/catalog.ts';
+import { currentOwner } from '@/lib/session.ts';
 
 // Реестр меняется после каждого `gf build` - страницу не кешируем.
 export const dynamic = 'force-dynamic';
 
-export default function CatalogPage() {
-  const games = listGames();
+export default async function CatalogPage() {
+  // Пререлизы (до 1.0.0) - только владельцу (D-060)
+  const games = listGames({ owner: (await currentOwner()) !== null });
   return (
     <section className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
@@ -24,7 +26,7 @@ export default function CatalogPage() {
         </p>
       ) : (
         <ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3" data-testid="catalog">
-          {games.map(({ entry, coverUrl, download }) => (
+          {games.map(({ entry, prerelease, coverUrl, download }) => (
             <li key={entry.id} data-game-id={entry.id} className="flex">
               <Card className="w-full">
                 <CardCover>
@@ -46,6 +48,7 @@ export default function CatalogPage() {
                       <Badge key={t}>{t}</Badge>
                     ))}
                     <Badge tone="version">v{entry.version}</Badge>
+                    {prerelease ? <Badge data-testid="prerelease">пререлиз</Badge> : null}
                   </div>
                 </CardContent>
                 <CardFooter>

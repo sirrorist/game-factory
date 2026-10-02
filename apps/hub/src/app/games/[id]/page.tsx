@@ -6,21 +6,27 @@ import { DownloadLink } from '@/components/download-link.tsx';
 import { Icon } from '@/components/icons.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import { findGame } from '@/lib/catalog.ts';
+import { currentOwner } from '@/lib/session.ts';
 import { GameFrame } from './game-frame.tsx';
 
 export const dynamic = 'force-dynamic';
 
 type Props = { params: Promise<{ id: string }> };
 
+async function gameFor(params: Props['params']) {
+  // Пререлиз гостю - 404, как несуществующая игра (D-060)
+  return findGame((await params).id, { owner: (await currentOwner()) !== null });
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const game = findGame((await params).id);
+  const game = await gameFor(params);
   return { title: game ? game.entry.manifest.title : 'Игра не найдена' };
 }
 
 export default async function GamePage({ params }: Props) {
-  const game = findGame((await params).id);
+  const game = await gameFor(params);
   if (!game) notFound();
-  const { entry, gameOrigin, download } = game;
+  const { entry, prerelease, gameOrigin, download } = game;
   const { manifest } = entry;
   const frame = frameAttributes(manifest.permissions);
 
@@ -34,6 +40,7 @@ export default async function GamePage({ params }: Props) {
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">{manifest.title}</h1>
           <Badge tone="version">v{entry.version}</Badge>
+          {prerelease ? <Badge data-testid="prerelease">пререлиз</Badge> : null}
           {manifest.tags.map((t) => (
             <Badge key={t}>{t}</Badge>
           ))}

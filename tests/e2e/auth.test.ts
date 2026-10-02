@@ -6,7 +6,7 @@ import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Server } from 'node:http';
 import type { Browser } from 'playwright';
-import { buildData, close, freePort, launchBrowser, OWNER, prepareAuthDb, startHub, startPlay, type Hub } from './helpers.ts';
+import { buildData, close, freePort, gameVersion, launchBrowser, OWNER, prepareAuthDb, startHub, startPlay, type Hub } from './helpers.ts';
 
 let hub: Hub;
 let play: { server: Server; port: number };
@@ -73,6 +73,39 @@ test('вход и выход через форму: имя в шапке, стр
   await page.waitForURL(`${hub.origin}/`);
   await page.getByTestId('sign-in-link').waitFor();
   await page.goto(`${hub.origin}/account`);
+  await page.waitForURL(`${hub.origin}/login`);
+  await page.close();
+});
+
+test('владельцу после входа видны пререлизы (до 1.0.0) с меткой и Web kit; после выхода - снова нет (D-060)', async () => {
+  const id = 'rogue-destiny';
+  assert.match(gameVersion(id), /^0\./, `${id}: уже не пререлиз - взять другую игру`);
+  const page = await browser.newPage();
+  await page.goto(`${hub.origin}/login`);
+  await page.getByLabel('Почта').fill(OWNER.email);
+  await page.getByLabel('Пароль').fill(OWNER.password);
+  await page.getByRole('button', { name: 'Войти', exact: true }).click();
+  await page.waitForURL(`${hub.origin}/account`);
+
+  await page.goto(`${hub.origin}/`);
+  const card = page.locator(`[data-game-id="${id}"]`);
+  assert.equal(await card.count(), 1, 'пререлиза нет в каталоге владельца');
+  assert.equal(await card.getByTestId('prerelease').count(), 1);
+  // Игры с 1.0.0 метку не получают
+  assert.equal(await page.locator('[data-game-id="snake"]').getByTestId('prerelease').count(), 0);
+
+  await page.goto(`${hub.origin}/games/${id}`);
+  await page.getByRole('heading', { level: 1, name: 'Rogue Destiny' }).waitFor();
+  assert.equal(await page.getByTestId('prerelease').count(), 1);
+
+  await page.getByRole('link', { name: 'Web kit' }).click();
+  await page.waitForURL(`${hub.origin}/kit`);
+
+  await page.getByTestId('sign-out').click();
+  await page.getByTestId('sign-in-link').waitFor();
+  await page.goto(`${hub.origin}/`);
+  assert.equal(await page.locator(`[data-game-id="${id}"]`).count(), 0, 'после выхода пререлиз виден');
+  await page.goto(`${hub.origin}/kit`);
   await page.waitForURL(`${hub.origin}/login`);
   await page.close();
 });
