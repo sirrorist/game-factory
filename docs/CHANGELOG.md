@@ -5,6 +5,29 @@
 > там снимок, здесь доказательства (D-052). Сессии №1-№5 подробно - история STATE
 > (`git log -p docs/STATE.md`, до 2026-09-30).
 
+## Сессия №12 (VPS-1, 2026-10-03) - шаблон ТЗ игр, среда агента на Windows, Superwalk
+
+- `docs/GAME-TZ.md` (D-061): шаблон ТЗ и протокол - границы прототипа, ПК = телефон (ввод как
+  `k8s-at-home`, портрет, "На весь экран" в меню), `dt`, бюджет оптимизации и F3, приёмка
+  "пункт → доказательство", уроки `rogue-destiny` с ценой, форматы команд кита.
+- GAME-AGENTS: раздел 1а (Windows и десктоп-приложение, PowerShell), `pnpm shots`, пререлиз без
+  входа не виден в локальном хабе; `games/AGENTS.md` - галочка только с доказательством.
+- `tools/gf.ts`: `pnpmCommand` - сборка игры без оболочки (на Windows `pnpm.cmd` без shell - EINVAL);
+  `.gitattributes` - LF; `tests/shots.ts` - скриншоты трёх раскладок.
+- Ветка `game/superwalk` (`34a93e6`, запушена; на VPS-1 - отдельный worktree для сверки): каркас
+  0.1.0 из шаблона, `DESIGN.md` (ТЗ прототипа), `NOTES.md` (бриф).
+
+| Что | Как | Итог |
+|---|---|---|
+| Типы и юнит | `pnpm typecheck && pnpm test` в `dev` и в ветке | 128 / 128 (+1 - `pnpmCommand`) |
+| Сборка после правки `gf.ts` | `games:build snake three-3d` во временный каталог | собраны |
+| Концы строк | `git ls-files --eol` | 243 LF, 14 двоичных - `.gitattributes` ничего не меняет |
+| `pnpm shots` без браузера | `GF_CHROMIUM_PATH=/nonexistent pnpm shots snake` | сборка и сервер игр - ok, упало на запуске Chromium, как и ждали |
+| Каркас `superwalk` | `gf validate`, typecheck, `games:build`, `games:export` | зелёные; архив 2 996 байт |
+
+Не проверено: путь на Windows целиком (клон, `pnpm install`, сборка, `pnpm shots`) - у владельца;
+эмуляция касаний Playwright включает `pointer: coarse` - предположение, `pnpm shots` печатает факт.
+
 ## Сессия №11 (VPS-1, 2026-10-02) - приёмка `rogue-destiny`, пререлизы и Web kit за входом
 
 - Ветка `game/rogue-destiny` (первая игра локального агента, D-059): сверка 13 пунктов приёмки
