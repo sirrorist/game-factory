@@ -170,12 +170,32 @@ button {
 .gf-icon--coin .px { fill: var(--coin); }
 
 /* ---------- HUD ---------- */
+#exp-bar-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: rgba(14, 18, 28, 0.6);
+  z-index: 12;
+  pointer-events: none;
+}
+#exp-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #00b4d8, #48cae4);
+  box-shadow: 0 0 8px rgba(72, 202, 228, 0.6);
+  transition: width 0.12s ease-out;
+}
+
 .gf-hud-top {
   position: absolute;
   left: calc(12px + var(--safe-l));
   top: calc(12px + var(--safe-t));
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
+  max-width: calc(100vw - 120px - var(--safe-l) - var(--safe-r));
   gap: var(--space-1);
   padding: var(--space-1);
   background: var(--hud);
@@ -198,6 +218,40 @@ button {
 .gf-hud-stat b { font: 600 14px/1 var(--font-display); font-variant-numeric: tabular-nums; }
 .gf-hud-stat span { font: 600 10px/1 var(--font-body); letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.75; }
 
+.gf-hud-stat--hp { padding-right: var(--space-1); }
+.gf-hp-bar {
+  position: relative;
+  display: block;
+  width: 104px;
+  height: 20px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+.gf-hp-bar__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 100%;
+  background: linear-gradient(90deg, #ff7a1a, #48bb78);
+  border-radius: var(--radius-pill);
+  transition: width 0.15s ease-out;
+}
+.gf-hp-bar__text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 700 11px/1 var(--font-display) !important;
+  font-variant-numeric: tabular-nums;
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  opacity: 1 !important;
+}
+
 #corner {
   position: absolute;
   right: calc(12px + var(--safe-r));
@@ -211,7 +265,7 @@ button {
 #debug {
   position: absolute;
   left: calc(12px + var(--safe-l));
-  top: calc(56px + var(--safe-t));
+  top: calc(72px + var(--safe-t));
   margin: 0;
   padding: 8px 12px;
   color: var(--hud-ink);

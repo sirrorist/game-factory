@@ -4,6 +4,15 @@ import { fillIcons, setIcon } from './icons.ts';
 import { Input } from './input.ts';
 import { stepPlayer, getTerrainHeight, type PlayerState } from './core/movement.ts';
 import { generateWorld, type WorldData } from './core/world.ts';
+import {
+  createInitialCombatState,
+  stepCombat,
+  spawnMobInRing,
+  getWaveTargetCount,
+  getAvailableMobTypes,
+  type CombatState,
+} from './core/combat.ts';
+import { HERO_CONFIG, getRequiredExp } from './core/content.ts';
 import './style.css';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
@@ -44,6 +53,30 @@ class SuperwalkApp {
     yaw: 0,
   };
   private runTime = 0;
+
+  // Боевая система и мобы
+  private combatState: CombatState;
+  private spawnTimer = 0;
+  private prngSeed = 42;
+
+  // Меши мобов, снарядов и кристаллов (InstancedMesh)
+  private mushletStemMesh: THREE.InstancedMesh;
+  private mushletCapMesh: THREE.InstancedMesh;
+  private beetleBodyMesh: THREE.InstancedMesh;
+  private beetleHornMesh: THREE.InstancedMesh;
+  private owlBodyMesh: THREE.InstancedMesh;
+  private owlEyesMesh: THREE.InstancedMesh;
+  private projMesh: THREE.InstancedMesh;
+  private gemMesh: THREE.InstancedMesh;
+
+  // Эффект взмаха хвостом (tail_blade)
+  private slashMesh: THREE.Mesh;
+  private slashMat: THREE.MeshBasicMaterial;
+  private slashTimer = 0;
+
+  private mobDummy = new THREE.Object3D();
+  private flashColor = new THREE.Color();
+  private defaultBeetleColor = new THREE.Color(0x1d3557);
 
   private lastTime = performance.now();
   private frameCount = 0;
@@ -307,6 +340,103 @@ class SuperwalkApp {
     grassMesh.instanceMatrix.needsUpdate = true;
     this.scene.add(grassMesh);
 
+    // 7.5 Мобы, снаряды, кристаллики опыта (InstancedMesh) и эффект взмаха хвостом
+    this.combatState = createInitialCombatState();
+    const maxMushlets = 160;
+    const maxBeetles = 80;
+    const maxOwls = 80;
+    const maxProjs = 60;
+    const maxGems = 250;
+
+    // Грибыш (mushlet)
+    const mStemGeo = new THREE.CylinderGeometry(0.14, 0.2, 0.4, 5);
+    const mStemMat = new THREE.MeshLambertMaterial({ color: 0xf3eee3, flatShading: true });
+    this.mushletStemMesh = new THREE.InstancedMesh(mStemGeo, mStemMat, maxMushlets);
+    this.mushletStemMesh.count = 0;
+    this.mushletStemMesh.frustumCulled = false;
+
+    const mCapGeo = new THREE.ConeGeometry(0.46, 0.38, 6);
+    const mCapMat = new THREE.MeshLambertMaterial({ color: 0xe63946, flatShading: true });
+    this.mushletCapMesh = new THREE.InstancedMesh(mCapGeo, mCapMat, maxMushlets);
+    this.mushletCapMesh.count = 0;
+    this.mushletCapMesh.frustumCulled = false;
+
+    // Жук-таран (ram_beetle)
+    const bBodyGeo = new THREE.BoxGeometry(0.55, 0.32, 0.7);
+    const bBodyMat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
+    this.beetleBodyMesh = new THREE.InstancedMesh(bBodyGeo, bBodyMat, maxBeetles);
+    this.beetleBodyMesh.count = 0;
+    this.beetleBodyMesh.frustumCulled = false;
+    for (let i = 0; i < maxBeetles; i++) {
+      this.beetleBodyMesh.setColorAt(i, this.defaultBeetleColor);
+    }
+    if (this.beetleBodyMesh.instanceColor) this.beetleBodyMesh.instanceColor.needsUpdate = true;
+
+    const bHornGeo = new THREE.ConeGeometry(0.12, 0.38, 4);
+    bHornGeo.rotateX(-Math.PI / 2);
+    const bHornMat = new THREE.MeshLambertMaterial({ color: 0x111c2e, flatShading: true });
+    this.beetleHornMesh = new THREE.InstancedMesh(bHornGeo, bHornMat, maxBeetles);
+    this.beetleHornMesh.count = 0;
+    this.beetleHornMesh.frustumCulled = false;
+
+    // Плевун-совёнок (spit_owl)
+    const oBodyGeo = new THREE.CylinderGeometry(0.28, 0.22, 0.55, 6);
+    const oBodyMat = new THREE.MeshLambertMaterial({ color: 0x7209b7, flatShading: true });
+    this.owlBodyMesh = new THREE.InstancedMesh(oBodyGeo, oBodyMat, maxOwls);
+    this.owlBodyMesh.count = 0;
+    this.owlBodyMesh.frustumCulled = false;
+
+    const oEyesGeo = new THREE.ConeGeometry(0.09, 0.2, 4);
+    oEyesGeo.rotateX(-Math.PI / 2);
+    const oEyesMat = new THREE.MeshLambertMaterial({ color: 0xffd166, flatShading: true });
+    this.owlEyesMesh = new THREE.InstancedMesh(oEyesGeo, oEyesMat, maxOwls);
+    this.owlEyesMesh.count = 0;
+    this.owlEyesMesh.frustumCulled = false;
+
+    // Снаряды совёнка
+    const pGeo = new THREE.SphereGeometry(0.16, 5, 5);
+    const pMat = new THREE.MeshLambertMaterial({ color: 0xff0054, emissive: 0x66001e });
+    this.projMesh = new THREE.InstancedMesh(pGeo, pMat, maxProjs);
+    this.projMesh.count = 0;
+    this.projMesh.frustumCulled = false;
+
+    // Кристаллики опыта
+    const gGeo = new THREE.OctahedronGeometry(0.22, 0);
+    const gMat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
+    this.gemMesh = new THREE.InstancedMesh(gGeo, gMat, maxGems);
+    this.gemMesh.count = 0;
+    this.gemMesh.frustumCulled = false;
+    const defaultGemCol = new THREE.Color(0x48cae4);
+    for (let i = 0; i < maxGems; i++) {
+      this.gemMesh.setColorAt(i, defaultGemCol);
+    }
+    if (this.gemMesh.instanceColor) this.gemMesh.instanceColor.needsUpdate = true;
+
+    this.scene.add(
+      this.mushletStemMesh,
+      this.mushletCapMesh,
+      this.beetleBodyMesh,
+      this.beetleHornMesh,
+      this.owlBodyMesh,
+      this.owlEyesMesh,
+      this.projMesh,
+      this.gemMesh,
+    );
+
+    // Эффект удара tail_blade (сектор 120°, 2.8 м)
+    const slashGeo = new THREE.RingGeometry(1.6, 2.8, 16, 1, -Math.PI / 3, (120 * Math.PI) / 180);
+    slashGeo.rotateX(-Math.PI / 2);
+    this.slashMat = new THREE.MeshBasicMaterial({
+      color: 0xffb703,
+      transparent: true,
+      opacity: 0,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    this.slashMesh = new THREE.Mesh(slashGeo, this.slashMat);
+    this.slashMesh.visible = false;
+    this.scene.add(this.slashMesh);
+
     // 8. Контроллер ввода (ПК и телефон)
     this.input = new Input(this.renderer.domElement, {
       pause: () => this.openMenu(),
@@ -512,7 +642,6 @@ class SuperwalkApp {
 
       const moveLen = Math.hypot(move.strafe, move.forward);
       if (moveLen > 0.05) {
-        this.runTime += dt;
         // Направление бега в мире относительно взгляда камеры (-Z - вперёд, +X - вправо)
         const sin = Math.sin(this.input.yaw);
         const cos = Math.cos(this.input.yaw);
@@ -544,6 +673,194 @@ class SuperwalkApp {
       const cz = this.playerState.z + Math.cos(this.input.yaw) * Math.cos(this.input.pitch) * camDist;
       this.camera.position.set(cx, Math.max(0.5, cy), cz);
       this.camera.lookAt(this.playerState.x, this.playerState.y + 1.0, this.playerState.z);
+
+      // 5. Спавн мобов волнами по расписанию (DESIGN.md)
+      this.runTime += dt;
+      const targetCount = getWaveTargetCount(this.runTime, this.input.touchMode);
+      this.spawnTimer -= dt;
+      if (this.spawnTimer <= 0 && this.combatState.mobs.length < targetCount) {
+        this.spawnTimer = this.combatState.mobs.length < 6 ? 0.08 : 0.25;
+        const available = getAvailableMobTypes(this.runTime);
+        this.prngSeed = (this.prngSeed * 16807) % 2147483647;
+        const rnd1 = (this.prngSeed - 1) / 2147483646;
+        this.prngSeed = (this.prngSeed * 16807) % 2147483647;
+        const rnd2 = (this.prngSeed - 1) / 2147483646;
+        const chosenType = available[Math.floor(rnd1 * available.length)] ?? 'mushlet';
+        spawnMobInRing(this.combatState, this.playerState.x, this.playerState.z, chosenType, this.runTime, () => rnd2);
+      }
+
+      // 6. Симуляция боя, автоатаки, снарядов и опыта
+      const combatRes = stepCombat(
+        this.combatState,
+        this.playerState.x,
+        this.playerState.y,
+        this.playerState.z,
+        dt,
+        this.heroGroup.rotation.y,
+        HERO_CONFIG.pickupRadius,
+        getTerrainHeight,
+      );
+
+      if (combatRes.leveledUp) {
+        toast(`Новый уровень ${this.combatState.heroLevel}!`, 1800, 'ok');
+      }
+
+      for (const atk of combatRes.attacks) {
+        if (atk.weaponId === 'tail_blade') {
+          this.triggerSlash(atk.x, atk.z, atk.facingYaw);
+        }
+      }
+
+      if (this.slashTimer > 0) {
+        this.slashTimer -= dt;
+        this.slashMat.opacity = Math.max(0, this.slashTimer / 0.16) * 0.9;
+        if (this.slashTimer <= 0) {
+          this.slashMesh.visible = false;
+        }
+      }
+
+      // 7. Отрисовка мобов через InstancedMesh (бюджет вызовов)
+      const dummy = this.mobDummy;
+      let mushletCount = 0;
+      let beetleCount = 0;
+      let owlCount = 0;
+
+      for (const mob of this.combatState.mobs) {
+        const dx = this.playerState.x - mob.x;
+        const dz = this.playerState.z - mob.z;
+
+        if (mob.type === 'mushlet' && mushletCount < 160) {
+          const hop = Math.abs(Math.sin((this.runTime * 8) + mob.id)) * 0.1;
+          const rotY = Math.atan2(-dx, -dz);
+
+          dummy.position.set(mob.x, mob.y + hop + 0.2, mob.z);
+          dummy.rotation.set(0, rotY, 0);
+          dummy.scale.set(1, 1, 1);
+          dummy.updateMatrix();
+          this.mushletStemMesh.setMatrixAt(mushletCount, dummy.matrix);
+
+          dummy.position.set(mob.x, mob.y + hop + 0.48, mob.z);
+          dummy.updateMatrix();
+          this.mushletCapMesh.setMatrixAt(mushletCount, dummy.matrix);
+
+          mushletCount++;
+        } else if (mob.type === 'ram_beetle' && beetleCount < 80) {
+          const rotY = mob.state === 'charge'
+            ? Math.atan2(-mob.chargeDirX, -mob.chargeDirZ)
+            : Math.atan2(-dx, -dz);
+
+          dummy.position.set(mob.x, mob.y + 0.18, mob.z);
+          dummy.rotation.set(0, rotY, 0);
+          dummy.scale.set(1, 1, 1);
+          dummy.updateMatrix();
+          this.beetleBodyMesh.setMatrixAt(beetleCount, dummy.matrix);
+
+          dummy.position.set(
+            mob.x - Math.sin(rotY) * 0.42,
+            mob.y + 0.2,
+            mob.z - Math.cos(rotY) * 0.42,
+          );
+          dummy.updateMatrix();
+          this.beetleHornMesh.setMatrixAt(beetleCount, dummy.matrix);
+
+          // Мигание при подготовке к рывку
+          if (mob.state === 'telegraph') {
+            const flash = Math.floor(this.runTime * 14) % 2 === 0;
+            this.flashColor.setHex(flash ? 0xff4d4d : 0x1d3557);
+          } else if (mob.state === 'charge') {
+            this.flashColor.setHex(0xd90429);
+          } else {
+            this.flashColor.setHex(0x1d3557);
+          }
+          this.beetleBodyMesh.setColorAt(beetleCount, this.flashColor);
+
+          beetleCount++;
+        } else if (mob.type === 'spit_owl' && owlCount < 80) {
+          const rotY = Math.atan2(-dx, -dz);
+          const hover = Math.sin((this.runTime * 4) + mob.id) * 0.12;
+
+          dummy.position.set(mob.x, mob.y + 0.5 + hover, mob.z);
+          dummy.rotation.set(0, rotY, 0);
+          dummy.scale.set(1, 1, 1);
+          dummy.updateMatrix();
+          this.owlBodyMesh.setMatrixAt(owlCount, dummy.matrix);
+
+          dummy.position.set(
+            mob.x - Math.sin(rotY) * 0.28,
+            mob.y + 0.55 + hover,
+            mob.z - Math.cos(rotY) * 0.28,
+          );
+          dummy.updateMatrix();
+          this.owlEyesMesh.setMatrixAt(owlCount, dummy.matrix);
+
+          owlCount++;
+        }
+      }
+
+      this.mushletStemMesh.count = mushletCount;
+      this.mushletCapMesh.count = mushletCount;
+      this.mushletStemMesh.instanceMatrix.needsUpdate = true;
+      this.mushletCapMesh.instanceMatrix.needsUpdate = true;
+
+      this.beetleBodyMesh.count = beetleCount;
+      this.beetleHornMesh.count = beetleCount;
+      this.beetleBodyMesh.instanceMatrix.needsUpdate = true;
+      this.beetleHornMesh.instanceMatrix.needsUpdate = true;
+      if (this.beetleBodyMesh.instanceColor) this.beetleBodyMesh.instanceColor.needsUpdate = true;
+
+      this.owlBodyMesh.count = owlCount;
+      this.owlEyesMesh.count = owlCount;
+      this.owlBodyMesh.instanceMatrix.needsUpdate = true;
+      this.owlEyesMesh.instanceMatrix.needsUpdate = true;
+
+      // Отрисовка снарядов
+      const projCount = Math.min(this.combatState.projectiles.length, 60);
+      for (let i = 0; i < projCount; i++) {
+        const p = this.combatState.projectiles[i]!;
+        dummy.position.set(p.x, p.y, p.z);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        this.projMesh.setMatrixAt(i, dummy.matrix);
+      }
+      this.projMesh.count = projCount;
+      this.projMesh.instanceMatrix.needsUpdate = true;
+
+      // Отрисовка кристалликов опыта
+      const gemCount = Math.min(this.combatState.gems.length, 250);
+      for (let i = 0; i < gemCount; i++) {
+        const g = this.combatState.gems[i]!;
+        const rotY = (this.runTime * 2.5) + g.id;
+        const scale = g.type === 'large' ? 1.5 : g.type === 'medium' ? 1.1 : 0.8;
+        const colorHex = g.type === 'large' ? 0xffd166 : g.type === 'medium' ? 0x0077b6 : 0x48cae4;
+
+        dummy.position.set(g.x, g.y, g.z);
+        dummy.rotation.set(0, rotY, 0);
+        dummy.scale.set(scale, scale, scale);
+        dummy.updateMatrix();
+        this.gemMesh.setMatrixAt(i, dummy.matrix);
+
+        this.flashColor.setHex(colorHex);
+        this.gemMesh.setColorAt(i, this.flashColor);
+      }
+      this.gemMesh.count = gemCount;
+      this.gemMesh.instanceMatrix.needsUpdate = true;
+      if (this.gemMesh.instanceColor) this.gemMesh.instanceColor.needsUpdate = true;
+
+      // 8. Обновление интерфейса
+      const mins = Math.floor(this.runTime / 60);
+      const secs = Math.floor(this.runTime % 60);
+      $('hud-timer').textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+      $('hud-level').textContent = String(this.combatState.heroLevel);
+      $('hud-kills').textContent = String(this.combatState.kills);
+
+      const hpPct = Math.max(0, Math.min(100, (this.combatState.heroHp / this.combatState.heroMaxHp) * 100));
+      $('hp-bar-fill').style.width = `${hpPct}%`;
+      $('hp-bar-text').textContent = `${Math.ceil(this.combatState.heroHp)} / ${this.combatState.heroMaxHp}`;
+
+      const reqExp = getRequiredExp(this.combatState.heroLevel);
+      const expPct = Math.max(0, Math.min(100, (this.combatState.heroExp / reqExp) * 100));
+      $('exp-bar-fill').style.width = `${expPct}%`;
     }
 
     this.renderer.render(this.scene, this.camera);
@@ -553,16 +870,27 @@ class SuperwalkApp {
     }
   }
 
+  private triggerSlash(x: number, z: number, facingYaw: number): void {
+    this.slashTimer = 0.16;
+    const y = getTerrainHeight(x, z);
+    this.slashMesh.position.set(x, y + 0.45, z);
+    this.slashMesh.rotation.y = facingYaw;
+    this.slashMesh.visible = true;
+    this.slashMat.opacity = 0.9;
+  }
+
   private updateDebug(): void {
     const info = this.renderer.info.render;
     const mem = this.renderer.info.memory;
     const el = this.renderer.domElement;
     const p = this.playerState;
+    const cs = this.combatState;
     $('debug').textContent = [
       `fps ${this.fps} · кадр ${this.perfAvgMs.toFixed(1)} мс, худший ${this.perfWorstMs.toFixed(0)} мс · рывков ${this.perfSlowPerSec}/с`,
       `экран ${el.width}×${el.height} · dpr ${this.renderer.getPixelRatio().toFixed(2)} · тач ${this.input.touchMode ? 'да' : 'нет'}`,
       `вызовов ${info.calls} · треугольников ${info.triangles} · геометрий ${mem.geometries}`,
       `xyz ${p.x.toFixed(1)} ${p.y.toFixed(1)} ${p.z.toFixed(1)} · vy ${p.vy.toFixed(1)} · земля ${p.grounded ? 'да' : 'нет'}`,
+      `мобов ${cs.mobs.length} · крист ${cs.gems.length} · снарядов ${cs.projectiles.length} · ур ${cs.heroLevel} · hp ${cs.heroHp}/${cs.heroMaxHp}`,
       `мышь ${this.input.mouseStats.events} соб/с · макс шаг ${this.input.mouseStats.maxStep} px`,
     ].join('\n');
   }
