@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { GameFactory, type Session } from '@gf/game-sdk';
 import { fillIcons, setIcon } from './icons.ts';
 import { Input } from './input.ts';
-import { stepPlayer, getTerrainHeight, type PlayerState, type Obstacle } from './core/movement.ts';
+import { stepPlayer, getTerrainHeight, type PlayerState } from './core/movement.ts';
+import { generateWorld, type WorldData } from './core/world.ts';
 import './style.css';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
@@ -10,15 +11,6 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   if (!el) throw new Error(`Элемент #${id} не найден`);
   return el as T;
 };
-
-// Препятствия на сцене с радиусом коллизии
-const ROCKS: readonly Obstacle[] = [
-  { x: 2, z: -4, radius: 1.2 },
-  { x: -6, z: -4, radius: 1.1 },
-  { x: 5, z: -6, radius: 1.1 },
-  { x: -4, z: 6, radius: 1.1 },
-  { x: 7, z: 4, radius: 1.1 },
-];
 
 let toastTimeout: number | undefined;
 function toast(message: string, durationMs = 2800, type: 'info' | 'ok' | 'err' = 'info'): void {
@@ -38,6 +30,7 @@ class SuperwalkApp {
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
   private input: Input;
+  private world: WorldData;
 
   private paused = false;
   private debug = false;
@@ -224,16 +217,95 @@ class SuperwalkApp {
     this.shadowMesh.position.y = 0.02;
     this.scene.add(this.shadowMesh);
 
-    // 7. Окружение: камни low-poly с коллизиями (стоят точно на поверхности холмов)
-    const stoneMat = new THREE.MeshLambertMaterial({ color: 0xb8b2a7, flatShading: true });
-    const stoneGeo = new THREE.DodecahedronGeometry(1.0, 0);
-    for (const r of ROCKS) {
-      const rock = new THREE.Mesh(stoneGeo, stoneMat);
-      const groundY = getTerrainHeight(r.x, r.z);
-      rock.position.set(r.x, groundY + 0.5, r.z);
-      rock.scale.set(r.radius, 0.8 * r.radius, r.radius);
-      this.scene.add(rock);
+    // 7. Окружение: процедурный мир "Солнечные холмы" через InstancedMesh (бюджет вызовов <= 300)
+    this.world = generateWorld(1337);
+    const dummy = new THREE.Object3D();
+
+    // 7.1 Деревья: стволы (коричневые цилиндры) и кроны (пастельно-зеленые конусы)
+    const trunkGeo = new THREE.CylinderGeometry(0.22, 0.32, 2.2, 5);
+    const trunkMat = new THREE.MeshLambertMaterial({ color: 0x7a5032, flatShading: true });
+    const trunkMesh = new THREE.InstancedMesh(trunkGeo, trunkMat, this.world.trees.length);
+
+    const lowerGeo = new THREE.ConeGeometry(1.6, 2.2, 6);
+    const lowerMat = new THREE.MeshLambertMaterial({ color: 0x4d9642, flatShading: true });
+    const lowerMesh = new THREE.InstancedMesh(lowerGeo, lowerMat, this.world.trees.length);
+
+    const upperGeo = new THREE.ConeGeometry(1.2, 1.8, 6);
+    const upperMat = new THREE.MeshLambertMaterial({ color: 0x5ea852, flatShading: true });
+    const upperMesh = new THREE.InstancedMesh(upperGeo, upperMat, this.world.trees.length);
+
+    for (let i = 0; i < this.world.trees.length; i++) {
+      const t = this.world.trees[i]!;
+      const y = getTerrainHeight(t.x, t.z);
+
+      // Ствол
+      dummy.position.set(t.x, y + 1.1 * t.scale, t.z);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(t.scale, t.scale, t.scale);
+      dummy.updateMatrix();
+      trunkMesh.setMatrixAt(i, dummy.matrix);
+
+      // Нижний ярус хвои
+      dummy.position.set(t.x, y + 2.5 * t.scale, t.z);
+      dummy.updateMatrix();
+      lowerMesh.setMatrixAt(i, dummy.matrix);
+
+      // Верхний ярус хвои
+      dummy.position.set(t.x, y + 3.8 * t.scale, t.z);
+      dummy.updateMatrix();
+      upperMesh.setMatrixAt(i, dummy.matrix);
     }
+    trunkMesh.instanceMatrix.needsUpdate = true;
+    lowerMesh.instanceMatrix.needsUpdate = true;
+    upperMesh.instanceMatrix.needsUpdate = true;
+    this.scene.add(trunkMesh, lowerMesh, upperMesh);
+
+    // 7.2 Внутренние камни (low-poly додекаэдры)
+    const rockGeo = new THREE.DodecahedronGeometry(1.0, 0);
+    const rockMat = new THREE.MeshLambertMaterial({ color: 0xb2aba0, flatShading: true });
+    const rockMesh = new THREE.InstancedMesh(rockGeo, rockMat, this.world.rocks.length);
+    for (let i = 0; i < this.world.rocks.length; i++) {
+      const r = this.world.rocks[i]!;
+      const y = getTerrainHeight(r.x, r.z);
+      dummy.position.set(r.x, y + 0.5 * r.scale, r.z);
+      dummy.rotation.set(0, r.rotY, 0);
+      dummy.scale.set(r.scale, 0.8 * r.scale, r.scale);
+      dummy.updateMatrix();
+      rockMesh.setMatrixAt(i, dummy.matrix);
+    }
+    rockMesh.instanceMatrix.needsUpdate = true;
+    this.scene.add(rockMesh);
+
+    // 7.3 Граничные скалы по периметру (массивные валуны)
+    const boundaryMat = new THREE.MeshLambertMaterial({ color: 0x8c867d, flatShading: true });
+    const boundaryMesh = new THREE.InstancedMesh(rockGeo, boundaryMat, this.world.boundaryRocks.length);
+    for (let i = 0; i < this.world.boundaryRocks.length; i++) {
+      const br = this.world.boundaryRocks[i]!;
+      const y = getTerrainHeight(br.x, br.z);
+      dummy.position.set(br.x, y + 1.2 * br.scale, br.z);
+      dummy.rotation.set(0, br.rotY, 0);
+      dummy.scale.set(br.scale, 1.4 * br.scale, br.scale);
+      dummy.updateMatrix();
+      boundaryMesh.setMatrixAt(i, dummy.matrix);
+    }
+    boundaryMesh.instanceMatrix.needsUpdate = true;
+    this.scene.add(boundaryMesh);
+
+    // 7.4 Декоративные пучки травы
+    const grassGeo = new THREE.ConeGeometry(0.35, 0.6, 3);
+    const grassMat = new THREE.MeshLambertMaterial({ color: 0xa2e055, flatShading: true });
+    const grassMesh = new THREE.InstancedMesh(grassGeo, grassMat, this.world.grassClumps.length);
+    for (let i = 0; i < this.world.grassClumps.length; i++) {
+      const g = this.world.grassClumps[i]!;
+      const y = getTerrainHeight(g.x, g.z);
+      dummy.position.set(g.x, y + 0.25 * g.scale, g.z);
+      dummy.rotation.set(0, g.rotY, 0);
+      dummy.scale.set(g.scale, g.scale, g.scale);
+      dummy.updateMatrix();
+      grassMesh.setMatrixAt(i, dummy.matrix);
+    }
+    grassMesh.instanceMatrix.needsUpdate = true;
+    this.scene.add(grassMesh);
 
     // 8. Контроллер ввода (ПК и телефон)
     this.input = new Input(this.renderer.domElement, {
@@ -421,7 +493,7 @@ class SuperwalkApp {
         },
         dt,
         undefined,
-        ROCKS,
+        this.world.obstacles,
         getTerrainHeight,
       );
 

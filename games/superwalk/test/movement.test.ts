@@ -111,6 +111,16 @@ describe('Физика движения и управление (dt, повор�
     assert.ok(state144.grounded);
   });
 
+  it('граница арены: герой не может убежать за пределы arenaRadius (65.0 м)', () => {
+    let state = { ...initial, x: 64.0, z: 0 };
+    // Бежим вправо (D) 60 кадров
+    for (let i = 0; i < 60; i++) {
+      state = stepPlayer(state, { forward: 0, strafe: 1, jump: false, yaw: 0 }, 1 / 60);
+    }
+    const dist = Math.hypot(state.x, state.z);
+    assert.ok(dist <= 65.0001, `Герой убежал за пределы арены! dist = ${dist}`);
+  });
+
   it('мутация: движение без dt приводит к катастрофическому расхождению между 60 и 144 Гц', () => {
     const brokenStep = (pos: number, speed: number) => pos + speed;
     let pos60 = 0;

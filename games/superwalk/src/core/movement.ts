@@ -33,6 +33,7 @@ export interface PlayerParams {
   jumpHeight: number;
   gravity: number;
   radius: number;
+  arenaRadius?: number;
 }
 
 export const DEFAULT_PLAYER_PARAMS: PlayerParams = {
@@ -40,6 +41,7 @@ export const DEFAULT_PLAYER_PARAMS: PlayerParams = {
   jumpHeight: 1.6,  // м
   gravity: 24.0,    // м/с^2
   radius: 0.45,     // радиус коллизии героя
+  arenaRadius: 65.0,// радиус игровой арены "Солнечные холмы"
 };
 
 /**
@@ -102,6 +104,15 @@ export function stepPlayer(
       const overlap = minDist - dist;
       nextX += (dx / dist) * overlap;
       nextZ += (dz / dist) * overlap;
+    }
+  }
+
+  // Ограничение игровой арены (не даёт лису выйти за край карты)
+  if (params.arenaRadius && params.arenaRadius > 0) {
+    const currentDist = Math.hypot(nextX, nextZ);
+    if (currentDist > params.arenaRadius) {
+      nextX = (nextX / currentDist) * params.arenaRadius;
+      nextZ = (nextZ / currentDist) * params.arenaRadius;
     }
   }
 
