@@ -11,7 +11,10 @@
   "offline": true,
   "permissions": [
     "saves",
-    "leaderboard"
+    "leaderboard",
+    "fullscreen",
+    "pointer-lock",
+    "orientation-lock"
   ],
   "tags": [
     "3d",

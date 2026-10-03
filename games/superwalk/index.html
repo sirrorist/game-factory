@@ -2,13 +2,53 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-  <title>Шаблон vite-ts</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Superwalk</title>
 </head>
 <body>
-  <p>Счёт: <b id="score">0</b> · Рекорд: <b id="best">-</b> · <span id="mode"></span></p>
-  <button id="click" type="button">+1</button>
-  <!-- Vite заменит это классическим скриптом внутри HTML (офлайн-режим @gf/vite-config). -->
+  <div id="app">
+    <div id="stage"></div>
+
+    <header id="hud" class="gf-hud-top">
+      <span class="gf-hud-stat"><span id="mode"></span></span>
+      <span class="gf-hud-stat" data-icon="trophy"><span>рекорд</span><b id="best">-</b></span>
+    </header>
+
+    <pre id="debug" hidden></pre>
+
+    <div id="corner">
+      <button id="btn-fs" class="gf-icon-btn gf-icon-btn--hud" type="button" data-icon="fullscreen" aria-label="На весь экран" title="На весь экран" hidden></button>
+      <button id="btn-menu" class="gf-icon-btn gf-icon-btn--hud" type="button" data-icon="menu" aria-label="Меню" title="Меню"></button>
+    </div>
+
+    <div id="toast" class="gf-toast" hidden></div>
+
+    <div id="menu" hidden>
+      <div class="gf-panel" role="dialog" aria-label="Меню игры">
+        <h1 class="gf-panel__title">Superwalk</h1>
+        <p class="gf-panel__sub">3D роглайт на выживание</p>
+        <button id="btn-resume" type="button" class="gf-btn gf-btn--primary gf-btn--lg" data-icon="play">
+          <span>Продолжить</span>
+        </button>
+        <div class="gf-panel__row">
+          <button id="btn-menu-fs" class="gf-btn gf-btn--sm" type="button" data-icon="fullscreen" hidden>
+            <span id="fs-label">На весь экран</span>
+          </button>
+          <button id="btn-debug-toggle" class="gf-btn gf-btn--sm" type="button">
+            <span id="debug-label">Показатели: выкл</span>
+          </button>
+        </div>
+        <div class="help" id="help-desktop">
+          <p><b>WASD / стрелки</b> — бег, <b>пробел</b> — прыжок</p>
+          <p><b>Мышь</b> — обзор, <b>Esc</b> — меню, <b>F3</b> — показатели</p>
+        </div>
+        <div class="help" id="help-touch" hidden>
+          <p><b>Джойстик слева</b> — бег, <b>касание справа</b> — обзор</p>
+          <p><b>Кнопка меню</b> — пауза и полный экран</p>
+        </div>
+      </div>
+    </div>
+  </div>
   <script type="module" src="./src/main.ts"></script>
 </body>
 </html>
