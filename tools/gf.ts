@@ -72,8 +72,20 @@ function selectGames(ids: string[]): string[] {
   return ids;
 }
 
+/**
+ * Как вызвать pnpm без оболочки. На Windows `pnpm` - это `pnpm.cmd`, а Node не запускает `.cmd`
+ * без `shell: true` (EINVAL), оболочка же ломает путь с пробелом. Под `pnpm run` известен сам
+ * скрипт pnpm (`npm_execpath`) - его и запускаем текущим Node; иначе - `pnpm` из PATH.
+ */
+export function pnpmCommand(env: NodeJS.ProcessEnv = process.env): { cmd: string; pre: string[] } {
+  const script = env.npm_execpath;
+  if (script && /pnpm\.c?js$/.test(script)) return { cmd: process.execPath, pre: [script] };
+  return { cmd: 'pnpm', pre: [] };
+}
+
 function runBuildScript(game: LoadedGame): void {
-  const r = spawnSync('pnpm', ['--dir', game.dir, 'run', 'build'], { stdio: 'inherit' });
+  const pnpm = pnpmCommand();
+  const r = spawnSync(pnpm.cmd, [...pnpm.pre, '--dir', game.dir, 'run', 'build'], { stdio: 'inherit' });
   if (r.status !== 0) throw new CliError(`игра "${game.manifest.id}": сборка упала (код ${r.status ?? r.signal})`);
 }
 
