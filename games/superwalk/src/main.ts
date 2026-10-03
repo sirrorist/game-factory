@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { GameFactory, type Session } from '@gf/game-sdk';
 import { fillIcons, setIcon } from './icons.ts';
+import { Input } from './input.ts';
+import { stepPlayer, getTerrainHeight, type PlayerState, type Obstacle } from './core/movement.ts';
 import './style.css';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
@@ -8,6 +10,15 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   if (!el) throw new Error(`Элемент #${id} не найден`);
   return el as T;
 };
+
+// Препятствия на сцене с радиусом коллизии
+const ROCKS: readonly Obstacle[] = [
+  { x: 2, z: -4, radius: 1.2 },
+  { x: -6, z: -4, radius: 1.1 },
+  { x: 5, z: -6, radius: 1.1 },
+  { x: -4, z: 6, radius: 1.1 },
+  { x: 7, z: 4, radius: 1.1 },
+];
 
 let toastTimeout: number | undefined;
 function toast(message: string, durationMs = 2800, type: 'info' | 'ok' | 'err' = 'info'): void {
@@ -26,10 +37,20 @@ class SuperwalkApp {
   private renderer: THREE.WebGLRenderer;
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
-  private touchDevice: boolean;
+  private input: Input;
 
   private paused = false;
   private debug = false;
+
+  private playerState: PlayerState = {
+    x: 0,
+    y: 0,
+    z: 0,
+    vy: 0,
+    grounded: true,
+    yaw: 0,
+  };
+  private runTime = 0;
 
   private lastTime = performance.now();
   private frameCount = 0;
@@ -44,33 +65,35 @@ class SuperwalkApp {
 
   private heroGroup: THREE.Group;
   private tailPivot: THREE.Group;
+  private shadowMesh: THREE.Mesh;
+  private shadowMat: THREE.MeshBasicMaterial;
+
   private fullscreenExitAt = -Infinity;
   private wasHostFullscreen = false;
 
   constructor(session: Session, best: number | null) {
     this.session = session;
-    this.touchDevice = matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window);
+    const touchDevice = matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window);
 
     // 1. WebGL рендерер с соблюдением бюджета (docs/GAME-TZ.md):
     // antialias отключен на тач-устройствах, dpr ограничен до 1.5 на таче и до 2 на ПК.
     this.renderer = new THREE.WebGLRenderer({
       powerPreference: 'high-performance',
-      antialias: !this.touchDevice,
+      antialias: !touchDevice,
     });
-    const maxDpr = this.touchDevice ? 1.5 : 2.0;
+    const maxDpr = touchDevice ? 1.5 : 2.0;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxDpr));
     $('stage').appendChild(this.renderer.domElement);
 
     // 2. Сцена и камера
     this.scene = new THREE.Scene();
-    // Пастельный градиент / туман с 35 м (DESIGN.md, раздел 6)
     const skyColor = 0xd8e8f8;
     this.scene.background = new THREE.Color(skyColor);
     this.scene.fog = new THREE.Fog(skyColor, 35, 110);
 
     this.camera = new THREE.PerspectiveCamera(65, 1, 0.1, 150);
-    this.camera.position.set(0, 4.2, 7.5);
-    this.camera.lookAt(0, 1.2, 0);
+    this.camera.position.set(0, 3.8, 6.2);
+    this.camera.lookAt(0, 1.0, 0);
 
     // 3. Освещение: одна направленная лампа (мягкие тени) и рассеянный свет
     const ambient = new THREE.AmbientLight(0xfff1de, 0.75);
@@ -80,7 +103,7 @@ class SuperwalkApp {
     sun.position.set(30, 45, 20);
     this.scene.add(sun);
 
-    // 4. Локация: "Солнечные холмы" - мягкая low-poly поляна 140x140 м (высота холмов <= 2 м)
+    // 4. Локация: "Солнечные холмы" - мягкая low-poly поляна 140x140 м
     const groundGeo = new THREE.PlaneGeometry(140, 140, 36, 36);
     groundGeo.rotateX(-Math.PI / 2);
     const pos = groundGeo.attributes['position'];
@@ -88,10 +111,7 @@ class SuperwalkApp {
       for (let i = 0; i < pos.count; i++) {
         const x = pos.getX(i);
         const z = pos.getZ(i);
-        // Небольшие холмы по краям, центр ровнее
-        const dist = Math.sqrt(x * x + z * z);
-        const factor = Math.min(dist / 40, 1.0);
-        const h = (Math.sin(x * 0.08) * Math.cos(z * 0.08) * 1.6 + Math.sin(x * 0.03 + z * 0.04) * 1.0) * factor;
+        const h = getTerrainHeight(x, z);
         pos.setY(i, h);
       }
       groundGeo.computeVertexNormals();
@@ -103,116 +123,151 @@ class SuperwalkApp {
     const groundMesh = new THREE.Mesh(groundGeo, groundMat);
     this.scene.add(groundMesh);
 
-    // 5. Силуэт героя (Лис: рыжий low-poly лис, хвост с белым кончиком, шарф)
+    // 5. Силуэт героя (Лис: лапки на земле y=0, рыжий low-poly лис, хвост с белым кончиком, шарф)
+    // Стандарт Three.js: лис изначально смотрит вперёд вглубь экрана (-Z).
+    // Мордочка и нос направлены в -Z, пушистый хвост - сзади на +Z.
     this.heroGroup = new THREE.Group();
-    this.heroGroup.position.set(0, 0.9, 0);
+    this.heroGroup.position.set(0, 0, 0);
 
     const foxOrange = new THREE.MeshLambertMaterial({ color: 0xff7a1a, flatShading: true });
     const whiteMat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
     const scarfMat = new THREE.MeshLambertMaterial({ color: 0x3d7cd8, flatShading: true });
-    const noseMat = new THREE.MeshLambertMaterial({ color: 0x222222, flatShading: true });
+    const darkMat = new THREE.MeshLambertMaterial({ color: 0x221a16, flatShading: true });
 
-    // Тело
-    const bodyGeo = new THREE.CylinderGeometry(0.32, 0.38, 0.85, 7);
+    // Лапки (опираются строго на землю y = 0: передние на -Z, задние на +Z)
+    const legGeo = new THREE.BoxGeometry(0.12, 0.24, 0.14);
+    const legPositions: [number, number, number][] = [
+      [-0.15, 0.12, -0.14],
+      [0.15, 0.12, -0.14],
+      [-0.15, 0.12, 0.12],
+      [0.15, 0.12, 0.12],
+    ];
+    for (const [lx, ly, lz] of legPositions) {
+      const leg = new THREE.Mesh(legGeo, darkMat);
+      leg.position.set(lx, ly, lz);
+      this.heroGroup.add(leg);
+    }
+
+    // Тело (расположено над лапками: y от 0.22 до 0.77)
+    const bodyGeo = new THREE.CylinderGeometry(0.28, 0.35, 0.55, 7);
     const bodyMesh = new THREE.Mesh(bodyGeo, foxOrange);
+    bodyMesh.position.set(0, 0.48, 0);
     this.heroGroup.add(bodyMesh);
 
-    // Голова
-    const headGeo = new THREE.BoxGeometry(0.5, 0.45, 0.52);
+    // Голова (смещена вперёд к -Z)
+    const headGeo = new THREE.BoxGeometry(0.42, 0.38, 0.44);
     const headMesh = new THREE.Mesh(headGeo, foxOrange);
-    headMesh.position.set(0, 0.58, 0.1);
+    headMesh.position.set(0, 0.88, -0.08);
     this.heroGroup.add(headMesh);
 
-    // Мордочка с белым кончиком
-    const muzzleGeo = new THREE.ConeGeometry(0.2, 0.35, 5);
-    muzzleGeo.rotateX(Math.PI / 2);
+    // Мордочка с белым кончиком (направлена вперёд по -Z)
+    const muzzleGeo = new THREE.ConeGeometry(0.16, 0.3, 5);
+    muzzleGeo.rotateX(-Math.PI / 2);
     const muzzleMesh = new THREE.Mesh(muzzleGeo, whiteMat);
-    muzzleMesh.position.set(0, 0.52, 0.46);
+    muzzleMesh.position.set(0, 0.82, -0.38);
     this.heroGroup.add(muzzleMesh);
 
-    const noseMesh = new THREE.Mesh(new THREE.SphereGeometry(0.06, 5, 5), noseMat);
-    noseMesh.position.set(0, 0.52, 0.65);
+    const noseMesh = new THREE.Mesh(new THREE.SphereGeometry(0.05, 5, 5), darkMat);
+    noseMesh.position.set(0, 0.82, -0.54);
     this.heroGroup.add(noseMesh);
 
     // Ушки
-    const earGeo = new THREE.ConeGeometry(0.12, 0.28, 4);
+    const earGeo = new THREE.ConeGeometry(0.1, 0.24, 4);
     const leftEar = new THREE.Mesh(earGeo, foxOrange);
-    leftEar.position.set(-0.2, 0.9, 0.05);
+    leftEar.position.set(-0.16, 1.15, -0.05);
     leftEar.rotation.z = 0.2;
     const rightEar = new THREE.Mesh(earGeo, foxOrange);
-    rightEar.position.set(0.2, 0.9, 0.05);
+    rightEar.position.set(0.16, 1.15, -0.05);
     rightEar.rotation.z = -0.2;
     this.heroGroup.add(leftEar, rightEar);
 
     // Шарф
-    const scarfMesh = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.1, 5, 8), scarfMat);
+    const scarfMesh = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.08, 5, 8), scarfMat);
     scarfMesh.rotation.x = Math.PI / 2;
-    scarfMesh.position.set(0, 0.36, 0.08);
+    scarfMesh.position.set(0, 0.72, -0.06);
     this.heroGroup.add(scarfMesh);
 
-    // Хвост (привязан к опорной точке tailPivot)
+    // Хвост (прикреплен сзади к телу на +Z)
     this.tailPivot = new THREE.Group();
-    this.tailPivot.position.set(0, -0.15, -0.32);
-    const tailBase = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.08, 0.7, 6), foxOrange);
-    tailBase.position.set(0, 0.25, -0.25);
-    tailBase.rotation.x = -0.8;
-    const tailTip = new THREE.Mesh(new THREE.ConeGeometry(0.19, 0.38, 6), whiteMat);
-    tailTip.position.set(0, 0.58, -0.52);
-    tailTip.rotation.x = -0.8;
+    this.tailPivot.position.set(0, 0.36, 0.24);
+    const tailBase = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.07, 0.6, 6), foxOrange);
+    tailBase.position.set(0, 0.22, 0.22);
+    tailBase.rotation.x = 0.8;
+    const tailTip = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.32, 6), whiteMat);
+    tailTip.position.set(0, 0.52, 0.46);
+    tailTip.rotation.x = 0.8;
     this.tailPivot.add(tailBase, tailTip);
     this.heroGroup.add(this.tailPivot);
 
     this.scene.add(this.heroGroup);
 
-    // 6. Окружение: несколько камней low-poly
+    // 6. Мягкая динамическая тень под лисом на траве (видна на земле даже при прыжке)
+    const shadowGeo = new THREE.PlaneGeometry(1.3, 1.3);
+    shadowGeo.rotateX(-Math.PI / 2);
+    const shadowCanvas = document.createElement('canvas');
+    shadowCanvas.width = 64;
+    shadowCanvas.height = 64;
+    const sctx = shadowCanvas.getContext('2d')!;
+    const grad = sctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(18, 38, 12, 0.65)');
+    grad.addColorStop(0.55, 'rgba(18, 38, 12, 0.32)');
+    grad.addColorStop(1, 'rgba(18, 38, 12, 0)');
+    sctx.fillStyle = grad;
+    sctx.fillRect(0, 0, 64, 64);
+    const shadowTex = new THREE.CanvasTexture(shadowCanvas);
+    this.shadowMat = new THREE.MeshBasicMaterial({
+      map: shadowTex,
+      transparent: true,
+      depthWrite: false,
+    });
+    this.shadowMesh = new THREE.Mesh(shadowGeo, this.shadowMat);
+    this.shadowMesh.position.y = 0.02;
+    this.scene.add(this.shadowMesh);
+
+    // 7. Окружение: камни low-poly с коллизиями (стоят точно на поверхности холмов)
     const stoneMat = new THREE.MeshLambertMaterial({ color: 0xb8b2a7, flatShading: true });
-    const stoneGeo = new THREE.DodecahedronGeometry(0.65, 0);
-    const rockPositions: [number, number, number][] = [
-      [-6, 0.2, -4],
-      [5, 0.2, -6],
-      [-4, 0.2, 6],
-      [7, 0.2, 4],
-    ];
-    for (const [rx, ry, rz] of rockPositions) {
+    const stoneGeo = new THREE.DodecahedronGeometry(1.0, 0);
+    for (const r of ROCKS) {
       const rock = new THREE.Mesh(stoneGeo, stoneMat);
-      rock.position.set(rx, ry, rz);
-      rock.scale.set(1 + Math.random() * 0.4, 0.8 + Math.random() * 0.3, 1 + Math.random() * 0.4);
+      const groundY = getTerrainHeight(r.x, r.z);
+      rock.position.set(r.x, groundY + 0.5, r.z);
+      rock.scale.set(r.radius, 0.8 * r.radius, r.radius);
       this.scene.add(rock);
     }
 
-    // Заполнение иконок в HTML
+    // 8. Контроллер ввода (ПК и телефон)
+    this.input = new Input(this.renderer.domElement, {
+      pause: () => this.openMenu(),
+      lockLost: () => {
+        if (performance.now() - this.fullscreenExitAt < 700) {
+          toast('Полный экран выключен — кликни, чтобы продолжить', 2500);
+        } else {
+          this.openMenu();
+        }
+      },
+      gesture: () => undefined,
+      toggleDebug: () => this.toggleDebug(),
+    });
+    if (touchDevice) this.input.enableTouch();
+
     fillIcons(document);
 
-    // Отображение режима хаба и лучшего счёта
     $('mode').textContent = session.mode === 'hub' ? 'в хабе' : 'без хаба';
     $('best').textContent = best === null ? '-' : String(best);
 
-    // Подсказка управления в зависимости от типа устройства
-    if (this.touchDevice) {
-      $('help-touch').hidden = false;
-      $('help-desktop').hidden = true;
-    }
-
-    // Ресайз
     new ResizeObserver(() => this.resize()).observe($('app'));
     this.resize();
 
-    // Привязка UI и кнопок
     this.bindUi();
 
-    // Запуск цикла рендеринга
     requestAnimationFrame((t) => this.tick(t));
   }
 
   private bindUi(): void {
-    // Открытие / закрытие меню
     $('btn-menu').addEventListener('click', () => this.toggleMenu());
     $('btn-resume').addEventListener('click', () => this.closeMenu());
-
-    // Переключатель F3
     $('btn-debug-toggle').addEventListener('click', () => this.toggleDebug());
 
-    // Кнопка полного экрана
     if (document.fullscreenEnabled) {
       $('btn-fs').hidden = false;
       $('btn-menu-fs').hidden = false;
@@ -225,16 +280,9 @@ class SuperwalkApp {
       this.syncFullscreenButtons();
     }
 
-    // Клавиатура ПК: Esc для меню, F3 для отладки
     window.addEventListener('keydown', (e: KeyboardEvent) => {
-      if (e.code === 'F3') {
-        e.preventDefault();
-        this.toggleDebug();
-        return;
-      }
       if (e.code === 'Escape') {
         e.preventDefault();
-        // Защита от дубля Esc при выходе из полноэкранного режима браузера
         if (performance.now() - this.fullscreenExitAt < 700) {
           toast('Полный экран выключен', 2000);
         } else {
@@ -262,7 +310,7 @@ class SuperwalkApp {
       try {
         screen.orientation?.unlock();
       } catch {
-        // Игнорируем ошибку разблокировки ориентации
+        // Игнорируем
       }
       try {
         await document.exitFullscreen();
@@ -279,12 +327,12 @@ class SuperwalkApp {
 
     try {
       await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
-      if (this.touchDevice) {
+      if (this.input.touchMode) {
         const o = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
         try {
           await o.lock?.('landscape');
         } catch {
-          // Игнорируем, если lock не поддержан
+          // Игнорируем
         }
       }
     } catch (e) {
@@ -299,11 +347,14 @@ class SuperwalkApp {
 
   private openMenu(): void {
     this.paused = true;
+    this.input.active = false;
+    this.input.unlock();
     $('menu').hidden = false;
   }
 
   private closeMenu(): void {
     this.paused = false;
+    this.input.active = true;
     $('menu').hidden = true;
   }
 
@@ -342,7 +393,6 @@ class SuperwalkApp {
     if (frameMs > this.worstFrameMs) this.worstFrameMs = frameMs;
     if (frameMs > 25) this.slowFramesCount++;
 
-    // Замер fps каждую секунду
     if (time - this.fpsTimer >= 1000) {
       this.fps = this.frameCount;
       const sum = this.frameTimes.reduce((acc, v) => acc + v, 0);
@@ -358,9 +408,70 @@ class SuperwalkApp {
     }
 
     if (!this.paused) {
-      // Плавное покачивание хвоста лиса во времени через dt
-      this.tailPivot.rotation.y = Math.sin(time * 0.003) * 0.25;
-      this.tailPivot.rotation.z = Math.cos(time * 0.002) * 0.08;
+      // 1. Движение лиса через чистую функцию физики stepPlayer с учётом коллизий ROCKS и холмов
+      const move = this.input.move();
+      const jump = this.input.jump();
+      this.playerState = stepPlayer(
+        this.playerState,
+        {
+          forward: move.forward,
+          strafe: move.strafe,
+          jump,
+          yaw: this.input.yaw,
+        },
+        dt,
+        undefined,
+        ROCKS,
+        getTerrainHeight,
+      );
+
+      // 2. Позиция 3D-модели лиса
+      this.heroGroup.position.set(this.playerState.x, this.playerState.y, this.playerState.z);
+
+      // 3. Динамическая тень на земле (проекция на рельеф под ногами)
+      this.shadowMesh.position.x = this.playerState.x;
+      this.shadowMesh.position.z = this.playerState.z;
+      const groundY = getTerrainHeight(this.playerState.x, this.playerState.z);
+      this.shadowMesh.position.y = groundY + 0.02;
+      const jumpDelta = Math.max(0, this.playerState.y - groundY);
+      const shadowScale = Math.max(0.35, 1.0 - jumpDelta * 0.35);
+      this.shadowMesh.scale.set(shadowScale, shadowScale, shadowScale);
+      this.shadowMat.opacity = Math.max(0.12, 0.65 - jumpDelta * 0.28);
+
+      const moveLen = Math.hypot(move.strafe, move.forward);
+      if (moveLen > 0.05) {
+        this.runTime += dt;
+        // Направление бега в мире относительно взгляда камеры (-Z - вперёд, +X - вправо)
+        const sin = Math.sin(this.input.yaw);
+        const cos = Math.cos(this.input.yaw);
+        const moveX = -move.forward * sin + move.strafe * cos;
+        const moveZ = -move.forward * cos - move.strafe * sin;
+        // В Three.js rotation.y вокруг +Y: (0, 0, -1) переходит в (-sin(θ), -cos(θ)).
+        // Чтобы модель смотрела по (moveX, moveZ): sin(θ) = -moveX, cos(θ) = -moveZ.
+        const targetAngle = Math.atan2(-moveX, -moveZ);
+
+        let diff = targetAngle - this.heroGroup.rotation.y;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        this.heroGroup.rotation.y += diff * Math.min(1, dt * 14);
+
+        // Анимация бега: покачивание тела и быстрое махание хвостом
+        this.heroGroup.position.y = this.playerState.y + Math.abs(Math.sin(this.runTime * 14)) * 0.06;
+        this.tailPivot.rotation.y = Math.sin(this.runTime * 16) * 0.45;
+        this.tailPivot.rotation.z = Math.cos(this.runTime * 14) * 0.15;
+      } else {
+        this.heroGroup.position.y = this.playerState.y;
+        this.tailPivot.rotation.y = Math.sin(time * 0.003) * 0.25;
+        this.tailPivot.rotation.z = Math.cos(time * 0.002) * 0.08;
+      }
+
+      // 4. Камера от третьего лица (следит за лисом с расстояния 6.2 м сзади: +Z при yaw=0)
+      const camDist = 6.2;
+      const cy = this.playerState.y + 1.3 + Math.sin(this.input.pitch) * camDist;
+      const cx = this.playerState.x + Math.sin(this.input.yaw) * Math.cos(this.input.pitch) * camDist;
+      const cz = this.playerState.z + Math.cos(this.input.yaw) * Math.cos(this.input.pitch) * camDist;
+      this.camera.position.set(cx, Math.max(0.5, cy), cz);
+      this.camera.lookAt(this.playerState.x, this.playerState.y + 1.0, this.playerState.z);
     }
 
     this.renderer.render(this.scene, this.camera);
@@ -374,11 +485,13 @@ class SuperwalkApp {
     const info = this.renderer.info.render;
     const mem = this.renderer.info.memory;
     const el = this.renderer.domElement;
+    const p = this.playerState;
     $('debug').textContent = [
       `fps ${this.fps} · кадр ${this.perfAvgMs.toFixed(1)} мс, худший ${this.perfWorstMs.toFixed(0)} мс · рывков ${this.perfSlowPerSec}/с`,
-      `экран ${el.width}×${el.height} · dpr ${this.renderer.getPixelRatio().toFixed(2)} · тач ${this.touchDevice ? 'да' : 'нет'}`,
-      `вызовов ${info.calls} · треугольников ${info.triangles}`,
-      `объектов сцены ${this.scene.children.length} · геометрий ${mem.geometries}`,
+      `экран ${el.width}×${el.height} · dpr ${this.renderer.getPixelRatio().toFixed(2)} · тач ${this.input.touchMode ? 'да' : 'нет'}`,
+      `вызовов ${info.calls} · треугольников ${info.triangles} · геометрий ${mem.geometries}`,
+      `xyz ${p.x.toFixed(1)} ${p.y.toFixed(1)} ${p.z.toFixed(1)} · vy ${p.vy.toFixed(1)} · земля ${p.grounded ? 'да' : 'нет'}`,
+      `мышь ${this.input.mouseStats.events} соб/с · макс шаг ${this.input.mouseStats.maxStep} px`,
     ].join('\n');
   }
 }

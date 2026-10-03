@@ -8,6 +8,7 @@ const ICONS = {
   'menu': { shapes: ['M4 7h16', 'M4 12h16', 'M4 17h10'], px: [17, 15.5] },
   'close': { shapes: ['M6 6l12 12', 'M18 6 6 18'], px: [10.5, 1] },
   'trophy': { shapes: ['M8 6h8v4a4 4 0 0 1-8 0z', 'M8 7.5H5.5a2.5 2.5 0 0 0 2.5 4', 'M16 7.5h2.5a2.5 2.5 0 0 1-2.5 4', 'M12 14v3.5', 'M10 17.5h4', 'M8.5 20.5h7'], px: [10.5, 1] },
+  'jump': { shapes: ['M12 5v14', 'M5 12l7-7 7 7'], px: [17, 3] },
 } satisfies Record<string, { shapes: Shape[]; px: [number, number] }>;
 
 export type IconName = keyof typeof ICONS;

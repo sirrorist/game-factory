@@ -332,3 +332,54 @@ button {
   .gf-panel__title { font-size: 22px; line-height: 26px; }
   .help { display: none; }
 }
+
+/* ---------- Сенсорное управление ---------- */
+#touch {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 15;
+}
+
+#stick {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  margin: -60px 0 0 -60px;
+  border-radius: 50%;
+  border: 2px solid var(--hud-line);
+  background: var(--hud);
+  display: none;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+}
+#stick.active { display: block; }
+
+#knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 52px;
+  height: 52px;
+  margin: -26px 0 0 -26px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+#btn-jump {
+  position: absolute;
+  pointer-events: auto;
+  width: 64px;
+  height: 64px;
+  right: calc(24px + var(--safe-r));
+  bottom: calc(24px + var(--safe-b));
+  border-radius: var(--radius-pill);
+}
+#btn-jump svg { width: 30px; height: 30px; }
+#btn-jump.on {
+  color: var(--on-brand);
+  background: var(--brand);
+  transform: scale(0.92);
+}
+
