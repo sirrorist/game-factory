@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GameFactory, type Session } from '@gf/game-sdk';
 import { fillIcons, setIcon } from './icons.ts';
 import { Input } from './input.ts';
-import { stepPlayer, getTerrainHeight, type PlayerState } from './core/movement.ts';
+import { stepPlayer, getTerrainHeight, DEFAULT_PLAYER_PARAMS, type PlayerState, type PlayerParams } from './core/movement.ts';
 import { generateWorld, type WorldData } from './core/world.ts';
 import {
   createInitialCombatState,
@@ -12,7 +12,14 @@ import {
   getAvailableMobTypes,
   type CombatState,
 } from './core/combat.ts';
-import { HERO_CONFIG, getRequiredExp } from './core/content.ts';
+import { HERO_CONFIG, getRequiredExp, WEAPON_CONFIGS, TOME_CONFIGS } from './core/content.ts';
+import {
+  createInitialInventory,
+  rollUpgradeChoices,
+  applyUpgrade,
+  type PlayerInventory,
+  type UpgradeOption,
+} from './core/upgrades.ts';
 import './style.css';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
@@ -33,6 +40,123 @@ function toast(message: string, durationMs = 2800, type: 'info' | 'ok' | 'err' =
   }, durationMs);
 }
 
+function createGemTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d')!;
+
+  const glow = ctx.createRadialGradient(32, 32, 8, 32, 32, 32);
+  glow.addColorStop(0, 'rgba(72, 202, 228, 0.55)');
+  glow.addColorStop(1, 'rgba(72, 202, 228, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, 64, 64);
+
+  // Ограненный кристалл (ромб)
+  ctx.beginPath();
+  ctx.moveTo(32, 6);
+  ctx.lineTo(54, 26);
+  ctx.lineTo(32, 58);
+  ctx.lineTo(10, 26);
+  ctx.closePath();
+  ctx.fillStyle = '#48cae4';
+  ctx.fill();
+
+  // Грани
+  ctx.beginPath();
+  ctx.moveTo(32, 6);
+  ctx.lineTo(32, 30);
+  ctx.lineTo(10, 26);
+  ctx.closePath();
+  ctx.fillStyle = '#caf0f8';
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(32, 6);
+  ctx.lineTo(54, 26);
+  ctx.lineTo(32, 30);
+  ctx.closePath();
+  ctx.fillStyle = '#90e0ef';
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(10, 26);
+  ctx.lineTo(32, 30);
+  ctx.lineTo(32, 58);
+  ctx.closePath();
+  ctx.fillStyle = '#0077b6';
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(54, 26);
+  ctx.lineTo(32, 58);
+  ctx.lineTo(32, 30);
+  ctx.closePath();
+  ctx.fillStyle = '#023e8a';
+  ctx.fill();
+
+  // Блик
+  ctx.beginPath();
+  ctx.arc(28, 22, 3, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+
+  return new THREE.CanvasTexture(canvas);
+}
+
+function createBossStumpModel(): { group: THREE.Group; eyesMat: THREE.MeshBasicMaterial } {
+  const group = new THREE.Group();
+
+  const trunkGeo = new THREE.CylinderGeometry(1.6, 2.2, 2.2, 8);
+  const trunkMat = new THREE.MeshLambertMaterial({ color: 0x3d2314, flatShading: true });
+  const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+  trunk.position.y = 1.1;
+  group.add(trunk);
+
+  const cutGeo = new THREE.CylinderGeometry(1.55, 1.55, 0.1, 8);
+  const cutMat = new THREE.MeshLambertMaterial({ color: 0x8a6240, flatShading: true });
+  const cut = new THREE.Mesh(cutGeo, cutMat);
+  cut.position.y = 2.22;
+  group.add(cut);
+
+  const rootGeo = new THREE.BoxGeometry(0.8, 0.7, 1.6);
+  const rootMat = new THREE.MeshLambertMaterial({ color: 0x2b180d, flatShading: true });
+  for (let i = 0; i < 5; i++) {
+    const angle = (i * Math.PI * 2) / 5;
+    const root = new THREE.Mesh(rootGeo, rootMat);
+    root.position.set(Math.cos(angle) * 1.8, 0.35, Math.sin(angle) * 1.8);
+    root.rotation.y = angle;
+    root.rotation.x = 0.2;
+    group.add(root);
+  }
+
+  const hollowGeo = new THREE.BoxGeometry(0.9, 0.6, 0.4);
+  const hollowMat = new THREE.MeshBasicMaterial({ color: 0x0a0503 });
+  const hollow = new THREE.Mesh(hollowGeo, hollowMat);
+  hollow.position.set(0, 1.3, -1.9);
+  group.add(hollow);
+
+  const eyesMat = new THREE.MeshBasicMaterial({ color: 0xff0033 });
+  const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.14, 5, 5), eyesMat);
+  eyeL.position.set(-0.25, 1.32, -1.95);
+  const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.14, 5, 5), eyesMat);
+  eyeR.position.set(0.25, 1.32, -1.95);
+  group.add(eyeL, eyeR);
+
+  group.visible = false;
+  return { group, eyesMat };
+}
+
+interface ActiveDamageNumber {
+  el: HTMLDivElement;
+  worldX: number;
+  worldY: number;
+  worldZ: number;
+  elapsed: number;
+  duration: number;
+  vy: number;
+}
+
 class SuperwalkApp {
   private session: Session;
   private renderer: THREE.WebGLRenderer;
@@ -40,6 +164,8 @@ class SuperwalkApp {
   private camera: THREE.PerspectiveCamera;
   private input: Input;
   private world: WorldData;
+  private damageLayer: HTMLElement;
+  private activeDamageNumbers: ActiveDamageNumber[] = [];
 
   private paused = false;
   private debug = false;
@@ -52,12 +178,23 @@ class SuperwalkApp {
     grounded: true,
     yaw: 0,
   };
+  private playerParams: PlayerParams = { ...DEFAULT_PLAYER_PARAMS };
   private runTime = 0;
+
+  // Инвентарь и карточки прокачки
+  private inventory: PlayerInventory = createInitialInventory();
+  private upgradeModalOpen = false;
+  private currentUpgradeChoices: UpgradeOption[] = [];
+
+  // Окно Tab (карта и характеристики)
+  private tabModalOpen = false;
+  private activeTab: 'map' | 'stats' = 'map';
 
   // Боевая система и мобы
   private combatState: CombatState;
   private spawnTimer = 0;
   private prngSeed = 42;
+  private bossSpawned = false;
 
   // Меши мобов, снарядов и кристаллов (InstancedMesh)
   private mushletStemMesh: THREE.InstancedMesh;
@@ -67,14 +204,26 @@ class SuperwalkApp {
   private owlBodyMesh: THREE.InstancedMesh;
   private owlEyesMesh: THREE.InstancedMesh;
   private projMesh: THREE.InstancedMesh;
+  private sparkProjMesh: THREE.InstancedMesh;
   private gemMesh: THREE.InstancedMesh;
+  private beamMesh: THREE.InstancedMesh;
+
+  // 3D-модель босса Старый Пень
+  private bossGroup: THREE.Group;
+  private bossEyesMat: THREE.MeshBasicMaterial;
 
   // Эффект взмаха хвостом (tail_blade)
   private slashMesh: THREE.Mesh;
   private slashMat: THREE.MeshBasicMaterial;
   private slashTimer = 0;
 
+  // Эффект выстрела пращи (spark_sling)
+  private sparkFlashMesh: THREE.Mesh;
+  private sparkFlashMat: THREE.MeshBasicMaterial;
+  private sparkFlashTimer = 0;
+
   private mobDummy = new THREE.Object3D();
+  private tempDmgVec = new THREE.Vector3();
   private flashColor = new THREE.Color();
   private defaultBeetleColor = new THREE.Color(0x1d3557);
 
@@ -400,17 +549,40 @@ class SuperwalkApp {
     this.projMesh.count = 0;
     this.projMesh.frustumCulled = false;
 
-    // Кристаллики опыта
-    const gGeo = new THREE.OctahedronGeometry(0.22, 0);
-    const gMat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
+    // Снаряды искровой пращи лиса (spark_sling)
+    const spGeo = new THREE.SphereGeometry(0.28, 6, 6);
+    const spMat = new THREE.MeshBasicMaterial({ color: 0xffea00 });
+    this.sparkProjMesh = new THREE.InstancedMesh(spGeo, spMat, 40);
+    this.sparkProjMesh.count = 0;
+    this.sparkProjMesh.frustumCulled = false;
+
+    // Кристаллики опыта: 2D-спрайты (биллборды LEGO-стиль с процедурной текстурой кристалла)
+    const gemTex = createGemTexture();
+    const gGeo = new THREE.PlaneGeometry(0.48, 0.48);
+    const gMat = new THREE.MeshBasicMaterial({
+      map: gemTex,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
     this.gemMesh = new THREE.InstancedMesh(gGeo, gMat, maxGems);
     this.gemMesh.count = 0;
     this.gemMesh.frustumCulled = false;
-    const defaultGemCol = new THREE.Color(0x48cae4);
-    for (let i = 0; i < maxGems; i++) {
-      this.gemMesh.setColorAt(i, defaultGemCol);
-    }
-    if (this.gemMesh.instanceColor) this.gemMesh.instanceColor.needsUpdate = true;
+
+    // Телеграфные лучи хитскана совят
+    const bBeamGeo = new THREE.CylinderGeometry(0.04, 0.04, 1, 6);
+    bBeamGeo.rotateX(Math.PI / 2);
+    const bBeamMat = new THREE.MeshBasicMaterial({ color: 0xff0055, transparent: true, opacity: 0.75, depthWrite: false });
+    this.beamMesh = new THREE.InstancedMesh(bBeamGeo, bBeamMat, 20);
+    this.beamMesh.count = 0;
+    this.beamMesh.frustumCulled = false;
+
+    // 3D-модель босса Старый Пень
+    const bossModel = createBossStumpModel();
+    this.bossGroup = bossModel.group;
+    this.bossEyesMat = bossModel.eyesMat;
+    this.bossGroup.visible = false;
+    this.scene.add(this.bossGroup);
 
     this.scene.add(
       this.mushletStemMesh,
@@ -420,14 +592,18 @@ class SuperwalkApp {
       this.owlBodyMesh,
       this.owlEyesMesh,
       this.projMesh,
+      this.sparkProjMesh,
       this.gemMesh,
+      this.beamMesh,
     );
 
-    // Эффект удара tail_blade (сектор 120°, 2.8 м)
-    const slashGeo = new THREE.RingGeometry(1.6, 2.8, 16, 1, -Math.PI / 3, (120 * Math.PI) / 180);
+    // Эффект удара tail_blade (дуга сзади лиса в сторону +Z, растет с уровнем до 360°)
+    const initialArc = (120 * Math.PI) / 180;
+    const initialThetaStart = -Math.PI / 2 - initialArc / 2;
+    const slashGeo = new THREE.RingGeometry(1.6, 2.9, 28, 1, initialThetaStart, initialArc);
     slashGeo.rotateX(-Math.PI / 2);
     this.slashMat = new THREE.MeshBasicMaterial({
-      color: 0xffb703,
+      color: 0xffa500,
       transparent: true,
       opacity: 0,
       side: THREE.DoubleSide,
@@ -437,14 +613,29 @@ class SuperwalkApp {
     this.slashMesh.visible = false;
     this.scene.add(this.slashMesh);
 
+    // Вспышка выстрела spark_sling
+    const sfGeo = new THREE.RingGeometry(0.15, 0.75, 12);
+    sfGeo.rotateX(-Math.PI / 2);
+    this.sparkFlashMat = new THREE.MeshBasicMaterial({
+      color: 0xffea00,
+      transparent: true,
+      opacity: 0,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    this.sparkFlashMesh = new THREE.Mesh(sfGeo, this.sparkFlashMat);
+    this.sparkFlashMesh.visible = false;
+    this.scene.add(this.sparkFlashMesh);
+
+    this.damageLayer = $('damage-layer');
+
     // 8. Контроллер ввода (ПК и телефон)
     this.input = new Input(this.renderer.domElement, {
       pause: () => this.openMenu(),
       lockLost: () => {
+        // Потеря Pointer Lock не открывает меню и не ставит игру на автопаузу (удобный альттаб)
         if (performance.now() - this.fullscreenExitAt < 700) {
           toast('Полный экран выключен — кликни, чтобы продолжить', 2500);
-        } else {
-          this.openMenu();
         }
       },
       gesture: () => undefined,
@@ -456,6 +647,8 @@ class SuperwalkApp {
 
     $('mode').textContent = session.mode === 'hub' ? 'в хабе' : 'без хаба';
     $('best').textContent = best === null ? '-' : String(best);
+
+    this.updateInventoryHud();
 
     new ResizeObserver(() => this.resize()).observe($('app'));
     this.resize();
@@ -470,6 +663,12 @@ class SuperwalkApp {
     $('btn-resume').addEventListener('click', () => this.closeMenu());
     $('btn-debug-toggle').addEventListener('click', () => this.toggleDebug());
 
+    $('btn-skip-upgrade').addEventListener('click', () => this.skipUpgrade());
+    $('btn-tab').addEventListener('click', () => this.toggleTabModal());
+    $('tab-btn-close').addEventListener('click', () => this.closeTabModal());
+    $('tab-btn-map').addEventListener('click', () => this.switchTab('map'));
+    $('tab-btn-stats').addEventListener('click', () => this.switchTab('stats'));
+
     if (document.fullscreenEnabled) {
       $('btn-fs').hidden = false;
       $('btn-menu-fs').hidden = false;
@@ -483,8 +682,50 @@ class SuperwalkApp {
     }
 
     window.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (this.upgradeModalOpen) {
+        if (e.code === 'Digit1' || e.code === 'Numpad1') {
+          e.preventDefault();
+          this.chooseUpgrade(0);
+          return;
+        }
+        if (e.code === 'Digit2' || e.code === 'Numpad2') {
+          e.preventDefault();
+          this.chooseUpgrade(1);
+          return;
+        }
+        if (e.code === 'Digit3' || e.code === 'Numpad3') {
+          e.preventDefault();
+          this.chooseUpgrade(2);
+          return;
+        }
+        if (e.code === 'Digit0' || e.code === 'Numpad0' || e.code === 'Space') {
+          e.preventDefault();
+          this.skipUpgrade();
+          return;
+        }
+      }
+
+      if (e.code === 'Tab') {
+        e.preventDefault();
+        if (!e.repeat && !this.tabModalOpen && !this.upgradeModalOpen) {
+          this.openTabModal();
+        }
+        return;
+      }
+
+      if (e.code === 'KeyB' && !this.tabModalOpen && !this.upgradeModalOpen) {
+        this.bossSpawned = true;
+        spawnMobInRing(this.combatState, this.playerState.x, this.playerState.z, 'old_stump', this.runTime, () => 0.5);
+        toast('БОСС призван клавишей B!', 2500, 'ok');
+        return;
+      }
+
       if (e.code === 'Escape') {
         e.preventDefault();
+        if (this.tabModalOpen) {
+          this.closeTabModal();
+          return;
+        }
         if (performance.now() - this.fullscreenExitAt < 700) {
           toast('Полный экран выключен', 2000);
         } else {
@@ -492,6 +733,225 @@ class SuperwalkApp {
         }
       }
     });
+
+    // Удержание Tab (Hold-to-open): при отпускании клавиши окно автоматически закрывается
+    window.addEventListener('keyup', (e) => {
+      if (e.code === 'Tab') {
+        e.preventDefault();
+        if (this.tabModalOpen && !this.upgradeModalOpen) {
+          this.closeTabModal();
+        }
+      }
+    });
+  }
+
+  private openUpgradeModal(): void {
+    if (this.upgradeModalOpen) return;
+    this.upgradeModalOpen = true;
+    this.paused = true;
+    if (this.tabModalOpen) {
+      this.closeTabModal(false);
+    }
+    this.input.active = false;
+    this.input.unlock();
+
+    this.currentUpgradeChoices = rollUpgradeChoices(this.inventory);
+    const container = $('upgrade-cards');
+    container.innerHTML = '';
+
+    for (let i = 0; i < this.currentUpgradeChoices.length; i++) {
+      const choice = this.currentUpgradeChoices[i]!;
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = `gf-card gf-card--${choice.kind}`;
+
+      const kindName = choice.kind === 'weapon' ? '⚔ Оружие' : choice.kind === 'tome' ? '📖 Фолиант' : '✨ Бонус';
+      const levelText = choice.isNew
+        ? '<span class="gf-card__level gf-card__level--new">НОВОЕ! (+ слот)</span>'
+        : `<span class="gf-card__level">Ур. ${choice.currentLevel} → ${choice.nextLevel}</span>`;
+
+      card.innerHTML = `
+        <div class="gf-card__top">
+          <span class="gf-card__badge">${kindName}</span>
+          <span class="gf-card__key">[${i + 1}]</span>
+        </div>
+        <div class="gf-card__title">${choice.name}</div>
+        ${levelText}
+        <p class="gf-card__desc">${choice.description}</p>
+      `;
+
+      card.addEventListener('click', () => this.chooseUpgrade(i));
+      container.appendChild(card);
+    }
+
+    $('upgrade-modal').hidden = false;
+  }
+
+  private chooseUpgrade(idx: number): void {
+    if (!this.upgradeModalOpen) return;
+    const choice = this.currentUpgradeChoices[idx];
+    if (!choice) return;
+
+    const res = applyUpgrade(this.inventory, choice.id);
+
+    // Синхронизируем состояние боя
+    this.combatState.hasteLevel = this.inventory.tomes.get('tome_haste') ?? 0;
+    this.combatState.mightLevel = this.inventory.tomes.get('tome_might') ?? 0;
+
+    for (const [wId, lvl] of this.inventory.weapons.entries()) {
+      let existing = this.combatState.weapons.find((w) => w.id === wId);
+      if (!existing) {
+        existing = { id: wId, level: lvl, cooldownTimer: 0.1 };
+        this.combatState.weapons.push(existing);
+      } else {
+        existing.level = lvl;
+      }
+    }
+
+    if (choice.id === 'tail_blade') {
+      this.updateSlashGeometry(this.inventory.weapons.get('tail_blade') ?? 1);
+    }
+
+    if (res.hpGain > 0) {
+      this.combatState.heroMaxHp += res.hpGain;
+      this.combatState.heroHp = Math.min(this.combatState.heroMaxHp, this.combatState.heroHp + res.hpGain);
+    }
+
+    if (res.speedMultiplier !== 1.0) {
+      this.playerParams.speed *= res.speedMultiplier;
+    }
+
+    this.updateInventoryHud();
+
+    this.combatState.pendingLevelUps = Math.max(0, this.combatState.pendingLevelUps - 1);
+    toast(`Выбрано: ${choice.name}`, 1800, 'ok');
+
+    $('upgrade-modal').hidden = true;
+    this.upgradeModalOpen = false;
+
+    if (this.combatState.pendingLevelUps > 0) {
+      this.openUpgradeModal();
+    } else {
+      this.paused = false;
+      this.input.active = true;
+      this.input.lock(); // Мгновенный возврат захвата мыши без лишнего клика
+    }
+  }
+
+  private skipUpgrade(): void {
+    if (!this.upgradeModalOpen) return;
+    this.combatState.pendingLevelUps = Math.max(0, this.combatState.pendingLevelUps - 1);
+    toast('Прокачка пропущена', 1500);
+
+    $('upgrade-modal').hidden = true;
+    this.upgradeModalOpen = false;
+
+    if (this.combatState.pendingLevelUps > 0) {
+      this.openUpgradeModal();
+    } else {
+      this.paused = false;
+      this.input.active = true;
+      this.input.lock(); // Мгновенный возврат захвата мыши
+    }
+  }
+
+  private toggleTabModal(): void {
+    if (this.upgradeModalOpen) return;
+    if (this.tabModalOpen) {
+      this.closeTabModal();
+    } else {
+      this.openTabModal();
+    }
+  }
+
+  private openTabModal(): void {
+    if (this.upgradeModalOpen) return;
+    this.tabModalOpen = true;
+    $('tab-modal').hidden = false;
+    // Игра НЕ встает на паузу, движение персонажа на WASD остается активным!
+    this.input.unlock(); // Освобождаем мышь для работы с меню
+    this.updateTabStats();
+  }
+
+  private closeTabModal(restorePointerLock = true): void {
+    if (!this.tabModalOpen) return;
+    this.tabModalOpen = false;
+    $('tab-modal').hidden = true;
+    if (restorePointerLock && !this.paused && !this.upgradeModalOpen) {
+      this.input.lock(); // Возвращаем фокус мыши только если игра продолжается
+    }
+  }
+
+  private switchTab(tab: 'map' | 'stats'): void {
+    this.activeTab = tab;
+    if (tab === 'map') {
+      $('tab-btn-map').className = 'gf-tab-nav__btn gf-tab-nav__btn--active';
+      $('tab-btn-stats').className = 'gf-tab-nav__btn';
+      $('tab-pane-map').hidden = false;
+      $('tab-pane-stats').hidden = true;
+    } else {
+      $('tab-btn-map').className = 'gf-tab-nav__btn';
+      $('tab-btn-stats').className = 'gf-tab-nav__btn gf-tab-nav__btn--active';
+      $('tab-pane-map').hidden = true;
+      $('tab-pane-stats').hidden = false;
+      this.updateTabStats();
+    }
+  }
+
+  private updateTabStats(): void {
+    const grid = $('tab-stats-grid');
+    grid.innerHTML = '';
+
+    const cs = this.combatState;
+    const inv = this.inventory;
+
+    const stats = [
+      { label: 'Здоровье лиса', val: `${Math.ceil(cs.heroHp)} / ${cs.heroMaxHp} HP`, sub: 'База 100 HP + чай' },
+      { label: 'Скорость бега', val: `${this.playerParams.speed.toFixed(1)} м/с`, sub: 'База 6.0 м/с' },
+      { label: 'Высота прыжка', val: '1.6 м', sub: 'Гравитация 24 м/с²' },
+      { label: 'Сила', val: `+${cs.mightLevel * 3} к урону всех ударов`, sub: `Фолиант силы (Ур.${cs.mightLevel})` },
+      { label: 'Спешка (скорость атаки)', val: `+${cs.hasteLevel * 12} %`, sub: `Фолиант быстроты (Ур.${cs.hasteLevel})` },
+      { label: 'Радиус сбора кристаллов', val: `${HERO_CONFIG.pickupRadius.toFixed(1)} м`, sub: 'Автомагнит' },
+      { label: 'Уровень героя', val: `Ур. ${cs.heroLevel}`, sub: `Опыт: ${cs.heroExp} / ${getRequiredExp(cs.heroLevel)}` },
+      { label: 'Побеждено мобов', val: `${cs.kills}`, sub: 'Счётчик забега' },
+      { label: 'Время выживания', val: `${Math.floor(this.runTime / 60)}:${Math.floor(this.runTime % 60).toString().padStart(2, '0')}`, sub: 'Цель: 10:00+' },
+    ];
+
+    for (const st of stats) {
+      const card = document.createElement('div');
+      card.className = 'gf-stat-card';
+      card.innerHTML = `
+        <span class="gf-stat-card__label">${st.label}</span>
+        <span class="gf-stat-card__val">${st.val}</span>
+        <span class="gf-stat-card__sub">${st.sub}</span>
+      `;
+      grid.appendChild(card);
+    }
+
+    // Активные оружия
+    for (const [wId, lvl] of inv.weapons.entries()) {
+      const cfg = WEAPON_CONFIGS[wId];
+      const card = document.createElement('div');
+      card.className = 'gf-stat-card';
+      card.innerHTML = `
+        <span class="gf-stat-card__label">Оружие: ${cfg.name}</span>
+        <span class="gf-stat-card__val">Уровень ${lvl} / 5</span>
+        <span class="gf-stat-card__sub">${cfg.description}</span>
+      `;
+      grid.appendChild(card);
+    }
+  }
+
+  private updateSlashGeometry(level: number): void {
+    const levelIdx = Math.max(0, Math.min(4, level - 1));
+    const cfg = WEAPON_CONFIGS.tail_blade;
+    const arc = cfg.sectorAngleByLevel ? (cfg.sectorAngleByLevel[levelIdx] ?? ((120 * Math.PI) / 180)) : ((120 * Math.PI) / 180);
+    const range = cfg.rangeByLevel[levelIdx] ?? 2.8;
+    const thetaStart = -Math.PI / 2 - arc / 2;
+
+    this.slashMesh.geometry.dispose();
+    this.slashMesh.geometry = new THREE.RingGeometry(1.6, range + 0.1, 28, 1, thetaStart, arc);
+    this.slashMesh.geometry.rotateX(-Math.PI / 2);
   }
 
   private isHostFullscreen(): boolean {
@@ -543,18 +1003,24 @@ class SuperwalkApp {
   }
 
   private toggleMenu(): void {
+    if (this.upgradeModalOpen) return;
     if (this.paused) this.closeMenu();
     else this.openMenu();
   }
 
   private openMenu(): void {
+    if (this.upgradeModalOpen) return;
     this.paused = true;
+    if (this.tabModalOpen) {
+      this.closeTabModal(false);
+    }
     this.input.active = false;
     this.input.unlock();
     $('menu').hidden = false;
   }
 
   private closeMenu(): void {
+    if (this.upgradeModalOpen) return;
     this.paused = false;
     this.input.active = true;
     $('menu').hidden = true;
@@ -622,7 +1088,7 @@ class SuperwalkApp {
           yaw: this.input.yaw,
         },
         dt,
-        undefined,
+        this.playerParams,
         this.world.obstacles,
         getTerrainHeight,
       );
@@ -676,6 +1142,14 @@ class SuperwalkApp {
 
       // 5. Спавн мобов волнами по расписанию (DESIGN.md)
       this.runTime += dt;
+
+      // Автоматический спавн босса "Старый Пень" на 8-й минуте (480 сек)
+      if (this.runTime >= 480 && !this.bossSpawned) {
+        this.bossSpawned = true;
+        spawnMobInRing(this.combatState, this.playerState.x, this.playerState.z, 'old_stump', this.runTime, () => 0.5);
+        toast('ДРЕВНИЙ ПЕНЬ ПРОБУДИЛСЯ!', 3500, 'err');
+      }
+
       const targetCount = getWaveTargetCount(this.runTime, this.input.touchMode);
       this.spawnTimer -= dt;
       if (this.spawnTimer <= 0 && this.combatState.mobs.length < targetCount) {
@@ -701,14 +1175,21 @@ class SuperwalkApp {
         getTerrainHeight,
       );
 
-      if (combatRes.leveledUp) {
-        toast(`Новый уровень ${this.combatState.heroLevel}!`, 1800, 'ok');
+      if ((combatRes.leveledUp || this.combatState.pendingLevelUps > 0) && !this.upgradeModalOpen) {
+        this.openUpgradeModal();
       }
 
       for (const atk of combatRes.attacks) {
         if (atk.weaponId === 'tail_blade') {
           this.triggerSlash(atk.x, atk.z, atk.facingYaw);
+        } else if (atk.weaponId === 'spark_sling') {
+          this.triggerSparkFlash(atk.x, atk.z);
         }
+      }
+
+      // Всплывающие цифры урона над врагами и героем
+      for (const popup of combatRes.damagePopups) {
+        this.showDamageNumber(popup.x, popup.y, popup.z, popup.damage, popup.isCrit, popup.isHero);
       }
 
       if (this.slashTimer > 0) {
@@ -716,6 +1197,14 @@ class SuperwalkApp {
         this.slashMat.opacity = Math.max(0, this.slashTimer / 0.16) * 0.9;
         if (this.slashTimer <= 0) {
           this.slashMesh.visible = false;
+        }
+      }
+
+      if (this.sparkFlashTimer > 0) {
+        this.sparkFlashTimer -= dt;
+        this.sparkFlashMat.opacity = Math.max(0, this.sparkFlashTimer / 0.12) * 0.9;
+        if (this.sparkFlashTimer <= 0) {
+          this.sparkFlashMesh.visible = false;
         }
       }
 
@@ -813,7 +1302,63 @@ class SuperwalkApp {
       this.owlBodyMesh.instanceMatrix.needsUpdate = true;
       this.owlEyesMesh.instanceMatrix.needsUpdate = true;
 
-      // Отрисовка снарядов
+      // Отрисовка босса Старый Пень и Boss HUD
+      const bossMob = this.combatState.mobs.find((m) => m.type === 'old_stump');
+      if (bossMob) {
+        this.bossGroup.position.set(bossMob.x, bossMob.y, bossMob.z);
+        const bdx = this.playerState.x - bossMob.x;
+        const bdz = this.playerState.z - bossMob.z;
+        this.bossGroup.rotation.y = Math.atan2(-bdx, -bdz);
+        this.bossGroup.visible = true;
+
+        const eyePulse = 0.6 + Math.sin(this.runTime * 6) * 0.4;
+        this.bossEyesMat.color.setRGB(1.0, 0.1 * eyePulse, 0.1 * eyePulse);
+
+        const bossHud = document.getElementById('boss-hud');
+        if (bossHud) bossHud.hidden = false;
+        const bHp = Math.max(0, bossMob.hp);
+        const bPct = Math.max(0, Math.min(100, (bHp / bossMob.maxHp) * 100));
+        const bossBar = document.getElementById('boss-hp-fill');
+        if (bossBar) bossBar.style.width = `${bPct}%`;
+        const bossHpText = document.getElementById('boss-hp-text');
+        if (bossHpText) bossHpText.textContent = `${bHp} / ${bossMob.maxHp} HP`;
+      } else {
+        this.bossGroup.visible = false;
+        const bossHud = document.getElementById('boss-hud');
+        if (bossHud) bossHud.hidden = true;
+      }
+
+      // Отрисовка телеграфных лазерных лучей совят
+      const beamCount = Math.min(this.combatState.beams.length, 20);
+      for (let i = 0; i < beamCount; i++) {
+        const b = this.combatState.beams[i]!;
+        const halfLen = b.length * 0.5;
+        const midX = b.startX + b.dirX * halfLen;
+        const midY = b.startY + b.dirY * halfLen;
+        const midZ = b.startZ + b.dirZ * halfLen;
+
+        dummy.position.set(midX, midY, midZ);
+        dummy.lookAt(b.startX + b.dirX * b.length, b.startY + b.dirY * b.length, b.startZ + b.dirZ * b.length);
+
+        if (b.timer > 0.4) {
+          // Фаза 1 (прицеливание): Тонкий пульсирующий прицельный лазер
+          const aimPulse = 0.08 + Math.sin(this.runTime * 22) * 0.02;
+          dummy.scale.set(aimPulse, aimPulse, b.length);
+        } else {
+          // Фаза 2 (фиксация и зарядка перед выстрелом):
+          // Луч намертво зафиксирован в пространстве, резко утолщается и мерцает неоновым огнем
+          const chargeProgress = Math.max(0, 1.0 - b.timer / 0.4);
+          const flicker = Math.sin(this.runTime * 50) * 0.08;
+          const thickness = 0.28 + chargeProgress * 0.42 + flicker;
+          dummy.scale.set(thickness, thickness, b.length);
+        }
+        dummy.updateMatrix();
+        this.beamMesh.setMatrixAt(i, dummy.matrix);
+      }
+      this.beamMesh.count = beamCount;
+      this.beamMesh.instanceMatrix.needsUpdate = true;
+
+      // Отрисовка снарядов врагов
       const projCount = Math.min(this.combatState.projectiles.length, 60);
       for (let i = 0; i < projCount; i++) {
         const p = this.combatState.projectiles[i]!;
@@ -826,16 +1371,29 @@ class SuperwalkApp {
       this.projMesh.count = projCount;
       this.projMesh.instanceMatrix.needsUpdate = true;
 
-      // Отрисовка кристалликов опыта
+      // Отрисовка искр героя (spark_sling)
+      const heroProjCount = Math.min(this.combatState.heroProjectiles.length, 40);
+      for (let i = 0; i < heroProjCount; i++) {
+        const hp = this.combatState.heroProjectiles[i]!;
+        dummy.position.set(hp.x, hp.y, hp.z);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        this.sparkProjMesh.setMatrixAt(i, dummy.matrix);
+      }
+      this.sparkProjMesh.count = heroProjCount;
+      this.sparkProjMesh.instanceMatrix.needsUpdate = true;
+
+      // Отрисовка кристалликов опыта (биллборд-спрайты)
       const gemCount = Math.min(this.combatState.gems.length, 250);
       for (let i = 0; i < gemCount; i++) {
         const g = this.combatState.gems[i]!;
-        const rotY = (this.runTime * 2.5) + g.id;
-        const scale = g.type === 'large' ? 1.5 : g.type === 'medium' ? 1.1 : 0.8;
+        const bob = Math.sin((this.runTime * 4) + g.id) * 0.08;
+        const scale = g.type === 'large' ? 1.6 : g.type === 'medium' ? 1.2 : 0.9;
         const colorHex = g.type === 'large' ? 0xffd166 : g.type === 'medium' ? 0x0077b6 : 0x48cae4;
 
-        dummy.position.set(g.x, g.y, g.z);
-        dummy.rotation.set(0, rotY, 0);
+        dummy.position.set(g.x, g.y + bob + 0.25, g.z);
+        dummy.quaternion.copy(this.camera.quaternion);
         dummy.scale.set(scale, scale, scale);
         dummy.updateMatrix();
         this.gemMesh.setMatrixAt(i, dummy.matrix);
@@ -861,12 +1419,106 @@ class SuperwalkApp {
       const reqExp = getRequiredExp(this.combatState.heroLevel);
       const expPct = Math.max(0, Math.min(100, (this.combatState.heroExp / reqExp) * 100));
       $('exp-bar-fill').style.width = `${expPct}%`;
+
+      if (this.tabModalOpen && this.activeTab === 'stats' && this.frameCount % 8 === 0) {
+        this.updateTabStats();
+      }
     }
+
+    // Покадровое обновление всплывающих цифр урона с привязкой к 3D-миру
+    this.updateDamageNumbers(this.paused ? 0 : dt);
 
     this.renderer.render(this.scene, this.camera);
 
     if (this.debug && this.frameCount % 10 === 0) {
       this.updateDebug();
+    }
+  }
+
+  private showDamageNumber(
+    x: number,
+    y: number,
+    z: number,
+    damage: number,
+    isCrit = false,
+    isHero = false,
+  ): void {
+    if (this.activeDamageNumbers.length >= 45) {
+      const oldest = this.activeDamageNumbers.shift();
+      if (oldest) oldest.el.remove();
+    }
+
+    const el = document.createElement('div');
+    const heroCls = isHero ? ' gf-damage-number--hero' : '';
+    const critCls = isCrit ? ' gf-damage-number--crit' : '';
+    el.className = `gf-damage-number${heroCls}${critCls}`;
+    el.textContent = `${isCrit ? '💥 ' : ''}${damage}`;
+    el.style.display = 'none'; // Будет спозиционирован в updateDamageNumbers
+    this.damageLayer.appendChild(el);
+
+    const worldX = x + (Math.random() - 0.5) * 0.45;
+    const worldY = y + 0.35 + (Math.random() - 0.5) * 0.2;
+    const worldZ = z + (Math.random() - 0.5) * 0.45;
+
+    this.activeDamageNumbers.push({
+      el,
+      worldX,
+      worldY,
+      worldZ,
+      elapsed: 0,
+      duration: 0.8,
+      vy: 1.25, // скорость всплытия в 3D мире (м/с)
+    });
+  }
+
+  private updateDamageNumbers(dt: number): void {
+    if (this.activeDamageNumbers.length === 0) return;
+
+    const halfW = window.innerWidth / 2;
+    const halfH = window.innerHeight / 2;
+
+    for (let i = this.activeDamageNumbers.length - 1; i >= 0; i--) {
+      const item = this.activeDamageNumbers[i]!;
+      item.elapsed += dt;
+
+      if (item.elapsed >= item.duration) {
+        item.el.remove();
+        this.activeDamageNumbers.splice(i, 1);
+        continue;
+      }
+
+      // Физическое всплытие точки урона в 3D пространстве мира
+      item.worldY += item.vy * dt;
+
+      // Покадровая проекция на камеру Three.js
+      this.tempDmgVec.set(item.worldX, item.worldY, item.worldZ);
+      this.tempDmgVec.project(this.camera);
+
+      // Если позади плоскости камеры (z > 1)
+      if (this.tempDmgVec.z > 1.0) {
+        item.el.style.display = 'none';
+        continue;
+      }
+
+      const screenX = (this.tempDmgVec.x * halfW) + halfW;
+      const screenY = -(this.tempDmgVec.y * halfH) + halfH;
+
+      if (screenX < -50 || screenX > window.innerWidth + 50 || screenY < -50 || screenY > window.innerHeight + 50) {
+        item.el.style.display = 'none';
+        continue;
+      }
+
+      const progress = item.elapsed / item.duration;
+      const opacity = progress > 0.65 ? Math.max(0, 1.0 - (progress - 0.65) / 0.35) : 1.0;
+      const scale = progress < 0.2
+        ? 0.75 + (progress / 0.2) * 0.45
+        : Math.max(0.7, 1.2 - (progress - 0.2) * 0.35);
+
+      item.el.style.display = 'block';
+      item.el.style.left = `${screenX}px`;
+      item.el.style.top = `${screenY}px`;
+      item.el.style.opacity = `${opacity.toFixed(2)}`;
+      item.el.style.transform = `translate(-50%, -50%) scale(${scale.toFixed(2)})`;
     }
   }
 
@@ -879,18 +1531,51 @@ class SuperwalkApp {
     this.slashMat.opacity = 0.9;
   }
 
+  private triggerSparkFlash(x: number, z: number): void {
+    this.sparkFlashTimer = 0.12;
+    const y = getTerrainHeight(x, z);
+    this.sparkFlashMesh.position.set(x, y + 0.45, z);
+    this.sparkFlashMesh.visible = true;
+    this.sparkFlashMat.opacity = 0.9;
+  }
+
+  private updateInventoryHud(): void {
+    const container = $('inv-slots');
+    container.innerHTML = '';
+
+    for (const [wId, lvl] of this.inventory.weapons.entries()) {
+      const cfg = WEAPON_CONFIGS[wId];
+      const badge = document.createElement('span');
+      badge.className = 'gf-inv-badge gf-inv-badge--weapon';
+      badge.innerHTML = `⚔ ${cfg.name} <b>Ур.${lvl}</b>`;
+      badge.title = `${cfg.name} (Ур.${lvl}): ${cfg.description}`;
+      container.appendChild(badge);
+    }
+
+    for (const [tId, lvl] of this.inventory.tomes.entries()) {
+      const cfg = TOME_CONFIGS[tId];
+      const badge = document.createElement('span');
+      badge.className = 'gf-inv-badge gf-inv-badge--tome';
+      badge.innerHTML = `📖 ${cfg.name} <b>Ур.${lvl}</b>`;
+      badge.title = `${cfg.name} (Ур.${lvl}): ${cfg.description}`;
+      container.appendChild(badge);
+    }
+  }
+
   private updateDebug(): void {
     const info = this.renderer.info.render;
     const mem = this.renderer.info.memory;
     const el = this.renderer.domElement;
     const p = this.playerState;
     const cs = this.combatState;
+    const wpList = cs.weapons.map((w) => `${w.id}:${w.level}`).join(', ');
     $('debug').textContent = [
       `fps ${this.fps} · кадр ${this.perfAvgMs.toFixed(1)} мс, худший ${this.perfWorstMs.toFixed(0)} мс · рывков ${this.perfSlowPerSec}/с`,
       `экран ${el.width}×${el.height} · dpr ${this.renderer.getPixelRatio().toFixed(2)} · тач ${this.input.touchMode ? 'да' : 'нет'}`,
       `вызовов ${info.calls} · треугольников ${info.triangles} · геометрий ${mem.geometries}`,
       `xyz ${p.x.toFixed(1)} ${p.y.toFixed(1)} ${p.z.toFixed(1)} · vy ${p.vy.toFixed(1)} · земля ${p.grounded ? 'да' : 'нет'}`,
-      `мобов ${cs.mobs.length} · крист ${cs.gems.length} · снарядов ${cs.projectiles.length} · ур ${cs.heroLevel} · hp ${cs.heroHp}/${cs.heroMaxHp}`,
+      `мобов ${cs.mobs.length} · крист ${cs.gems.length} · снарядов ${cs.projectiles.length}+${cs.heroProjectiles.length} · ур ${cs.heroLevel} · hp ${cs.heroHp}/${cs.heroMaxHp}`,
+      `оружие [${wpList}] · сила ${cs.mightLevel} · ускор ${cs.hasteLevel} · скор ${this.playerParams.speed.toFixed(1)}`,
       `мышь ${this.input.mouseStats.events} соб/с · макс шаг ${this.input.mouseStats.maxStep} px`,
     ].join('\n');
   }

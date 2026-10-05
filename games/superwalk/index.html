@@ -27,9 +27,27 @@
       </span>
     </header>
 
+    <div id="damage-layer" class="gf-damage-layer"></div>
+
+    <div id="hud-inventory" class="gf-hud-inv" title="Активное снаряжение">
+      <div id="inv-slots" class="gf-inv-slots"></div>
+    </div>
+
+    <div id="boss-hud" class="gf-boss-hud" hidden>
+      <div class="gf-boss-hud__info">
+        <span class="gf-boss-hud__badge">БОСС</span>
+        <span class="gf-boss-hud__name">Старый Пень</span>
+        <span id="boss-hp-text" class="gf-boss-hud__hp">5000 / 5000</span>
+      </div>
+      <div class="gf-boss-hud__bar">
+        <div id="boss-hp-fill" class="gf-boss-hud__fill" style="width: 100%;"></div>
+      </div>
+    </div>
+
     <pre id="debug" hidden></pre>
 
     <div id="corner">
+      <button id="btn-tab" class="gf-icon-btn gf-icon-btn--hud" type="button" aria-label="Карта и характеристики (Tab)" title="Карта и характеристики (Tab)">📊</button>
       <button id="btn-fs" class="gf-icon-btn gf-icon-btn--hud" type="button" data-icon="fullscreen" aria-label="На весь экран" title="На весь экран" hidden></button>
       <button id="btn-menu" class="gf-icon-btn gf-icon-btn--hud" type="button" data-icon="menu" aria-label="Меню" title="Меню"></button>
     </div>
@@ -39,6 +57,54 @@
     <div id="touch" hidden>
       <div id="stick"><div id="knob"></div></div>
       <button id="btn-jump" class="gf-icon-btn gf-icon-btn--hud" type="button" data-icon="jump" aria-label="Прыжок" title="Прыжок"></button>
+    </div>
+
+    <div id="upgrade-modal" hidden>
+      <div class="gf-upgrade-panel" role="dialog" aria-label="Выбор улучшения">
+        <div class="gf-upgrade-header">
+          <h2 class="gf-upgrade-title">НОВЫЙ УРОВЕНЬ!</h2>
+        </div>
+        <div id="upgrade-cards" class="gf-upgrade-cards"></div>
+        <div class="gf-upgrade-footer">
+          <div class="gf-upgrade-hint">
+            <span>Нажми <b>1</b>, <b>2</b>, <b>3</b> или коснись карточки</span>
+          </div>
+          <button id="btn-skip-upgrade" type="button" class="gf-btn gf-btn--ghost gf-btn--sm">
+            <span>Пропустить улучшение [0 / Пробел]</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-modal" class="gf-tab-modal" hidden>
+      <div class="gf-tab-panel" role="dialog" aria-label="Карта и характеристики">
+        <div class="gf-tab-header">
+          <div class="gf-tab-nav">
+            <button id="tab-btn-map" type="button" class="gf-tab-nav__btn gf-tab-nav__btn--active">Карта арены</button>
+            <button id="tab-btn-stats" type="button" class="gf-tab-nav__btn">Характеристики лиса</button>
+          </div>
+          <button id="tab-btn-close" type="button" class="gf-tab-close" aria-label="Закрыть">✕</button>
+        </div>
+        <div id="tab-pane-map" class="gf-tab-pane gf-tab-pane--active">
+          <div class="gf-map-placeholder">
+            <div class="gf-map-radar">
+              <div class="gf-map-radar__circle"></div>
+              <div class="gf-map-radar__cross"></div>
+              <div class="gf-map-radar__fox" id="map-fox-marker">🦊</div>
+              <div class="gf-map-radar__tag">Солнечные холмы (R = 65 м)</div>
+            </div>
+            <p class="gf-map-desc">Разведка местности: холмы, скальные кольца и тайники в разработке</p>
+          </div>
+        </div>
+        <div id="tab-pane-stats" class="gf-tab-pane" hidden>
+          <div class="gf-stats-grid" id="tab-stats-grid">
+            <!-- Динамически заполняется списком характеристик -->
+          </div>
+        </div>
+        <div class="gf-tab-footer">
+          <span>Нажми <b>Tab</b>, чтобы закрыть окно и вернуть фокус камеры</span>
+        </div>
+      </div>
     </div>
 
     <div id="menu" hidden>

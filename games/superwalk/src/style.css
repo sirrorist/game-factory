@@ -252,6 +252,54 @@ button {
   opacity: 1 !important;
 }
 
+/* ---------- Инвентарь в HUD ---------- */
+.gf-hud-inv {
+  position: absolute;
+  left: calc(12px + var(--safe-l));
+  top: calc(50px + var(--safe-t));
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.gf-inv-slots {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.gf-inv-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-xs);
+  font: 700 11px/1 var(--font-display);
+  letter-spacing: 0.02em;
+  background: var(--hud);
+  border: 1px solid var(--hud-line);
+  color: var(--hud-ink);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.gf-inv-badge--weapon {
+  border-color: rgba(255, 122, 26, 0.5);
+  color: var(--brand);
+}
+.gf-inv-badge--tome {
+  border-color: rgba(72, 202, 228, 0.5);
+  color: #48cae4;
+}
+.gf-inv-badge b {
+  color: var(--coin);
+  font-variant-numeric: tabular-nums;
+}
+
 #corner {
   position: absolute;
   right: calc(12px + var(--safe-r));
@@ -265,7 +313,7 @@ button {
 #debug {
   position: absolute;
   left: calc(12px + var(--safe-l));
-  top: calc(72px + var(--safe-t));
+  top: calc(84px + var(--safe-t));
   margin: 0;
   padding: 8px 12px;
   color: var(--hud-ink);
@@ -435,5 +483,447 @@ button {
   color: var(--on-brand);
   background: var(--brand);
   transform: scale(0.92);
+}
+
+/* ---------- Окно выбора улучшений (Level Up) ---------- */
+#upgrade-modal {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--scrim);
+  backdrop-filter: blur(8px);
+  padding: calc(16px + var(--safe-t)) calc(16px + var(--safe-r)) calc(16px + var(--safe-b)) calc(16px + var(--safe-l));
+  z-index: 25;
+  overflow-y: auto;
+}
+
+.gf-upgrade-panel {
+  width: min(760px, 100%);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  background: var(--bg-100);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.75), 0 0 40px rgba(255, 122, 26, 0.15);
+  animation: gf-pop var(--dur-slow) var(--ease-spring) both;
+}
+
+.gf-upgrade-header {
+  text-align: center;
+}
+
+.gf-upgrade-title {
+  margin: 0;
+  font: 800 28px/1.1 var(--font-display);
+  letter-spacing: 0.04em;
+  color: var(--brand);
+  text-shadow: 0 2px 12px rgba(255, 122, 26, 0.5);
+  text-transform: uppercase;
+}
+
+.gf-upgrade-sub {
+  margin: 6px 0 0;
+  font: 600 14px/1 var(--font-body);
+  color: var(--ink-muted);
+}
+
+.gf-upgrade-cards {
+  display: flex;
+  gap: var(--space-3);
+  width: 100%;
+  justify-content: center;
+  align-items: stretch;
+}
+
+.gf-card {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: var(--space-4);
+  background: var(--bg-200);
+  border: 2px solid var(--line);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: left;
+  position: relative;
+  transition: transform var(--dur-base) var(--ease-spring),
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-spring),
+    background-color var(--dur-fast) var(--ease-out);
+}
+
+.gf-card:hover {
+  background: var(--bg-300);
+  border-color: var(--brand);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45), 0 0 20px rgba(255, 122, 26, 0.25);
+}
+
+.gf-card:active {
+  transform: translateY(2px) scale(0.98);
+  transition-duration: var(--dur-instant);
+}
+
+.gf-card:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.gf-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: var(--space-2);
+}
+
+.gf-card__badge {
+  font: 700 11px/1 var(--font-display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: var(--radius-xs);
+  background: var(--line);
+  color: var(--ink);
+}
+
+.gf-card--weapon .gf-card__badge {
+  background: rgba(255, 122, 26, 0.2);
+  color: var(--brand);
+  border: 1px solid rgba(255, 122, 26, 0.4);
+}
+
+.gf-card--tome .gf-card__badge {
+  background: rgba(72, 202, 228, 0.2);
+  color: #48cae4;
+  border: 1px solid rgba(72, 202, 228, 0.4);
+}
+
+.gf-card--fallback .gf-card__badge {
+  background: rgba(155, 215, 112, 0.2);
+  color: var(--grass);
+  border: 1px solid rgba(155, 215, 112, 0.4);
+}
+
+.gf-card__key {
+  font: 700 12px/1 var(--font-mono);
+  color: var(--ink-subtle);
+  background: var(--bg-100);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  padding: 3px 6px;
+}
+
+.gf-card__title {
+  margin: 0 0 4px;
+  font: 700 17px/1.2 var(--font-display);
+  color: var(--ink);
+}
+
+.gf-card__level {
+  font: 700 12px/1 var(--font-display);
+  color: var(--coin);
+  margin-bottom: var(--space-2);
+}
+
+.gf-card__level--new {
+  color: #48cae4;
+}
+
+.gf-card__desc {
+  margin: 0;
+  font: 13px/1.4 var(--font-body);
+  color: var(--ink-muted);
+  flex-grow: 1;
+}
+
+.gf-upgrade-hint {
+  font: 12px/1 var(--font-mono);
+  color: var(--ink-subtle);
+}
+.gf-upgrade-hint b {
+  color: var(--brand);
+}
+
+/* Вертикальная раскладка для портрета и узких экранов */
+@media (max-width: 680px), (orientation: portrait) {
+  .gf-upgrade-panel {
+    padding: var(--space-3);
+    gap: var(--space-2);
+  }
+  .gf-upgrade-title {
+    font-size: 22px;
+  }
+  .gf-upgrade-cards {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .gf-card {
+    padding: 12px 14px;
+  }
+  .gf-card__title {
+    font-size: 15px;
+  }
+  .gf-card__desc {
+    font-size: 12px;
+  }
+}
+
+/* ---------- Всплывающие цифры урона (Damage Layer) ---------- */
+.gf-damage-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 15;
+}
+.gf-damage-number {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font: 900 16px/1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  color: #ffd166;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 6px rgba(255, 122, 26, 0.5);
+  user-select: none;
+  pointer-events: none;
+  white-space: nowrap;
+  will-change: transform, opacity, left, top;
+}
+.gf-damage-number--hero {
+  color: #ff3366;
+  font-size: 18px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95), 0 0 8px rgba(255, 0, 50, 0.6);
+}
+.gf-damage-number--crit {
+  color: #ffaa00;
+  font-size: 20px;
+}
+
+/* ---------- Полоса здоровья босса (Boss HUD) ---------- */
+.gf-boss-hud {
+  position: absolute;
+  bottom: calc(14px + var(--safe-b));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(520px, calc(100vw - 32px));
+  padding: 8px 12px;
+  background: rgba(14, 18, 28, 0.88);
+  border: 1px solid rgba(230, 57, 70, 0.6);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6), 0 0 16px rgba(230, 57, 70, 0.25);
+  backdrop-filter: blur(8px);
+  z-index: 10;
+  pointer-events: none;
+}
+.gf-boss-hud__info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.gf-boss-hud__badge {
+  background: #e63946;
+  color: #ffffff;
+  font: 800 10px/1 var(--font-display);
+  padding: 3px 6px;
+  border-radius: var(--radius-xs);
+  letter-spacing: 0.08em;
+}
+.gf-boss-hud__name {
+  font: 700 14px/1 var(--font-display);
+  color: #f1faee;
+  flex-grow: 1;
+}
+.gf-boss-hud__hp {
+  font: 700 12px/1 var(--font-mono);
+  color: #ffccd5;
+  font-variant-numeric: tabular-nums;
+}
+.gf-boss-hud__bar {
+  width: 100%;
+  height: 12px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+.gf-boss-hud__fill {
+  height: 100%;
+  background: linear-gradient(90deg, #d90429, #9b5de5);
+  border-radius: var(--radius-pill);
+  transition: width 0.15s ease-out;
+}
+
+/* ---------- Оверлей Tab (Карта и характеристики) ---------- */
+.gf-tab-modal {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 10, 16, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  padding: var(--space-3);
+}
+.gf-tab-panel {
+  width: min(600px, 94vw);
+  max-height: 85vh;
+  background: rgba(18, 22, 34, 0.94);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.gf-tab-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+.gf-tab-nav {
+  display: flex;
+  gap: 8px;
+}
+.gf-tab-nav__btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--ink-muted);
+  font: 700 13px/1 var(--font-display);
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.gf-tab-nav__btn:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.05);
+}
+.gf-tab-nav__btn--active {
+  color: var(--ink);
+  background: var(--brand-ghost);
+  border-color: var(--brand-line);
+}
+.gf-tab-close {
+  background: transparent;
+  border: none;
+  color: var(--ink-muted);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-xs);
+}
+.gf-tab-close:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.1);
+}
+.gf-tab-pane {
+  padding: var(--space-4);
+  overflow-y: auto;
+  flex-grow: 1;
+}
+.gf-tab-footer {
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--line);
+  font: 11px/1 var(--font-mono);
+  color: var(--ink-subtle);
+  text-align: center;
+}
+.gf-map-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px 0;
+}
+.gf-map-radar {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  border: 2px dashed rgba(72, 202, 228, 0.5);
+  background: radial-gradient(circle, rgba(72, 202, 228, 0.08) 0%, rgba(0, 0, 0, 0.4) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gf-map-radar__circle {
+  position: absolute;
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  border: 1px solid rgba(72, 202, 228, 0.25);
+}
+.gf-map-radar__cross {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to right, transparent 49%, rgba(72, 202, 228, 0.2) 50%, transparent 51%),
+              linear-gradient(to bottom, transparent 49%, rgba(72, 202, 228, 0.2) 50%, transparent 51%);
+}
+.gf-map-radar__fox {
+  font-size: 24px;
+  z-index: 2;
+  filter: drop-shadow(0 0 6px rgba(255, 122, 26, 0.8));
+}
+.gf-map-radar__tag {
+  position: absolute;
+  bottom: -22px;
+  font: 600 11px/1 var(--font-mono);
+  color: #48cae4;
+  white-space: nowrap;
+}
+.gf-map-desc {
+  font: 13px/1.4 var(--font-body);
+  color: var(--ink-muted);
+  text-align: center;
+  max-width: 320px;
+  margin: 12px 0 0;
+}
+.gf-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.gf-stat-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.gf-stat-card__label {
+  font: 600 11px/1 var(--font-body);
+  color: var(--ink-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.gf-stat-card__val {
+  font: 700 16px/1.2 var(--font-display);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.gf-stat-card__sub {
+  font: 12px/1 var(--font-body);
+  color: var(--brand);
+}
+.gf-upgrade-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: var(--space-2);
 }
 

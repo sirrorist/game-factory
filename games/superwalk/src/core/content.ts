@@ -63,7 +63,7 @@ export const MOB_CONFIGS: Record<MobType, MobConfig> = {
   old_stump: {
     id: 'old_stump',
     name: 'Старый Пень (босс)',
-    baseHp: 2400,
+    baseHp: 5000,
     speed: 1.8,
     damage: 20,
     exp: 50,
@@ -106,18 +106,27 @@ export const WAVE_SCHEDULE: readonly WavePeriod[] = [
     endSec: 600, // 8:00 - 10:00 (босс)
     types: ['old_stump', 'mushlet', 'ram_beetle', 'spit_owl'],
     startTarget: 60,
-    endTarget: 60,
+    endTarget: 70,
+  },
+  {
+    startSec: 600,
+    endSec: 720, // 10:00 - 12:00 (овертайм: враги становятся сильнее и спавнятся до 100 одновременно)
+    types: ['old_stump', 'mushlet', 'ram_beetle', 'spit_owl'],
+    startTarget: 80,
+    endTarget: 100,
   },
 ];
 
-/** Потолок мобов одновременно на карте (DESIGN.md, раздел 5.4) */
+/** Потолок мобов одновременно на карте (DESIGN.md, раздел 5.4, овертайм до 100) */
 export const MAX_MOBS_TOUCH = 80;
 export const MAX_MOBS_DESKTOP = 150;
 
-/** Множитель здоровья мобов: растёт на 10% каждую полную минуту забега */
+/** Множитель здоровья мобов: растёт на 10% каждую полную минуту до 10 мин, далее +20%/мин */
 export function getMobHpMultiplier(runTimeSec: number): number {
-  const minutes = Math.floor(Math.max(0, runTimeSec) / 60);
-  return Math.pow(1.10, minutes);
+  const totalMinutes = Math.floor(Math.max(0, runTimeSec) / 60);
+  const regularMinutes = Math.min(totalMinutes, 10);
+  const extraMinutes = Math.max(0, totalMinutes - 10);
+  return Math.pow(1.10, regularMinutes) * Math.pow(1.20, extraMinutes);
 }
 
 /** Опыт до следующего уровня N: 5 + (N - 1) * 4 (DESIGN.md, раздел 5.5) */
@@ -144,27 +153,82 @@ export type WeaponType = 'tail_blade' | 'spark_sling';
 export interface WeaponConfig {
   id: WeaponType;
   name: string;
+  description: string;
   damageByLevel: readonly number[];
-  cooldownByLevel: readonly number[];
-  range: number;
+  cooldownSec: number;
+  rangeByLevel: readonly number[];
+  projectilesByLevel?: readonly number[];
+  projSpeed?: number;
   sectorAngle?: number;
+  sectorAngleByLevel?: readonly number[];
 }
 
 export const WEAPON_CONFIGS: Record<WeaponType, WeaponConfig> = {
   tail_blade: {
     id: 'tail_blade',
-    name: 'Взмах хвостом',
-    damageByLevel: [14, 18, 22, 26, 32],
-    cooldownByLevel: [1.1, 1.04, 0.98, 0.91, 0.85],
-    range: 2.8,
+    name: 'Хвост-клинок',
+    description: 'Взмах хвостом сзади (дуга растёт до кольца 360°)',
+    damageByLevel: [14, 18, 22, 26, 30],
+    cooldownSec: 0.9,
+    rangeByLevel: [2.8, 3.1, 3.4, 3.7, 4.0],
     sectorAngle: (120 * Math.PI) / 180,
+    sectorAngleByLevel: [
+      (120 * Math.PI) / 180,
+      (180 * Math.PI) / 180,
+      (240 * Math.PI) / 180,
+      (300 * Math.PI) / 180,
+      2 * Math.PI,
+    ],
   },
   spark_sling: {
     id: 'spark_sling',
-    name: 'Искромёт',
-    damageByLevel: [10, 13, 16, 20, 25],
-    cooldownByLevel: [1.4, 1.28, 1.17, 1.06, 0.95],
-    range: 14.0,
+    name: 'Искровая праща',
+    description: 'Снаряд в ближайшего врага',
+    damageByLevel: [9, 12, 15, 18, 21],
+    cooldownSec: 0.7,
+    rangeByLevel: [16.0, 16.0, 16.0, 16.0, 16.0],
+    projectilesByLevel: [1, 1, 2, 2, 3],
+    projSpeed: 22.0,
+  },
+};
+
+export type TomeType = 'tome_haste' | 'tome_might';
+
+export interface TomeConfig {
+  id: TomeType;
+  name: string;
+  description: string;
+}
+
+export const TOME_CONFIGS: Record<TomeType, TomeConfig> = {
+  tome_haste: {
+    id: 'tome_haste',
+    name: 'Фолиант быстроты',
+    description: '+12 % к скорости атаки всех оружий',
+  },
+  tome_might: {
+    id: 'tome_might',
+    name: 'Фолиант силы',
+    description: '+3 к силе каждого удара',
+  },
+};
+
+export interface FallbackBonusConfig {
+  id: 'heal_bonus' | 'speed_bonus';
+  name: string;
+  description: string;
+}
+
+export const FALLBACK_BONUSES: Record<'heal_bonus' | 'speed_bonus', FallbackBonusConfig> = {
+  heal_bonus: {
+    id: 'heal_bonus',
+    name: 'Лечебный чай',
+    description: '+20 к текущему и максимальному здоровью',
+  },
+  speed_bonus: {
+    id: 'speed_bonus',
+    name: 'Легконог',
+    description: '+5 % к скорости бега',
   },
 };
 

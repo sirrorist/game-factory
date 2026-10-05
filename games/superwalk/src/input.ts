@@ -45,6 +45,14 @@ export class Input {
     window.addEventListener('blur', () => this.releaseAll());
 
     document.addEventListener('pointerlockchange', () => {
+      if (!this.active && document.pointerLockElement) {
+        try {
+          document.exitPointerLock();
+        } catch {
+          // Игнорируем
+        }
+        return;
+      }
       if (this.locked || !this.active || this.touchMode) return;
       setTimeout(() => {
         if (!this.locked && this.active) this.ev.lockLost();
@@ -80,18 +88,29 @@ export class Input {
   }
 
   lock(): void {
-    if (this.touchMode || this.locked) return;
+    if (this.touchMode || this.locked || !this.active) return;
     const canvas = this.canvas as HTMLElement & {
       requestPointerLock(options?: { unadjustedMovement?: boolean }): Promise<void> | void;
     };
     try {
       const r = canvas.requestPointerLock({ unadjustedMovement: true });
       if (r instanceof Promise) {
-        r.then(() => (this.rawMouse = true)).catch((e: unknown) => {
+        r.then(() => {
+          this.rawMouse = true;
+          if (!this.active) {
+            this.unlock();
+          }
+        }).catch((e: unknown) => {
           if (e instanceof DOMException && e.name === 'NotSupportedError') {
             this.rawMouse = false;
             const again = canvas.requestPointerLock();
-            if (again instanceof Promise) again.catch(() => undefined);
+            if (again instanceof Promise) {
+              again
+                .then(() => {
+                  if (!this.active) this.unlock();
+                })
+                .catch(() => undefined);
+            }
           }
         });
       }
@@ -101,12 +120,12 @@ export class Input {
   }
 
   unlock(): void {
-    if (this.locked) {
-      try {
+    try {
+      if (document.pointerLockElement) {
         document.exitPointerLock();
-      } catch {
-        // Игнорируем
       }
+    } catch {
+      // Игнорируем
     }
   }
 
