@@ -232,3 +232,183 @@ export const FALLBACK_BONUSES: Record<'heal_bonus' | 'speed_bonus', FallbackBonu
   },
 };
 
+// --- Предметы из сундуков (DESIGN.md, раздел 5.3) ---
+
+export type ItemRarity = 'common' | 'rare' | 'epic' | 'legendary';
+
+export type ItemId =
+  // Обычные (5)
+  | 'acorn'
+  | 'swift_feather'
+  | 'magnet_pebble'
+  | 'burdock'
+  | 'lucky_paw'
+  // Редкие (4)
+  | 'fang'
+  | 'honeycomb'
+  | 'spring_boots'
+  | 'rage_totem'
+  // Очень редкие (3)
+  | 'storm_bead'
+  | 'mirror_bark'
+  | 'four_leaf'
+  // Легендарные (2)
+  | 'ninth_tail'
+  | 'phoenix_down';
+
+export interface ItemConfig {
+  id: ItemId;
+  name: string;
+  rarity: ItemRarity;
+  description: string;
+  /** Признак складываемости по ТЗ (пользователь: пока без ограничений на стак) */
+  stackable: boolean;
+  /** Иконка или эмодзи для HUD и карточек */
+  icon: string;
+}
+
+export const ITEM_CONFIGS: Record<ItemId, ItemConfig> = {
+  acorn: {
+    id: 'acorn',
+    name: 'Жёлудь',
+    rarity: 'common',
+    description: '+10 к максимальному здоровью',
+    stackable: true,
+    icon: '🌰',
+  },
+  swift_feather: {
+    id: 'swift_feather',
+    name: 'Перо стрижа',
+    rarity: 'common',
+    description: '+6 % к скорости бега',
+    stackable: true,
+    icon: '🪶',
+  },
+  magnet_pebble: {
+    id: 'magnet_pebble',
+    name: 'Магнитный камешек',
+    rarity: 'common',
+    description: '+20 % к радиусу подбора кристаллов',
+    stackable: true,
+    icon: '🧲',
+  },
+  burdock: {
+    id: 'burdock',
+    name: 'Лопух',
+    rarity: 'common',
+    description: '+0.4 здоровья в секунду',
+    stackable: true,
+    icon: '🌿',
+  },
+  lucky_paw: {
+    id: 'lucky_paw',
+    name: 'Заячья лапка',
+    rarity: 'common',
+    description: '+5 % к шансу крита (крит ×2)',
+    stackable: true,
+    icon: '🐾',
+  },
+  fang: {
+    id: 'fang',
+    name: 'Клык',
+    rarity: 'rare',
+    description: '+15 % к урону',
+    stackable: true,
+    icon: '🦷',
+  },
+  honeycomb: {
+    id: 'honeycomb',
+    name: 'Соты',
+    rarity: 'rare',
+    description: '+2 здоровья за убийство (до 10/с)',
+    stackable: true,
+    icon: '🍯',
+  },
+  spring_boots: {
+    id: 'spring_boots',
+    name: 'Пружинные башмаки',
+    rarity: 'rare',
+    description: '+1 прыжок в воздухе',
+    stackable: false,
+    icon: '👟',
+  },
+  rage_totem: {
+    id: 'rage_totem',
+    name: 'Тотем ярости',
+    rarity: 'rare',
+    description: '+25 % к урону при здоровье ниже 50 %',
+    stackable: false,
+    icon: '🗿',
+  },
+  storm_bead: {
+    id: 'storm_bead',
+    name: 'Бусина грозы',
+    rarity: 'epic',
+    description: '12 % шанс призвать молнию по 3 целям (20 урона)',
+    stackable: true,
+    icon: '⚡',
+  },
+  mirror_bark: {
+    id: 'mirror_bark',
+    name: 'Зеркальная кора',
+    rarity: 'epic',
+    description: 'Раз в 10 с поглощает один удар целиком',
+    stackable: false,
+    icon: '🛡',
+  },
+  four_leaf: {
+    id: 'four_leaf',
+    name: 'Клевер',
+    rarity: 'epic',
+    description: 'Шансы сундука сдвигаются к редким (×1.5 для редкого и выше)',
+    stackable: true,
+    icon: '🍀',
+  },
+  ninth_tail: {
+    id: 'ninth_tail',
+    name: 'Девятый хвост',
+    rarity: 'legendary',
+    description: 'Каждая 5-я атака — огненная волна 4 м (45 урона)',
+    stackable: false,
+    icon: '🔥',
+  },
+  phoenix_down: {
+    id: 'phoenix_down',
+    name: 'Пух феникса',
+    rarity: 'legendary',
+    description: 'Одно воскрешение с половиной здоровья',
+    stackable: false,
+    icon: '✨',
+  },
+};
+
+export const ALL_ITEM_IDS: readonly ItemId[] = Object.keys(ITEM_CONFIGS) as ItemId[];
+
+export const ITEMS_BY_RARITY: Record<ItemRarity, readonly ItemConfig[]> = {
+  common: ALL_ITEM_IDS.map((id) => ITEM_CONFIGS[id]).filter((it) => it.rarity === 'common'),
+  rare: ALL_ITEM_IDS.map((id) => ITEM_CONFIGS[id]).filter((it) => it.rarity === 'rare'),
+  epic: ALL_ITEM_IDS.map((id) => ITEM_CONFIGS[id]).filter((it) => it.rarity === 'epic'),
+  legendary: ALL_ITEM_IDS.map((id) => ITEM_CONFIGS[id]).filter((it) => it.rarity === 'legendary'),
+};
+
+/** Базовые шансы выпадения редкостей из сундука (DESIGN.md, раздел 5.3) */
+export const CHEST_BASE_RATES: Record<ItemRarity, number> = {
+  common: 0.62,
+  rare: 0.26,
+  epic: 0.10,
+  legendary: 0.02,
+};
+
+/** Множитель Клевера для редкого и выше */
+export const CLOVER_RARITY_MULTIPLIER = 1.5;
+
+/** Стартовое количество сундуков на карте */
+export const INITIAL_CHEST_COUNT = 6;
+
+/** Максимум активных сундуков одновременно на карте */
+export const MAX_ACTIVE_CHESTS = 10;
+
+/** Интервал появления нового сундука (+1 в минуту) */
+export const CHEST_SPAWN_INTERVAL_SEC = 60;
+
+

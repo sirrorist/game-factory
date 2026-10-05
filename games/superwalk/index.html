@@ -13,25 +13,27 @@
       <div id="exp-bar-fill"></div>
     </div>
 
-    <header id="hud" class="gf-hud-top">
-      <span class="gf-hud-stat"><span id="mode"></span></span>
-      <span class="gf-hud-stat" data-icon="trophy"><span>рекорд</span><b id="best">-</b></span>
-      <span class="gf-hud-stat"><span>время</span><b id="hud-timer">0:00</b></span>
-      <span class="gf-hud-stat"><span>ур.</span><b id="hud-level">1</b></span>
-      <span class="gf-hud-stat"><span>врагов</span><b id="hud-kills">0</b></span>
-      <span class="gf-hud-stat gf-hud-stat--hp">
-        <span class="gf-hp-bar">
-          <span id="hp-bar-fill" class="gf-hp-bar__fill"></span>
-          <b id="hp-bar-text" class="gf-hp-bar__text">100 / 100</b>
+    <div class="gf-hud-left-group">
+      <header id="hud" class="gf-hud-top">
+        <span class="gf-hud-stat"><span id="mode"></span></span>
+        <span class="gf-hud-stat" data-icon="trophy"><span>рекорд</span><b id="best">-</b></span>
+        <span class="gf-hud-stat"><span>время</span><b id="hud-timer">0:00</b></span>
+        <span class="gf-hud-stat"><span>ур.</span><b id="hud-level">1</b></span>
+        <span class="gf-hud-stat"><span>врагов</span><b id="hud-kills">0</b></span>
+        <span class="gf-hud-stat gf-hud-stat--hp">
+          <span class="gf-hp-bar">
+            <span id="hp-bar-fill" class="gf-hp-bar__fill"></span>
+            <b id="hp-bar-text" class="gf-hp-bar__text">100 / 100</b>
+          </span>
         </span>
-      </span>
-    </header>
+      </header>
+
+      <div id="hud-inventory" class="gf-hud-inv" title="Активное снаряжение">
+        <div id="inv-slots" class="gf-inv-slots"></div>
+      </div>
+    </div>
 
     <div id="damage-layer" class="gf-damage-layer"></div>
-
-    <div id="hud-inventory" class="gf-hud-inv" title="Активное снаряжение">
-      <div id="inv-slots" class="gf-inv-slots"></div>
-    </div>
 
     <div id="boss-hud" class="gf-boss-hud" hidden>
       <div class="gf-boss-hud__info">
@@ -53,6 +55,8 @@
     </div>
 
     <div id="toast" class="gf-toast" hidden></div>
+
+    <div id="item-card-popup" class="gf-item-popup" hidden></div>
 
     <div id="touch" hidden>
       <div id="stick"><div id="knob"></div></div>

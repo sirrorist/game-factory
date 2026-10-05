@@ -570,6 +570,143 @@ describe('Боевая система и мобы (DESIGN.md, раздел 5 и 
     assert.ok(popup.damage > 0);
     assert.equal(popup.isHero, false);
   });
+
+  it('ERR-06: честный 3D-расчёт — прыжок на высоту 2.0 м спасает от урона грибыша под ногами', () => {
+    const state = createInitialCombatState();
+    state.heroHp = 100;
+    state.mobs.push({
+      id: 99,
+      type: 'mushlet',
+      x: 0,
+      y: 0,
+      z: 0,
+      hp: 50,
+      maxHp: 50,
+      speed: 0,
+      radius: 0.45,
+      damage: 15,
+      exp: 1,
+      state: 'walk',
+      stateTimer: 0,
+      chargeDirX: 0,
+      chargeDirZ: 0,
+      shootCooldown: 0,
+    });
+
+    // Герой находится на тех же X=0, Z=0, но на высоте Y=2.0 м (в воздухе после прыжка)
+    const res = stepCombat(state, 0, 2.0, 0, 0.016);
+    assert.equal(res.damageDealtToHero, 0, 'В воздухе лис не получает урон от наземного грибыша');
+    assert.equal(state.heroHp, 100);
+
+    // Когда герой на земле Y=0.0 м — урон проходит
+    const resGround = stepCombat(state, 0, 0.0, 0, 0.016);
+    assert.equal(resGround.damageDealtToHero, 15, 'На земле лис получает урон касанием');
+    assert.equal(state.heroHp, 85);
+  });
+
+  it('ERR-06: взмах Хвоста-клинка в прыжке на высоте 3.0 м не задевает мобов на земле', () => {
+    const state = createInitialCombatState();
+    state.weapons[0]!.cooldownTimer = 0;
+    state.mobs.push({
+      id: 100,
+      type: 'mushlet',
+      x: 0,
+      y: 0,
+      z: 1.5,
+      hp: 100,
+      maxHp: 100,
+      speed: 0,
+      radius: 0.45,
+      damage: 0,
+      exp: 1,
+      state: 'walk',
+      stateTimer: 0,
+      chargeDirX: 0,
+      chargeDirZ: 0,
+      shootCooldown: 0,
+    });
+
+    // Лис прыгнул на Y=3.0 м — хвост не должен достать моба на земле
+    stepCombat(state, 0, 3.0, 0, 0.016, 0);
+    assert.equal(state.mobs[0]!.hp, 100, 'Моб на земле не получил урон от удара лиса в воздухе');
+
+    // На высоте Y=0.0 м хвост достает моба
+    state.weapons[0]!.cooldownTimer = 0;
+    stepCombat(state, 0, 0.0, 0, 0.016, 0);
+    assert.ok(state.mobs[0]!.hp < 100, 'Моб получил урон от удара лиса на земле');
+  });
+
+  it('ERR-08: воскрешение Феникса отбрасывает мобов на 5 м назад и даёт 2.0 с неуязвимости', () => {
+    const state = createInitialCombatState();
+    state.phoenixDownCharges = 1;
+    state.heroHp = 5;
+    state.mobs.push({
+      id: 101,
+      type: 'mushlet',
+      x: 0,
+      y: 0,
+      z: 0.5,
+      hp: 100,
+      maxHp: 100,
+      speed: 0,
+      radius: 0.45,
+      damage: 20,
+      exp: 1,
+      state: 'walk',
+      stateTimer: 0,
+      chargeDirX: 0,
+      chargeDirZ: 0,
+      shootCooldown: 0,
+    });
+
+    const res = stepCombat(state, 0, 0, 0, 0.016);
+    assert.equal(res.revivedByPhoenix, true);
+    assert.equal(state.phoenixDownCharges, 0);
+    assert.equal(state.heroIFrameSec, 2.0, '2.0 с кадров неуязвимости после воскрешения');
+    // Моб был на z=0.5, отброшен радиально назад на 5 м (z >= 5.0)
+    assert.ok(state.mobs[0]!.z >= 5.0, `Моб отброшен на безопасную дистанцию z=${state.mobs[0]!.z}`);
+  });
+
+  it('ERR-09: Token Bucket исцеляет за несколько одновременных сплеш-убийств в одном тике', () => {
+    const state = createInitialCombatState();
+    state.healOnKill = 2; // Соты: +2 HP за килл
+    state.heroHp = 50;
+    state.heroMaxHp = 100;
+    state.honeycombTokens = 10.0; // Пул токенов полон
+
+    // Спавним 4 мобов
+    for (let i = 1; i <= 4; i++) {
+      state.mobs.push({
+        id: i,
+        type: 'mushlet',
+        x: i,
+        y: 0,
+        z: 0,
+        hp: 10,
+        maxHp: 10,
+        speed: 0,
+        radius: 0.45,
+        damage: 0,
+        exp: 1,
+        state: 'walk',
+        stateTimer: 0,
+        chargeDirX: 0,
+        chargeDirZ: 0,
+        shootCooldown: 0,
+      });
+    }
+
+    // Убиваем 4 мобов одновременно в одном тике (сплеш-удар)
+    killMob(state, 1);
+    killMob(state, 2);
+    killMob(state, 3);
+    killMob(state, 4);
+
+    // До фикса дискретный кд заблокировал бы 3 из 4 убийств, восстановив только 2 HP (52).
+    // С Token Bucket восстанавливается 4 * 2 = 8 HP (58)!
+    assert.equal(state.heroHp, 58, 'Все 4 моба восстановили здоровье через пул токенов');
+    assert.equal(Math.round(state.honeycombTokens), 6, 'Израсходовано ровно 4 токена из 10');
+  });
 });
 
 

@@ -12,7 +12,25 @@ import {
   getAvailableMobTypes,
   type CombatState,
 } from './core/combat.ts';
-import { HERO_CONFIG, getRequiredExp, WEAPON_CONFIGS, TOME_CONFIGS } from './core/content.ts';
+import {
+  HERO_CONFIG,
+  getRequiredExp,
+  WEAPON_CONFIGS,
+  TOME_CONFIGS,
+  ITEM_CONFIGS,
+  INITIAL_CHEST_COUNT,
+  MAX_ACTIVE_CHESTS,
+  type ItemId,
+  type ItemConfig,
+} from './core/content.ts';
+import {
+  createInitialChests,
+  stepChests,
+  checkChestPickup,
+  rollChestItem,
+  getItemStatBonuses,
+  type ChestEntity,
+} from './core/chests.ts';
 import {
   createInitialInventory,
   rollUpgradeChoices,
@@ -196,6 +214,15 @@ class SuperwalkApp {
   private prngSeed = 42;
   private bossSpawned = false;
 
+  // Сундуки и 14 предметов (DESIGN.md, раздел 5.3)
+  private chests: ChestEntity[] = [];
+  private lastChestMinute = 0;
+  private ownedItems = new Map<ItemId, number>();
+  private chestBaseMesh: THREE.InstancedMesh;
+  private chestLidMesh: THREE.InstancedMesh;
+  private chestLockMesh: THREE.InstancedMesh;
+  private itemPopupTimeout?: number;
+
   // Меши мобов, снарядов и кристаллов (InstancedMesh)
   private mushletStemMesh: THREE.InstancedMesh;
   private mushletCapMesh: THREE.InstancedMesh;
@@ -221,6 +248,11 @@ class SuperwalkApp {
   private sparkFlashMesh: THREE.Mesh;
   private sparkFlashMat: THREE.MeshBasicMaterial;
   private sparkFlashTimer = 0;
+
+  // Эффект огненной волны (ninth_tail)
+  private fireWaveMesh: THREE.Mesh;
+  private fireWaveMat: THREE.MeshBasicMaterial;
+  private fireWaveTimer = 0;
 
   private mobDummy = new THREE.Object3D();
   private tempDmgVec = new THREE.Vector3();
@@ -489,6 +521,34 @@ class SuperwalkApp {
     grassMesh.instanceMatrix.needsUpdate = true;
     this.scene.add(grassMesh);
 
+    // 7.4b Сундуки на холмах (InstancedMesh, бюджет вызовов)
+    this.chests = createInitialChests(
+      this.world.obstacles,
+      getTerrainHeight,
+      () => Math.random(),
+      INITIAL_CHEST_COUNT,
+      65,
+    );
+    const chestBaseGeo = new THREE.BoxGeometry(0.72, 0.38, 0.52);
+    const chestBaseMat = new THREE.MeshLambertMaterial({ color: 0x8a502c, flatShading: true });
+    this.chestBaseMesh = new THREE.InstancedMesh(chestBaseGeo, chestBaseMat, MAX_ACTIVE_CHESTS);
+    this.chestBaseMesh.count = 0;
+    this.chestBaseMesh.frustumCulled = false;
+
+    const chestLidGeo = new THREE.BoxGeometry(0.75, 0.20, 0.55);
+    const chestLidMat = new THREE.MeshLambertMaterial({ color: 0x6e3c1d, flatShading: true });
+    this.chestLidMesh = new THREE.InstancedMesh(chestLidGeo, chestLidMat, MAX_ACTIVE_CHESTS);
+    this.chestLidMesh.count = 0;
+    this.chestLidMesh.frustumCulled = false;
+
+    const chestLockGeo = new THREE.BoxGeometry(0.14, 0.16, 0.10);
+    const chestLockMat = new THREE.MeshBasicMaterial({ color: 0xffd166 });
+    this.chestLockMesh = new THREE.InstancedMesh(chestLockGeo, chestLockMat, MAX_ACTIVE_CHESTS);
+    this.chestLockMesh.count = 0;
+    this.chestLockMesh.frustumCulled = false;
+
+    this.scene.add(this.chestBaseMesh, this.chestLidMesh, this.chestLockMesh);
+
     // 7.5 Мобы, снаряды, кристаллики опыта (InstancedMesh) и эффект взмаха хвостом
     this.combatState = createInitialCombatState();
     const maxMushlets = 160;
@@ -627,6 +687,20 @@ class SuperwalkApp {
     this.sparkFlashMesh.visible = false;
     this.scene.add(this.sparkFlashMesh);
 
+    // Эффект огненной волны Девятого хвоста (ninth_tail)
+    const fwGeo = new THREE.RingGeometry(0.3, 4.5, 32);
+    fwGeo.rotateX(-Math.PI / 2);
+    this.fireWaveMat = new THREE.MeshBasicMaterial({
+      color: 0xff4d00,
+      transparent: true,
+      opacity: 0,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    this.fireWaveMesh = new THREE.Mesh(fwGeo, this.fireWaveMat);
+    this.fireWaveMesh.visible = false;
+    this.scene.add(this.fireWaveMesh);
+
     this.damageLayer = $('damage-layer');
 
     // 8. Контроллер ввода (ПК и телефон)
@@ -743,6 +817,8 @@ class SuperwalkApp {
         }
       }
     });
+
+    this.recalculateHeroStats();
   }
 
   private openUpgradeModal(): void {
@@ -812,15 +888,7 @@ class SuperwalkApp {
       this.updateSlashGeometry(this.inventory.weapons.get('tail_blade') ?? 1);
     }
 
-    if (res.hpGain > 0) {
-      this.combatState.heroMaxHp += res.hpGain;
-      this.combatState.heroHp = Math.min(this.combatState.heroMaxHp, this.combatState.heroHp + res.hpGain);
-    }
-
-    if (res.speedMultiplier !== 1.0) {
-      this.playerParams.speed *= res.speedMultiplier;
-    }
-
+    this.recalculateHeroStats();
     this.updateInventoryHud();
 
     this.combatState.pendingLevelUps = Math.max(0, this.combatState.pendingLevelUps - 1);
@@ -904,18 +972,30 @@ class SuperwalkApp {
 
     const cs = this.combatState;
     const inv = this.inventory;
+    const itemBonuses = getItemStatBonuses(this.ownedItems, cs.heroMaxHp, cs.heroHp);
 
     const stats = [
-      { label: 'Здоровье лиса', val: `${Math.ceil(cs.heroHp)} / ${cs.heroMaxHp} HP`, sub: 'База 100 HP + чай' },
-      { label: 'Скорость бега', val: `${this.playerParams.speed.toFixed(1)} м/с`, sub: 'База 6.0 м/с' },
-      { label: 'Высота прыжка', val: '1.6 м', sub: 'Гравитация 24 м/с²' },
+      { label: 'Здоровье лиса', val: `${Math.ceil(cs.heroHp)} / ${cs.heroMaxHp} HP`, sub: 'База 100 HP + чай + жёлуди' },
+      { label: 'Скорость бега', val: `${this.playerParams.speed.toFixed(1)} м/с`, sub: `База 6.0 м/с (${Math.round(itemBonuses.speedMultiplier * 100)} %)` },
+      { label: 'Высота прыжка', val: '1.6 м', sub: `Прыжков в воздухе: ${itemBonuses.airJumps}` },
       { label: 'Сила', val: `+${cs.mightLevel * 3} к урону всех ударов`, sub: `Фолиант силы (Ур.${cs.mightLevel})` },
       { label: 'Спешка (скорость атаки)', val: `+${cs.hasteLevel * 12} %`, sub: `Фолиант быстроты (Ур.${cs.hasteLevel})` },
-      { label: 'Радиус сбора кристаллов', val: `${HERO_CONFIG.pickupRadius.toFixed(1)} м`, sub: 'Автомагнит' },
+      { label: 'Радиус сбора кристаллов', val: `${(HERO_CONFIG.pickupRadius * itemBonuses.pickupRadiusMultiplier).toFixed(1)} м`, sub: `Автомагнит (${Math.round(itemBonuses.pickupRadiusMultiplier * 100)} %)` },
+      { label: 'Множитель урона', val: `×${itemBonuses.damageMultiplier.toFixed(2)}`, sub: 'Клыки и Тотем ярости' },
+      { label: 'Шанс крита', val: `${Math.round(itemBonuses.critChance * 100)} %`, sub: 'Заячья лапка (крит ×2)' },
+      { label: 'Регенерация HP', val: `+${itemBonuses.regenHpPerSec.toFixed(1)} HP/с`, sub: 'Лопух' },
       { label: 'Уровень героя', val: `Ур. ${cs.heroLevel}`, sub: `Опыт: ${cs.heroExp} / ${getRequiredExp(cs.heroLevel)}` },
       { label: 'Побеждено мобов', val: `${cs.kills}`, sub: 'Счётчик забега' },
       { label: 'Время выживания', val: `${Math.floor(this.runTime / 60)}:${Math.floor(this.runTime % 60).toString().padStart(2, '0')}`, sub: 'Цель: 10:00+' },
     ];
+
+    if (cs.phoenixDownCharges > 0) {
+      stats.push({
+        label: 'Заряды феникса',
+        val: `${cs.phoenixDownCharges}`,
+        sub: 'Пух феникса (50% HP при гибели)',
+      });
+    }
 
     for (const st of stats) {
       const card = document.createElement('div');
@@ -934,9 +1014,23 @@ class SuperwalkApp {
       const card = document.createElement('div');
       card.className = 'gf-stat-card';
       card.innerHTML = `
-        <span class="gf-stat-card__label">Оружие: ${cfg.name}</span>
+        <span class="gf-stat-card__label">⚔ Оружие: ${cfg.name}</span>
         <span class="gf-stat-card__val">Уровень ${lvl} / 5</span>
         <span class="gf-stat-card__sub">${cfg.description}</span>
+      `;
+      grid.appendChild(card);
+    }
+
+    // Собранные предметы из сундуков
+    for (const [itId, count] of this.ownedItems.entries()) {
+      const cfg = ITEM_CONFIGS[itId];
+      if (!cfg) continue;
+      const card = document.createElement('div');
+      card.className = 'gf-stat-card';
+      card.innerHTML = `
+        <span class="gf-stat-card__label">${cfg.icon} ${cfg.name} ${count > 1 ? '(×' + count + ')' : ''}</span>
+        <span class="gf-stat-card__val">${cfg.description}</span>
+        <span class="gf-stat-card__sub">Редкость: ${cfg.rarity}</span>
       `;
       grid.appendChild(card);
     }
@@ -1163,6 +1257,41 @@ class SuperwalkApp {
         spawnMobInRing(this.combatState, this.playerState.x, this.playerState.z, chosenType, this.runTime, () => rnd2);
       }
 
+      // 5.1 Сундуки: спавн +1 каждую полную минуту забега (до потолка 10 активных)
+      const chestSpawnRes = stepChests(
+        this.chests,
+        this.runTime,
+        this.lastChestMinute,
+        this.world.obstacles,
+        getTerrainHeight,
+        () => Math.random(),
+        65,
+      );
+      this.lastChestMinute = chestSpawnRes.nextSpawnMinute;
+
+      // Проверка подбора сундука героем (честная 3D-проверка с учётом Y, MISTAKES.md ERR-01)
+      const openedChest = checkChestPickup(
+        this.chests,
+        this.playerState.x,
+        this.playerState.y,
+        this.playerState.z,
+        this.playerParams.radius,
+      );
+      if (openedChest) {
+        this.handleChestOpened(openedChest);
+      }
+
+      // Синхронизация динамических бонусов предметов (включая Тотем ярости при HP < 50%)
+      const bonuses = getItemStatBonuses(this.ownedItems, this.combatState.heroMaxHp, this.combatState.heroHp);
+      this.combatState.itemDamageMultiplier = bonuses.damageMultiplier;
+      this.combatState.critChance = bonuses.critChance;
+      this.combatState.regenHpPerSec = bonuses.regenHpPerSec;
+      this.combatState.healOnKill = bonuses.healOnKill;
+      this.combatState.hasMirrorBark = bonuses.hasMirrorBark;
+      this.combatState.hasNinthTail = bonuses.hasNinthTail;
+      this.combatState.stormBeadCount = bonuses.stormBeadCount;
+      const effectivePickupRadius = HERO_CONFIG.pickupRadius * bonuses.pickupRadiusMultiplier;
+
       // 6. Симуляция боя, автоатаки, снарядов и опыта
       const combatRes = stepCombat(
         this.combatState,
@@ -1171,9 +1300,16 @@ class SuperwalkApp {
         this.playerState.z,
         dt,
         this.heroGroup.rotation.y,
-        HERO_CONFIG.pickupRadius,
+        effectivePickupRadius,
         getTerrainHeight,
       );
+
+      if (combatRes.shieldBlocked) {
+        toast('Кора-зеркало поглотила удар!', 2000, 'ok');
+      }
+      if (combatRes.revivedByPhoenix) {
+        toast('Перо феникса воскресило лиса!', 3500, 'ok');
+      }
 
       if ((combatRes.leveledUp || this.combatState.pendingLevelUps > 0) && !this.upgradeModalOpen) {
         this.openUpgradeModal();
@@ -1184,6 +1320,8 @@ class SuperwalkApp {
           this.triggerSlash(atk.x, atk.z, atk.facingYaw);
         } else if (atk.weaponId === 'spark_sling') {
           this.triggerSparkFlash(atk.x, atk.z);
+        } else if (atk.weaponId === 'ninth_tail') {
+          this.triggerFireWave(atk.x, atk.z);
         }
       }
 
@@ -1205,6 +1343,17 @@ class SuperwalkApp {
         this.sparkFlashMat.opacity = Math.max(0, this.sparkFlashTimer / 0.12) * 0.9;
         if (this.sparkFlashTimer <= 0) {
           this.sparkFlashMesh.visible = false;
+        }
+      }
+
+      if (this.fireWaveTimer > 0) {
+        this.fireWaveTimer -= dt;
+        const progress = Math.max(0, 1.0 - this.fireWaveTimer / 0.28);
+        const scale = 0.2 + progress * 0.8;
+        this.fireWaveMesh.scale.set(scale, scale, scale);
+        this.fireWaveMat.opacity = Math.max(0, this.fireWaveTimer / 0.28) * 0.9;
+        if (this.fireWaveTimer <= 0) {
+          this.fireWaveMesh.visible = false;
         }
       }
 
@@ -1405,6 +1554,35 @@ class SuperwalkApp {
       this.gemMesh.instanceMatrix.needsUpdate = true;
       if (this.gemMesh.instanceColor) this.gemMesh.instanceColor.needsUpdate = true;
 
+      // Отрисовка сундуков через InstancedMesh (бюджет вызовов)
+      let activeChestCount = 0;
+      for (const chest of this.chests) {
+        if (chest.opened) continue;
+        if (activeChestCount >= MAX_ACTIVE_CHESTS) break;
+
+        dummy.position.set(chest.x, chest.y + 0.19, chest.z);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        this.chestBaseMesh.setMatrixAt(activeChestCount, dummy.matrix);
+
+        dummy.position.set(chest.x, chest.y + 0.44, chest.z);
+        dummy.updateMatrix();
+        this.chestLidMesh.setMatrixAt(activeChestCount, dummy.matrix);
+
+        dummy.position.set(chest.x, chest.y + 0.32, chest.z - 0.26);
+        dummy.updateMatrix();
+        this.chestLockMesh.setMatrixAt(activeChestCount, dummy.matrix);
+
+        activeChestCount++;
+      }
+      this.chestBaseMesh.count = activeChestCount;
+      this.chestLidMesh.count = activeChestCount;
+      this.chestLockMesh.count = activeChestCount;
+      this.chestBaseMesh.instanceMatrix.needsUpdate = true;
+      this.chestLidMesh.instanceMatrix.needsUpdate = true;
+      this.chestLockMesh.instanceMatrix.needsUpdate = true;
+
       // 8. Обновление интерфейса
       const mins = Math.floor(this.runTime / 60);
       const secs = Math.floor(this.runTime % 60);
@@ -1539,6 +1717,101 @@ class SuperwalkApp {
     this.sparkFlashMat.opacity = 0.9;
   }
 
+  private triggerFireWave(x: number, z: number): void {
+    this.fireWaveTimer = 0.28;
+    const y = getTerrainHeight(x, z);
+    this.fireWaveMesh.position.set(x, y + 0.12, z);
+    this.fireWaveMesh.scale.set(0.1, 0.1, 0.1);
+    this.fireWaveMesh.visible = true;
+    this.fireWaveMat.opacity = 0.9;
+  }
+
+  private handleChestOpened(chest: ChestEntity): void {
+    const cloverCount = this.ownedItems.get('four_leaf') ?? 0;
+    const item = rollChestItem(this.ownedItems, cloverCount, () => Math.random());
+    const count = (this.ownedItems.get(item.id) ?? 0) + 1;
+    this.ownedItems.set(item.id, count);
+
+    if (item.id === 'phoenix_down') {
+      this.combatState.phoenixDownCharges += 1;
+    }
+
+    this.recalculateHeroStats();
+    this.showItemCardPopup(item, count);
+    toast(`Найден предмет: ${item.icon} ${item.name}!`, 2500, 'ok');
+    this.updateInventoryHud();
+    if (this.tabModalOpen && this.activeTab === 'stats') {
+      this.updateTabStats();
+    }
+  }
+
+  private showItemCardPopup(item: ItemConfig, count: number): void {
+    const container = $('item-card-popup');
+    if (!container) return;
+
+    if (this.itemPopupTimeout !== undefined) {
+      window.clearTimeout(this.itemPopupTimeout);
+      this.itemPopupTimeout = undefined;
+    }
+
+    const rarityLabels: Record<string, string> = {
+      common: 'Обычный',
+      rare: 'Редкий',
+      epic: 'Эпический',
+      legendary: 'Легендарный',
+    };
+
+    container.innerHTML = `
+      <div class="gf-item-card gf-item-card--${item.rarity}">
+        <div class="gf-item-card__header">
+          <span class="gf-item-card__icon">${item.icon}</span>
+          <span class="gf-item-card__rarity">${rarityLabels[item.rarity] ?? item.rarity}</span>
+          ${count > 1 ? `<span class="gf-item-card__count">×${count}</span>` : ''}
+        </div>
+        <div class="gf-item-card__name">${item.name}</div>
+        <p class="gf-item-card__desc">${item.description}</p>
+      </div>
+    `;
+
+    container.hidden = false;
+
+    this.itemPopupTimeout = window.setTimeout(() => {
+      container.hidden = true;
+      this.itemPopupTimeout = undefined;
+    }, 3000);
+  }
+
+  private recalculateHeroStats(): void {
+    const bonuses = getItemStatBonuses(this.ownedItems, this.combatState.heroMaxHp, this.combatState.heroHp);
+
+    // Скорость движения героя (с учётом улучшений speed_bonus и Перьев стрижа)
+    this.playerParams.speed = DEFAULT_PLAYER_PARAMS.speed * Math.pow(1.05, this.inventory.speedBonusCount) * bonuses.speedMultiplier;
+    this.playerParams.maxAirJumps = bonuses.airJumps;
+
+    // Здоровье героя (Жёлудь +10 HP за штуку + Лечебный чай +20 HP за штуку, ERR-07)
+    const targetMaxHp = HERO_CONFIG.maxHp + bonuses.maxHpBonus + (this.inventory.healBonusCount * 20);
+    if (targetMaxHp !== this.combatState.heroMaxHp) {
+      const diff = targetMaxHp - this.combatState.heroMaxHp;
+      this.combatState.heroMaxHp = targetMaxHp;
+      if (diff > 0) {
+        this.combatState.heroHp += diff;
+      }
+      this.combatState.heroHp = Math.min(this.combatState.heroHp, this.combatState.heroMaxHp);
+    }
+
+    // Боевые параметры предметов
+    this.combatState.itemDamageMultiplier = bonuses.damageMultiplier;
+    this.combatState.critChance = bonuses.critChance;
+    this.combatState.regenHpPerSec = bonuses.regenHpPerSec;
+    this.combatState.healOnKill = bonuses.healOnKill;
+    this.combatState.hasMirrorBark = bonuses.hasMirrorBark;
+    this.combatState.hasNinthTail = bonuses.hasNinthTail;
+    this.combatState.stormBeadCount = bonuses.stormBeadCount;
+    if (bonuses.hasMirrorBark && !this.combatState.mirrorBarkReady && this.combatState.mirrorBarkCooldownSec <= 0) {
+      this.combatState.mirrorBarkReady = true;
+    }
+  }
+
   private updateInventoryHud(): void {
     const container = $('inv-slots');
     container.innerHTML = '';
@@ -1560,6 +1833,16 @@ class SuperwalkApp {
       badge.title = `${cfg.name} (Ур.${lvl}): ${cfg.description}`;
       container.appendChild(badge);
     }
+
+    for (const [itemId, count] of this.ownedItems.entries()) {
+      const cfg = ITEM_CONFIGS[itemId];
+      if (!cfg) continue;
+      const badge = document.createElement('span');
+      badge.className = `gf-inv-badge gf-inv-badge--item gf-inv-badge--${cfg.rarity}`;
+      badge.innerHTML = `${cfg.icon} ${cfg.name}${count > 1 ? ` <b>×${count}</b>` : ''}`;
+      badge.title = `${cfg.name} (${cfg.rarity}): ${cfg.description}`;
+      container.appendChild(badge);
+    }
   }
 
   private updateDebug(): void {
@@ -1569,13 +1852,16 @@ class SuperwalkApp {
     const p = this.playerState;
     const cs = this.combatState;
     const wpList = cs.weapons.map((w) => `${w.id}:${w.level}`).join(', ');
+    const activeChests = this.chests.filter((c) => !c.opened).length;
+    const totalItems = Array.from(this.ownedItems.values()).reduce((a, b) => a + b, 0);
     $('debug').textContent = [
       `fps ${this.fps} · кадр ${this.perfAvgMs.toFixed(1)} мс, худший ${this.perfWorstMs.toFixed(0)} мс · рывков ${this.perfSlowPerSec}/с`,
       `экран ${el.width}×${el.height} · dpr ${this.renderer.getPixelRatio().toFixed(2)} · тач ${this.input.touchMode ? 'да' : 'нет'}`,
       `вызовов ${info.calls} · треугольников ${info.triangles} · геометрий ${mem.geometries}`,
-      `xyz ${p.x.toFixed(1)} ${p.y.toFixed(1)} ${p.z.toFixed(1)} · vy ${p.vy.toFixed(1)} · земля ${p.grounded ? 'да' : 'нет'}`,
+      `xyz ${p.x.toFixed(1)} ${p.y.toFixed(1)} ${p.z.toFixed(1)} · vy ${p.vy.toFixed(1)} · земля ${p.grounded ? 'да' : 'нет'} · прыжков ${p.airJumpsLeft ?? 0}`,
       `мобов ${cs.mobs.length} · крист ${cs.gems.length} · снарядов ${cs.projectiles.length}+${cs.heroProjectiles.length} · ур ${cs.heroLevel} · hp ${cs.heroHp}/${cs.heroMaxHp}`,
       `оружие [${wpList}] · сила ${cs.mightLevel} · ускор ${cs.hasteLevel} · скор ${this.playerParams.speed.toFixed(1)}`,
+      `сундуки ${activeChests}/${this.chests.length} · предметов ${totalItems} · клевер ${this.ownedItems.get('four_leaf') ?? 0}`,
       `мышь ${this.input.mouseStats.events} соб/с · макс шаг ${this.input.mouseStats.maxStep} px`,
     ].join('\n');
   }

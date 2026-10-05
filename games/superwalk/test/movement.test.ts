@@ -129,4 +129,39 @@ describe('Физика движения и управление (dt, повор�
     for (let i = 0; i < 144; i++) pos144 = brokenStep(pos144, 6.0);
     assert.ok(Math.abs(pos144 - pos60) > 500);
   });
+
+  it('пружинные башмаки: двойной прыжок в воздухе (spring_boots, maxAirJumps = 1)', () => {
+    const paramsWithBoots = { ...DEFAULT_PLAYER_PARAMS, maxAirJumps: 1 };
+    let state: PlayerState = { x: 0, y: 0, z: 0, vy: 0, grounded: true, yaw: 0 };
+    const dt = 1 / 60;
+
+    // 1. Первый прыжок с земли
+    state = stepPlayer(state, { forward: 0, strafe: 0, jump: true, yaw: 0 }, dt, paramsWithBoots);
+    assert.equal(state.grounded, false, 'Герой оторвался от земли');
+    assert.ok(state.vy > 0, 'Положительная вертикальная скорость');
+
+    // Отпускаем клавишу прыжка и летим вверх 0.2 с
+    for (let i = 0; i < 12; i++) {
+      state = stepPlayer(state, { forward: 0, strafe: 0, jump: false, yaw: 0 }, dt, paramsWithBoots);
+    }
+    const heightBeforeAirJump = state.y;
+    assert.ok(heightBeforeAirJump > 0.8, 'Герой поднялся выше 0.8 м');
+
+    // 2. Нажимаем прыжок в воздухе (второй прыжок)
+    state = stepPlayer(state, { forward: 0, strafe: 0, jump: true, yaw: 0 }, dt, paramsWithBoots);
+    assert.ok(state.vy > 7.0, 'Второй прыжок в воздухе вернул максимальный импульс vy0');
+    assert.equal(state.airJumpsLeft, 0, 'Воздушные прыжки исчерпаны');
+
+    // Отпускаем клавишу и летим до пика второго прыжка
+    for (let i = 0; i < 15; i++) {
+      state = stepPlayer(state, { forward: 0, strafe: 0, jump: false, yaw: 0 }, dt, paramsWithBoots);
+    }
+    assert.ok(state.y > 2.2, `Высота с двойным прыжком (${state.y.toFixed(2)} м) превысила стандартные 1.6 м`);
+
+    // 3. Пытаемся сделать третий прыжок в воздухе — не должно сработать
+    const vyBeforeThird = state.vy;
+    state = stepPlayer(state, { forward: 0, strafe: 0, jump: true, yaw: 0 }, dt, paramsWithBoots);
+    assert.ok(state.vy < vyBeforeThird, 'Третий прыжок не срабатывает, продолжается падение');
+  });
 });
+

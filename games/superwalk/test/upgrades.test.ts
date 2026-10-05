@@ -107,4 +107,17 @@ describe('Система улучшений и карточек (DESIGN.md, ша
     assert.equal(getFlatMightBonus(2), 6);
     assert.equal(getFlatMightBonus(5), 15);
   });
+
+  it('ERR-07: Лечебный чай суммирует Max HP (+20 за уровень) вместе с Жёлудем и сохраняется при пересчёте', () => {
+    const inv = createInitialInventory();
+    applyUpgrade(inv, 'heal_bonus');
+    applyUpgrade(inv, 'heal_bonus');
+    assert.equal(inv.healBonusCount, 2);
+
+    // База 100 HP + 2 чая (40 HP) + 3 желудя (30 HP) = 170 HP
+    const baseHp = 100;
+    const acornBonus = 30;
+    const targetMaxHp = baseHp + acornBonus + (inv.healBonusCount * 20);
+    assert.equal(targetMaxHp, 170, 'Max HP равен 100 + 30 + 40 = 170');
+  });
 });

@@ -121,6 +121,7 @@ export interface HeroProjectileEntity {
   damage: number;
   radius: number;
   lifeSec: number;
+  isCrit?: boolean;
 }
 
 export interface TelegraphBeamEntity {
@@ -168,6 +169,19 @@ export interface CombatState {
   heroExp: number;
   heroIFrameSec: number;
   kills: number;
+  // --- Эффекты предметов (DESIGN.md, раздел 5.3) ---
+  itemDamageMultiplier: number;
+  critChance: number;
+  regenHpPerSec: number;
+  healOnKill: number;
+  honeycombTokens: number;
+  mirrorBarkCooldownSec: number;
+  mirrorBarkReady: boolean;
+  hasMirrorBark: boolean;
+  stormBeadCount: number;
+  ninthTailAttackCount: number;
+  hasNinthTail: boolean;
+  phoenixDownCharges: number;
 }
 
 export function createInitialCombatState(): CombatState {
@@ -198,6 +212,18 @@ export function createInitialCombatState(): CombatState {
     heroExp: 0,
     heroIFrameSec: 0,
     kills: 0,
+    itemDamageMultiplier: 1.0,
+    critChance: 0.0,
+    regenHpPerSec: 0.0,
+    healOnKill: 0,
+    honeycombTokens: 10.0,
+    mirrorBarkCooldownSec: 0.0,
+    mirrorBarkReady: false,
+    hasMirrorBark: false,
+    stormBeadCount: 0,
+    ninthTailAttackCount: 0,
+    hasNinthTail: false,
+    phoenixDownCharges: 0,
   };
 }
 
@@ -245,8 +271,10 @@ export function spawnMobInRing(
   return mob;
 }
 
+export type AttackType = WeaponType | 'ninth_tail' | 'storm_bead';
+
 export interface AttackEvent {
-  weaponId: WeaponType;
+  weaponId: AttackType;
   x: number;
   z: number;
   facingYaw: number;
@@ -263,6 +291,8 @@ export interface StepCombatResult {
   bossAlive: boolean;
   bossHp: number | null;
   bossMaxHp: number | null;
+  shieldBlocked?: boolean;
+  revivedByPhoenix?: boolean;
 }
 
 /**
@@ -277,6 +307,7 @@ export function stepCombat(
   heroFacingYaw = 0,
   pickupRadius = HERO_CONFIG.pickupRadius,
   getGroundHeight: (x: number, z: number) => number = () => 0,
+  rnd: () => number = Math.random,
 ): StepCombatResult {
   const safeDt = Math.min(Math.max(dt, 0), 0.05);
   let damageDealtToHero = 0;
@@ -286,6 +317,22 @@ export function stepCombat(
 
   if (state.heroIFrameSec > 0) {
     state.heroIFrameSec = Math.max(0, state.heroIFrameSec - safeDt);
+  }
+
+  // Пассивная регенерация здоровья (Лопух, burdock)
+  if (state.regenHpPerSec > 0 && state.heroHp < state.heroMaxHp) {
+    state.heroHp = Math.min(state.heroMaxHp, state.heroHp + state.regenHpPerSec * safeDt);
+  }
+
+  // Пополнение токенов вампиризма Сот (honeycomb: Token Bucket до 10 токенов/с, ERR-09)
+  state.honeycombTokens = Math.min(10.0, state.honeycombTokens + safeDt * 10.0);
+
+  // Перезарядка щита Зеркальной коры (mirror_bark, раз в 10 с)
+  if (state.hasMirrorBark && !state.mirrorBarkReady) {
+    state.mirrorBarkCooldownSec -= safeDt;
+    if (state.mirrorBarkCooldownSec <= 0) {
+      state.mirrorBarkReady = true;
+    }
   }
 
   // 1. Поведение и перемещение мобов
@@ -300,8 +347,9 @@ export function stepCombat(
         mob.x += (dx / dist) * mob.speed * safeDt;
         mob.z += (dz / dist) * mob.speed * safeDt;
       }
-      // Касание героя
-      if (dist < mob.radius + 0.45 && state.heroIFrameSec <= 0) {
+      // Касание героя (честный 3D-расчёт: центр героя heroY + 0.45, центр грибыша mob.y + 0.2, ERR-06)
+      const dist3D = Math.hypot(heroX - mob.x, (heroY + 0.45) - (mob.y + 0.2), heroZ - mob.z);
+      if (dist3D < mob.radius + 0.45 && state.heroIFrameSec <= 0) {
         damageDealtToHero += mob.damage;
         state.heroIFrameSec = 0.6; // кадры неуязвимости
         damagePopups.push({
@@ -337,7 +385,8 @@ export function stepCombat(
         const chargeSpeed = 9.0;
         mob.x += mob.chargeDirX * chargeSpeed * safeDt;
         mob.z += mob.chargeDirZ * chargeSpeed * safeDt;
-        if (dist < mob.radius + 0.45 && state.heroIFrameSec <= 0) {
+        const dist3D = Math.hypot(heroX - mob.x, (heroY + 0.45) - (mob.y + 0.2), heroZ - mob.z);
+        if (dist3D < mob.radius + 0.45 && state.heroIFrameSec <= 0) {
           damageDealtToHero += mob.damage;
           state.heroIFrameSec = 0.6;
           damagePopups.push({
@@ -408,7 +457,9 @@ export function stepCombat(
         mob.x += (dx / dist) * mob.speed * safeDt;
         mob.z += (dz / dist) * mob.speed * safeDt;
       }
-      if (dist < mob.radius + 0.45 && state.heroIFrameSec <= 0) {
+      // Касание босса (честный 3D-расчёт: центр босса mob.y + 1.2, центр героя heroY + 0.45, ERR-06)
+      const dist3D = Math.hypot(heroX - mob.x, (heroY + 0.45) - (mob.y + 1.2), heroZ - mob.z);
+      if (dist3D < mob.radius + 0.45 && state.heroIFrameSec <= 0) {
         damageDealtToHero += mob.damage;
         state.heroIFrameSec = 0.8;
         damagePopups.push({
@@ -483,6 +534,9 @@ export function stepCombat(
     }
   }
 
+  const attacks: AttackEvent[] = [];
+  const mightBonus = getFlatMightBonus(state.mightLevel);
+
   // 2b. Движение снарядов героя (spark_sling) в 3D
   for (let i = state.heroProjectiles.length - 1; i >= 0; i--) {
     const hp = state.heroProjectiles[i]!;
@@ -503,10 +557,12 @@ export function stepCombat(
           y: mob.y + mob.radius + 0.3,
           z: mob.z,
           damage: hp.damage,
-          isCrit: false,
+          isCrit: hp.isCrit ?? false,
           isHero: false,
         });
         hit = true;
+        // Бусина грозы (storm_bead) при попадании снаряда (честный 3D-расчёт)
+        triggerStormBead(state, mob.x, mob.y + mob.radius, mob.z, mightBonus, attacks, damagePopups, rnd);
         if (mob.hp <= 0) {
           killMob(state, mob.id);
         }
@@ -519,24 +575,26 @@ export function stepCombat(
     }
   }
 
-  // 3. Магнит и сбор кристалликов опыта
+  // 3. Магнит и сбор кристалликов опыта (честный 3D-расчёт, ERR-06)
   for (let i = state.gems.length - 1; i >= 0; i--) {
     const gem = state.gems[i]!;
     const dx = heroX - gem.x;
+    const dy = (heroY + 0.45) - gem.y;
     const dz = heroZ - gem.z;
-    const dist = Math.hypot(dx, dz);
+    const dist3D = Math.hypot(dx, dy, dz);
 
-    if (dist < pickupRadius) {
+    if (dist3D < pickupRadius) {
       gem.flying = true;
     }
 
     if (gem.flying) {
       const flySpeed = 14.0;
-      if (dist > 0.001) {
-        gem.x += (dx / dist) * flySpeed * safeDt;
-        gem.z += (dz / dist) * flySpeed * safeDt;
+      if (dist3D > 0.001) {
+        gem.x += (dx / dist3D) * flySpeed * safeDt;
+        gem.y += (dy / dist3D) * flySpeed * safeDt;
+        gem.z += (dz / dist3D) * flySpeed * safeDt;
       }
-      if (dist < 0.6) {
+      if (dist3D < 0.6) {
         // Подобрали кристалл!
         state.heroExp += gem.value;
         gemsCollected++;
@@ -556,9 +614,6 @@ export function stepCombat(
   }
 
   // 4. Автоатака оружия лиса
-  const attacks: AttackEvent[] = [];
-  const mightBonus = getFlatMightBonus(state.mightLevel);
-
   for (const w of state.weapons) {
     w.cooldownTimer -= safeDt;
     if (w.cooldownTimer <= 0) {
@@ -577,21 +632,24 @@ export function stepCombat(
         const bx = Math.sin(heroFacingYaw);
         const bz = Math.cos(heroFacingYaw);
         let hits = 0;
+        const isCrit = state.critChance > 0 && rnd() < state.critChance;
 
         for (let i = state.mobs.length - 1; i >= 0; i--) {
           const m = state.mobs[i]!;
           const mdx = m.x - heroX;
+          const mdy = (m.y + m.radius) - (heroY + 0.45);
           const mdz = m.z - heroZ;
-          const dist = Math.hypot(mdx, mdz);
-          if (dist <= range + m.radius) {
-            const dot = dist > 0.001 ? (bx * (mdx / dist) + bz * (mdz / dist)) : 1;
+          const distXZ = Math.hypot(mdx, mdz);
+          // Честный 3D-расчёт: горизонтальный сектор удара и вертикальный размах ±1.5 м (ERR-06)
+          if (distXZ <= range + m.radius && Math.abs(mdy) <= 1.5) {
+            const dot = distXZ > 0.001 ? (bx * (mdx / distXZ) + bz * (mdz / distXZ)) : 1;
             if (dot >= minDot) {
               const dmg = calculateDamage({
                 baseDamage: baseDmg,
                 weaponLevelBonus: 0,
                 mightTomeBonus: mightBonus,
-                itemDamageMultiplier: 1.0,
-                isCrit: false,
+                itemDamageMultiplier: state.itemDamageMultiplier,
+                isCrit,
               });
               m.hp -= dmg;
               hits++;
@@ -600,7 +658,7 @@ export function stepCombat(
                 y: m.y + m.radius + 0.3,
                 z: m.z,
                 damage: dmg,
-                isCrit: false,
+                isCrit,
                 isHero: false,
               });
               if (m.hp <= 0) {
@@ -610,6 +668,10 @@ export function stepCombat(
           }
         }
 
+        if (hits > 0) {
+          triggerStormBead(state, heroX, heroY + 0.45, heroZ, mightBonus, attacks, damagePopups, rnd);
+        }
+
         attacks.push({
           weaponId: 'tail_blade',
           x: heroX,
@@ -617,6 +679,15 @@ export function stepCombat(
           facingYaw: heroFacingYaw,
           hits,
         });
+
+        // Девятый хвост (ninth_tail): каждая 5-я атака — огненная волна 4 м на 45 урона
+        if (state.hasNinthTail) {
+          state.ninthTailAttackCount++;
+          if (state.ninthTailAttackCount >= 5) {
+            state.ninthTailAttackCount = 0;
+            triggerNinthTailWave(state, heroX, heroY, heroZ, heroFacingYaw, mightBonus, attacks, damagePopups);
+          }
+        }
       } else if (w.id === 'spark_sling') {
         const range = cfg.rangeByLevel[levelIdx] ?? 16.0;
         const inRangeMobs: Array<{ mob: MobEntity; dist: number }> = [];
@@ -634,13 +705,14 @@ export function stepCombat(
           // Количество снарядов не превышает количества мобов
           const count = Math.min(maxProjs, inRangeMobs.length);
           const pSpeed = cfg.projSpeed ?? 22.0;
+          const isCrit = state.critChance > 0 && rnd() < state.critChance;
 
           const dmg = calculateDamage({
             baseDamage: baseDmg,
             weaponLevelBonus: 0,
             mightTomeBonus: mightBonus,
-            itemDamageMultiplier: 1.0,
-            isCrit: false,
+            itemDamageMultiplier: state.itemDamageMultiplier,
+            isCrit,
           });
 
           const startX = heroX;
@@ -670,6 +742,7 @@ export function stepCombat(
               damage: dmg,
               radius: 0.35,
               lifeSec: 1.2,
+              isCrit,
             });
           }
 
@@ -680,6 +753,15 @@ export function stepCombat(
             facingYaw: heroFacingYaw,
             hits: count,
           });
+
+          // Девятый хвост (ninth_tail): каждая 5-я атака — огненная волна
+          if (state.hasNinthTail) {
+            state.ninthTailAttackCount++;
+            if (state.ninthTailAttackCount >= 5) {
+              state.ninthTailAttackCount = 0;
+              triggerNinthTailWave(state, heroX, heroY, heroZ, heroFacingYaw, mightBonus, attacks, damagePopups);
+            }
+          }
         }
       }
     }
@@ -693,11 +775,55 @@ export function stepCombat(
     }
   }
 
+  // 6. Получение урона героем (с учётом щита Зеркальной коры и воскрешения Феникса)
+  let shieldBlocked = false;
+  let revivedByPhoenix = false;
+
   if (damageDealtToHero > 0) {
-    state.heroHp = Math.max(0, state.heroHp - damageDealtToHero);
+    if (state.hasMirrorBark && state.mirrorBarkReady) {
+      // Зеркальная кора (mirror_bark): раз в 10 с снимает один удар целиком
+      state.mirrorBarkReady = false;
+      state.mirrorBarkCooldownSec = 10.0;
+      shieldBlocked = true;
+      damageDealtToHero = 0;
+      // Убираем цифру урона по лису
+      for (let pIdx = damagePopups.length - 1; pIdx >= 0; pIdx--) {
+        if (damagePopups[pIdx]!.isHero) {
+          damagePopups.splice(pIdx, 1);
+          break;
+        }
+      }
+    } else if (state.heroHp - damageDealtToHero <= 0 && state.phoenixDownCharges > 0) {
+      // Пух феникса (phoenix_down): воскрешение с половиной здоровья (списываем 1 заряд, ERR-08)
+      state.phoenixDownCharges--;
+      state.heroHp = Math.round(state.heroMaxHp * 0.5);
+      state.heroIFrameSec = 2.0; // 2.0 секунды неуязвимости для безопасного выхода из толпы
+      revivedByPhoenix = true;
+      damageDealtToHero = 0;
+      for (let pIdx = damagePopups.length - 1; pIdx >= 0; pIdx--) {
+        if (damagePopups[pIdx]!.isHero) {
+          damagePopups.splice(pIdx, 1);
+          break;
+        }
+      }
+      // Радиальное отталкивание всех мобов в радиусе 7.0 м на 5.0 м назад (ERR-08)
+      for (const m of state.mobs) {
+        const mdx = m.x - heroX;
+        const mdz = m.z - heroZ;
+        const d = Math.hypot(mdx, mdz);
+        if (d < 7.0) {
+          const factor = d > 0.001 ? 5.0 / d : 1.0;
+          m.x += d > 0.001 ? mdx * factor : 5.0;
+          m.z += d > 0.001 ? mdz * factor : 0.0;
+          m.y = getGroundHeight(m.x, m.z);
+        }
+      }
+    } else {
+      state.heroHp = Math.max(0, state.heroHp - damageDealtToHero);
+    }
   }
 
-  // 6. Информация о боссе для шкалы здоровья внизу экрана
+  // 7. Информация о боссе для шкалы здоровья внизу экрана
   let bossAlive = false;
   let bossHp: number | null = null;
   let bossMaxHp: number | null = null;
@@ -718,7 +844,119 @@ export function stepCombat(
     bossAlive,
     bossHp,
     bossMaxHp,
+    shieldBlocked,
+    revivedByPhoenix,
   };
+}
+
+/**
+ * Бусина грозы (storm_bead): 12 % шанс призвать молнию по 3 целям (20 урона) в 3D (ERR-06).
+ */
+function triggerStormBead(
+  state: CombatState,
+  originX: number,
+  originY: number,
+  originZ: number,
+  mightBonus: number,
+  attacks: AttackEvent[],
+  damagePopups: DamagePopupEvent[],
+  rnd: () => number,
+): void {
+  if (state.stormBeadCount <= 0) return;
+  const chance = Math.min(0.60, state.stormBeadCount * 0.12);
+  if (rnd() >= chance) return;
+
+  const inRange = state.mobs
+    .map((m) => ({
+      mob: m,
+      dist: Math.hypot(m.x - originX, (m.y + m.radius) - originY, m.z - originZ),
+    }))
+    .filter((entry) => entry.dist <= 12.0)
+    .sort((a, b) => a.dist - b.dist)
+    .slice(0, 3);
+
+  if (inRange.length === 0) return;
+
+  const lightningDmg = calculateDamage({
+    baseDamage: 20,
+    weaponLevelBonus: 0,
+    mightTomeBonus: mightBonus,
+    itemDamageMultiplier: state.itemDamageMultiplier,
+    isCrit: true,
+  });
+
+  for (const { mob: m } of inRange) {
+    m.hp -= lightningDmg;
+    damagePopups.push({
+      x: m.x,
+      y: m.y + m.radius + 0.3,
+      z: m.z,
+      damage: lightningDmg,
+      isCrit: true,
+      isHero: false,
+    });
+    if (m.hp <= 0) killMob(state, m.id);
+  }
+
+  attacks.push({
+    weaponId: 'storm_bead',
+    x: originX,
+    z: originZ,
+    facingYaw: 0,
+    hits: inRange.length,
+  });
+}
+
+/**
+ * Девятый хвост (ninth_tail): каждая 5-я атака — огненная волна 4 м (45 урона) в 3D (ERR-06).
+ */
+function triggerNinthTailWave(
+  state: CombatState,
+  heroX: number,
+  heroY: number,
+  heroZ: number,
+  heroFacingYaw: number,
+  mightBonus: number,
+  attacks: AttackEvent[],
+  damagePopups: DamagePopupEvent[],
+): void {
+  const waveRadius = 4.0;
+  const waveDmg = calculateDamage({
+    baseDamage: 45,
+    weaponLevelBonus: 0,
+    mightTomeBonus: mightBonus,
+    itemDamageMultiplier: state.itemDamageMultiplier,
+    isCrit: true,
+  });
+
+  let hits = 0;
+  const heroCenterY = heroY + 0.45;
+  for (let i = state.mobs.length - 1; i >= 0; i--) {
+    const m = state.mobs[i]!;
+    const mobCenterY = m.y + m.radius;
+    const dist3D = Math.hypot(m.x - heroX, mobCenterY - heroCenterY, m.z - heroZ);
+    if (dist3D <= waveRadius + m.radius) {
+      m.hp -= waveDmg;
+      hits++;
+      damagePopups.push({
+        x: m.x,
+        y: m.y + m.radius + 0.3,
+        z: m.z,
+        damage: waveDmg,
+        isCrit: true,
+        isHero: false,
+      });
+      if (m.hp <= 0) killMob(state, m.id);
+    }
+  }
+
+  attacks.push({
+    weaponId: 'ninth_tail',
+    x: heroX,
+    z: heroZ,
+    facingYaw: heroFacingYaw,
+    hits,
+  });
 }
 
 /** Уничтожение моба с выпадением кристалла опыта */
@@ -729,6 +967,12 @@ export function killMob(state: CombatState, mobId: number): boolean {
   const mob = state.mobs[idx]!;
   state.mobs.splice(idx, 1);
   state.kills++;
+
+  // Эффект Соты (honeycomb): +2 здоровья за убийство (Token Bucket до 10 токенов, ERR-09)
+  if (state.healOnKill > 0 && state.honeycombTokens >= 1.0) {
+    state.heroHp = Math.min(state.heroMaxHp, state.heroHp + state.healOnKill);
+    state.honeycombTokens -= 1.0;
+  }
 
   // Спавн кристаллика опыта на месте гибели моба
   state.gems.push({

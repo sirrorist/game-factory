@@ -9,6 +9,10 @@ export interface PlayerState {
   vy: number;
   grounded: boolean;
   yaw: number;
+  /** Количество оставшихся прыжков в воздухе (для Пружинных башмаков) */
+  airJumpsLeft?: number;
+  /** Была ли нажата клавиша прыжка на прошлом шаге (для фронта нажатия) */
+  jumpPressedLast?: boolean;
 }
 
 export interface MovementInput {
@@ -34,6 +38,8 @@ export interface PlayerParams {
   gravity: number;
   radius: number;
   arenaRadius?: number;
+  /** Максимальное число прыжков в воздухе (0 по умолчанию, 1+ с башмаками) */
+  maxAirJumps?: number;
 }
 
 export const DEFAULT_PLAYER_PARAMS: PlayerParams = {
@@ -42,6 +48,7 @@ export const DEFAULT_PLAYER_PARAMS: PlayerParams = {
   gravity: 24.0,    // м/с^2
   radius: 0.45,     // радиус коллизии героя
   arenaRadius: 65.0,// радиус игровой арены "Солнечные холмы"
+  maxAirJumps: 0,
 };
 
 /**
@@ -124,10 +131,22 @@ export function stepPlayer(
   let nextVy = state.vy;
   let nextY = state.y;
   let nextGrounded = state.grounded;
+  const maxAirJumps = params.maxAirJumps ?? 0;
+  let nextAirJumpsLeft = state.airJumpsLeft !== undefined ? state.airJumpsLeft : maxAirJumps;
 
-  if (nextGrounded && input.jump) {
-    nextVy = vy0;
-    nextGrounded = false;
+  if (nextGrounded) {
+    nextAirJumpsLeft = maxAirJumps;
+    if (input.jump) {
+      nextVy = vy0;
+      nextGrounded = false;
+    }
+  } else {
+    // В воздухе: проверка двойного прыжка по фронту нажатия (spring_boots)
+    const jumpTriggeredNow = input.jump && !state.jumpPressedLast;
+    if (jumpTriggeredNow && nextAirJumpsLeft > 0) {
+      nextVy = vy0;
+      nextAirJumpsLeft--;
+    }
   }
 
   if (!nextGrounded) {
@@ -138,6 +157,7 @@ export function stepPlayer(
       nextY = groundY;
       nextVy = 0;
       nextGrounded = true;
+      nextAirJumpsLeft = maxAirJumps;
     }
   } else {
     nextY = groundY;
@@ -150,5 +170,7 @@ export function stepPlayer(
     vy: nextVy,
     grounded: nextGrounded,
     yaw: input.yaw,
+    airJumpsLeft: nextAirJumpsLeft,
+    jumpPressedLast: input.jump,
   };
 }
