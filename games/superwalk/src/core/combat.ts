@@ -12,6 +12,20 @@ import {
   type WeaponType,
 } from './content.ts';
 import { getWeaponCooldown, getFlatMightBonus } from './upgrades.ts';
+import type { Obstacle } from './movement.ts';
+
+export function getMobHeight(type: MobType): number {
+  switch (type) {
+    case 'mushlet':
+      return 0.45;
+    case 'ram_beetle':
+      return 0.65;
+    case 'spit_owl':
+      return 0.65;
+    case 'old_stump':
+      return 2.4;
+  }
+}
 
 export interface WeaponState {
   id: WeaponType;
@@ -26,16 +40,56 @@ export interface DamageParams {
   mightTomeBonus: number;
   itemDamageMultiplier: number;
   isCrit: boolean;
+  isOvercrit?: boolean;
+}
+
+export interface CritRollResult {
+  isCrit: boolean;
+  isOvercrit: boolean;
+  multiplier: number;
 }
 
 /**
- * Расчёт урона по формуле DESIGN.md (раздел 5.2, строки 104-105):
- * (база оружия + уровень оружия + фолиант силы) × множители предметов × крит (×2).
+ * Ролл крита и оверкрита по правилам Megabonk (DESIGN.md, раздел 5.3):
+ * - При шансе крита <= 100% (1.0): стандартный ролл (множитель ×2.0 при успехе).
+ * - При шансе крита > 100% (1.0): базовый крит гарантирован (×2.0),
+ *   а остаток шанса (critChance - 1.0) даёт шанс оранжевого супер-крита (×3.0).
+ */
+export function rollCrit(critChance: number, rnd: () => number = Math.random): CritRollResult {
+  if (critChance <= 0) {
+    return { isCrit: false, isOvercrit: false, multiplier: 1.0 };
+  }
+  if (critChance <= 1.0) {
+    const isCrit = rnd() < critChance;
+    return {
+      isCrit,
+      isOvercrit: false,
+      multiplier: isCrit ? 2.0 : 1.0,
+    };
+  }
+  const overcritChance = critChance - 1.0;
+  const isOvercrit = rnd() < overcritChance;
+  return {
+    isCrit: true,
+    isOvercrit,
+    multiplier: isOvercrit ? 3.0 : 2.0,
+  };
+}
+
+/**
+ * Расчёт урона по формуле DESIGN.md (раздел 5.2 и 5.3):
+ * (база оружия + уровень оружия + фолиант силы) × множители предметов × крит (×2 или оверкрит ×3).
  */
 export function calculateDamage(params: DamageParams): number {
   const flatSum = params.baseDamage + params.weaponLevelBonus + params.mightTomeBonus;
   const withItems = flatSum * Math.max(0, params.itemDamageMultiplier);
-  const total = withItems * (params.isCrit ? 2.0 : 1.0);
+  let critMult = 1.0;
+  if (params.isOvercrit) {
+    critMult = 3.0;
+  } else if (params.isCrit) {
+    critMult = 2.0;
+  }
+  const total = withItems * critMult;
   return Math.round(total);
 }
 
@@ -122,6 +176,7 @@ export interface HeroProjectileEntity {
   radius: number;
   lifeSec: number;
   isCrit?: boolean;
+  isOvercrit?: boolean;
 }
 
 export interface TelegraphBeamEntity {
@@ -145,6 +200,7 @@ export interface DamagePopupEvent {
   z: number;
   damage: number;
   isCrit: boolean;
+  isOvercrit?: boolean;
   isHero: boolean;
 }
 
@@ -176,6 +232,7 @@ export interface CombatState {
   healOnKill: number;
   honeycombTokens: number;
   mirrorBarkCooldownSec: number;
+  mirrorBarkBaseCooldown: number;
   mirrorBarkReady: boolean;
   hasMirrorBark: boolean;
   stormBeadCount: number;
@@ -218,6 +275,7 @@ export function createInitialCombatState(): CombatState {
     healOnKill: 0,
     honeycombTokens: 10.0,
     mirrorBarkCooldownSec: 0.0,
+    mirrorBarkBaseCooldown: 10.0,
     mirrorBarkReady: false,
     hasMirrorBark: false,
     stormBeadCount: 0,
@@ -236,8 +294,14 @@ export function spawnMobInRing(
   heroZ: number,
   type: MobType,
   runTimeSec: number,
-  rnd: () => number,
+  rnd: () => number = Math.random,
 ): MobEntity {
+  // Босс Старый Пень спавнится строго в единственном экземпляре
+  if (type === 'old_stump') {
+    const existingBoss = state.mobs.find((m) => m.type === 'old_stump');
+    if (existingBoss) return existingBoss;
+  }
+
   const cfg = MOB_CONFIGS[type];
   const hpMult = getMobHpMultiplier(runTimeSec);
   const hp = Math.round(cfg.baseHp * hpMult);
@@ -245,8 +309,27 @@ export function spawnMobInRing(
   const angle = rnd() * Math.PI * 2;
   // Дистанция строго в кольце 18..24 м
   const dist = 18.0 + rnd() * 6.0;
-  const x = heroX + Math.cos(angle) * dist;
-  const z = heroZ + Math.sin(angle) * dist;
+  let x = heroX + Math.cos(angle) * dist;
+  let z = heroZ + Math.sin(angle) * dist;
+
+  // Безопасный спавн строго внутри активной арены (R <= 58.0 м при арене 60.0 м)
+  const MAX_SPAWN_RADIUS = 58.0;
+  if (Math.hypot(x, z) > MAX_SPAWN_RADIUS) {
+    // Если точка спавна выходит за границы арены (герой у края карты):
+    // Направляем спавн от героя в сторону центра поляны (0, 0)
+    const toCenterAngle = Math.atan2(-heroZ, -heroX);
+    // Случайный сектор ±60° в сторону центра поляны
+    const inwardAngle = toCenterAngle + (rnd() - 0.5) * (Math.PI * 0.66);
+    x = heroX + Math.cos(inwardAngle) * dist;
+    z = heroZ + Math.sin(inwardAngle) * dist;
+
+    // Гарантированный кламп внутри арены
+    const distFromCenter = Math.hypot(x, z);
+    if (distFromCenter > MAX_SPAWN_RADIUS) {
+      x = (x / distFromCenter) * MAX_SPAWN_RADIUS;
+      z = (z / distFromCenter) * MAX_SPAWN_RADIUS;
+    }
+  }
 
   const mob: MobEntity = {
     id: state.nextMobId++,
@@ -293,6 +376,37 @@ export interface StepCombatResult {
   bossMaxHp: number | null;
   shieldBlocked?: boolean;
   revivedByPhoenix?: boolean;
+  heroPushX?: number;
+  heroPushZ?: number;
+}
+
+/**
+ * Расчёт опорной поверхности под мобом с учётом покатых валунов арены.
+ */
+export function getMobSurfaceHeight(
+  x: number,
+  z: number,
+  mobRadius: number,
+  obstacles: readonly Obstacle[] = [],
+  getGroundHeight: (x: number, z: number) => number = () => 0,
+): number {
+  let surfaceY = getGroundHeight(x, z);
+  for (const obs of obstacles) {
+    const obsHeight = obs.height ?? 1.2;
+    if (obsHeight < 3.0) {
+      const mDist = Math.hypot(x - obs.x, z - obs.z);
+      const maxReach = obs.radius + mobRadius * 0.4;
+      if (mDist < maxReach) {
+        const u = Math.min(1.0, mDist / maxReach);
+        const domeH = obsHeight * Math.sqrt(Math.max(0, 1 - u * u));
+        const rockY = getGroundHeight(obs.x, obs.z) + domeH;
+        if (rockY > surfaceY) {
+          surfaceY = rockY;
+        }
+      }
+    }
+  }
+  return surfaceY;
 }
 
 /**
@@ -308,6 +422,8 @@ export function stepCombat(
   pickupRadius = HERO_CONFIG.pickupRadius,
   getGroundHeight: (x: number, z: number) => number = () => 0,
   rnd: () => number = Math.random,
+  obstacles: readonly Obstacle[] = [],
+  arenaRadius = 60.0,
 ): StepCombatResult {
   const safeDt = Math.min(Math.max(dt, 0), 0.05);
   let damageDealtToHero = 0;
@@ -347,20 +463,6 @@ export function stepCombat(
         mob.x += (dx / dist) * mob.speed * safeDt;
         mob.z += (dz / dist) * mob.speed * safeDt;
       }
-      // Касание героя (честный 3D-расчёт: центр героя heroY + 0.45, центр грибыша mob.y + 0.2, ERR-06)
-      const dist3D = Math.hypot(heroX - mob.x, (heroY + 0.45) - (mob.y + 0.2), heroZ - mob.z);
-      if (dist3D < mob.radius + 0.45 && state.heroIFrameSec <= 0) {
-        damageDealtToHero += mob.damage;
-        state.heroIFrameSec = 0.6; // кадры неуязвимости
-        damagePopups.push({
-          x: heroX,
-          y: heroY + 0.8,
-          z: heroZ,
-          damage: mob.damage,
-          isCrit: false,
-          isHero: true,
-        });
-      }
     } else if (mob.type === 'ram_beetle') {
       // Жук-таран: останавливается, мигает 0.6 с, затем рывок 9 м/с
       if (mob.state === 'walk') {
@@ -385,19 +487,6 @@ export function stepCombat(
         const chargeSpeed = 9.0;
         mob.x += mob.chargeDirX * chargeSpeed * safeDt;
         mob.z += mob.chargeDirZ * chargeSpeed * safeDt;
-        const dist3D = Math.hypot(heroX - mob.x, (heroY + 0.45) - (mob.y + 0.2), heroZ - mob.z);
-        if (dist3D < mob.radius + 0.45 && state.heroIFrameSec <= 0) {
-          damageDealtToHero += mob.damage;
-          state.heroIFrameSec = 0.6;
-          damagePopups.push({
-            x: heroX,
-            y: heroY + 0.8,
-            z: heroZ,
-            damage: mob.damage,
-            isCrit: false,
-            isHero: true,
-          });
-        }
         if (mob.stateTimer <= 0) {
           mob.state = 'cooldown';
           mob.stateTimer = 1.6;
@@ -457,52 +546,190 @@ export function stepCombat(
         mob.x += (dx / dist) * mob.speed * safeDt;
         mob.z += (dz / dist) * mob.speed * safeDt;
       }
-      // Касание босса (честный 3D-расчёт: центр босса mob.y + 1.2, центр героя heroY + 0.45, ERR-06)
-      const dist3D = Math.hypot(heroX - mob.x, (heroY + 0.45) - (mob.y + 1.2), heroZ - mob.z);
-      if (dist3D < mob.radius + 0.45 && state.heroIFrameSec <= 0) {
-        damageDealtToHero += mob.damage;
-        state.heroIFrameSec = 0.8;
-        damagePopups.push({
-          x: heroX,
-          y: heroY + 0.8,
-          z: heroZ,
-          damage: mob.damage,
-          isCrit: false,
-          isHero: true,
-        });
+    }
+
+    // 1.1. Коллизии моба с препятствиями (камни, деревья)
+    for (const obs of obstacles) {
+      const obsHeight = obs.height ?? 1.2;
+      const obsGroundY = getGroundHeight(obs.x, obs.z);
+
+      // Отвесные монолитные преграды (стволы деревьев, граничные скалы) блокируют движение
+      if (obsHeight >= 3.0) {
+        const obsTopY = obsGroundY + obsHeight;
+        const mobHeight = getMobHeight(mob.type);
+
+        if (mob.y < obsTopY && (mob.y + mobHeight) > obsGroundY) {
+          const minDist = obs.radius + mob.radius;
+          const mdx = mob.x - obs.x;
+          const mdz = mob.z - obs.z;
+          const distSq = mdx * mdx + mdz * mdz;
+
+          if (distSq < minDist * minDist && distSq > 0.00001) {
+            const mDist = Math.sqrt(distSq);
+            const overlap = minDist - mDist;
+            const nx = mdx / mDist;
+            const nz = mdz / mDist;
+            mob.x += nx * overlap;
+            mob.z += nz * overlap;
+
+            // Касательный обход препятствий (Obstacle Steering / Slide, ERR-18):
+            // Мобильная сущность не застревает в лоб, а скользит вдоль ствола в сторону героя
+            const toHeroX = heroX - mob.x;
+            const toHeroZ = heroZ - mob.z;
+            const toHeroDist = Math.hypot(toHeroX, toHeroZ);
+            if (toHeroDist > 0.001) {
+              const hx = toHeroX / toHeroDist;
+              const hz = toHeroZ / toHeroDist;
+              // Скалярное произведение направления на героя и нормали к препятствию
+              const dotN = hx * nx + hz * nz;
+              if (dotN < 0.5) {
+                // Вектор касательной t = (-nz, nx)
+                const dotT = hx * (-nz) + hz * nx;
+                const sign = dotT >= 0 ? 1 : -1;
+                const tx = -nz * sign;
+                const tz = nx * sign;
+                mob.x += tx * mob.speed * safeDt * 1.25;
+                mob.z += tz * mob.speed * safeDt * 1.25;
+              }
+            }
+
+            // Жук-таран в фазе рывка врезается в дерево/скалу и останавливается в перезарядку
+            if (mob.type === 'ram_beetle' && mob.state === 'charge') {
+              mob.state = 'cooldown';
+              mob.stateTimer = 1.6;
+            }
+          }
+        }
       }
     }
 
-    mob.y = getGroundHeight(mob.x, mob.z);
+    // 1.2. Ограничение границ арены для мобов (единая граница Megabonk, без искусственных стен перед героем)
+    if (arenaRadius > 0) {
+      const distArena = Math.hypot(mob.x, mob.z);
+      if (distArena > arenaRadius) {
+        mob.x = (mob.x / distArena) * arenaRadius;
+        mob.z = (mob.z / distArena) * arenaRadius;
+      }
+    }
+
+    // Обновляем высоту моба по рельефу и покатым камням арены (карабканье мобов, ликвидация абуза)
+    mob.y = getMobSurfaceHeight(mob.x, mob.z, mob.radius, obstacles, getGroundHeight);
+
+    // 1.3. Честный урон касанием по герою в 3D
+    // Урон наносится только если:
+    // а) цилиндр героя [heroY, heroY + 0.9] и цилиндр моба [mob.y, mob.y + mobHeight] пересекаются по Y
+    // б) горизонтальное расстояние меньше суммы радиусов
+    // в) для жука-тарана: только во время рывка (charge)
+    const mobHeight = getMobHeight(mob.type);
+    const isVerticalOverlap = heroY < (mob.y + mobHeight) && (heroY + 0.9) > mob.y;
+    const distXZ = Math.hypot(heroX - mob.x, heroZ - mob.z);
+    const canDamageHero =
+      mob.type === 'ram_beetle' ? mob.state === 'charge' : mob.type !== 'spit_owl';
+
+    if (canDamageHero && isVerticalOverlap && distXZ < mob.radius + 0.45 && state.heroIFrameSec <= 0) {
+      damageDealtToHero += mob.damage;
+      state.heroIFrameSec = mob.type === 'old_stump' ? 0.8 : 0.6;
+      damagePopups.push({
+        x: heroX,
+        y: heroY + 0.8,
+        z: heroZ,
+        damage: mob.damage,
+        isCrit: false,
+        isHero: true,
+      });
+
+      // При попадании по герою жук-таран завершает рывок
+      if (mob.type === 'ram_beetle' && mob.state === 'charge') {
+        mob.state = 'cooldown';
+        mob.stateTimer = 1.6;
+      }
+    }
   }
 
-  // 2. Телеграфные лучи совят (3 фазы: прицеливание 0..1.1 с, фиксация 1.1..1.5 с, 3D хитскан на 1.5 с)
+  // 1.5. Взаимное расталкивание мобов (Separation push-out) и коллизии с героем
+  let heroPushX = 0;
+  let heroPushZ = 0;
+  const heroRadius = 0.45;
+  const mobCount = state.mobs.length;
+
+  for (let i = 0; i < mobCount; i++) {
+    const m1 = state.mobs[i]!;
+
+    // Взаимное расталкивание между парами мобов (предотвращает слипание врагов в одну точку)
+    for (let j = i + 1; j < mobCount; j++) {
+      const m2 = state.mobs[j]!;
+      const dx = m1.x - m2.x;
+      const dz = m1.z - m2.z;
+      const minDist = m1.radius + m2.radius;
+      const distSq = dx * dx + dz * dz;
+
+      if (distSq < minDist * minDist && distSq > 0.00001) {
+        const dist = Math.sqrt(distSq);
+        const overlap = minDist - dist;
+        const nx = dx / dist;
+        const nz = dz / dist;
+
+        if (m1.type === 'old_stump') {
+          // Босс монолитен: рядовой враг отталкивается на всю величину
+          m2.x -= nx * overlap;
+          m2.z -= nz * overlap;
+        } else if (m2.type === 'old_stump') {
+          m1.x += nx * overlap;
+          m1.z += nz * overlap;
+        } else {
+          // Рядовые враги расталкиваются поровну
+          const push = overlap * 0.5;
+          m1.x += nx * push;
+          m1.z += nz * push;
+          m2.x -= nx * push;
+          m2.z -= nz * push;
+        }
+      }
+    }
+
+    // Коллизия с героем: выталкивание героя наружу (не даёт проходить сквозь босса и мобов на земле)
+    // Действует ТОЛЬКО если герой и моб пересекаются по вертикали!
+    const m1Height = getMobHeight(m1.type);
+    const isVerticalOverlapWithHero = heroY < (m1.y + m1Height) && (heroY + 0.9) > m1.y;
+
+    if (isVerticalOverlapWithHero) {
+      const hdx = heroX - m1.x;
+      const hdz = heroZ - m1.z;
+      const heroMinDist = m1.radius + heroRadius;
+      const hDistSq = hdx * hdx + hdz * hdz;
+
+      if (hDistSq < heroMinDist * heroMinDist && hDistSq > 0.00001) {
+        const hDist = Math.sqrt(hDistSq);
+        const hOverlap = heroMinDist - hDist;
+        const hnx = hdx / hDist;
+        const hnz = hdz / hDist;
+
+        if (m1.type === 'old_stump') {
+          // Босс монолитен: герой полностью выталкивается по нормали
+          heroPushX += hnx * hOverlap;
+          heroPushZ += hnz * hOverlap;
+        } else {
+          // Рядовой моб: мягкое разделение
+          const push = hOverlap * 0.5;
+          heroPushX += hnx * push;
+          heroPushZ += hnz * push;
+          m1.x -= hnx * push;
+          m1.z -= hnz * push;
+        }
+      }
+    }
+
+    // Обновляем высоту по рельефу и покатым камням арены после расталкивания
+    m1.y = getMobSurfaceHeight(m1.x, m1.z, m1.radius, obstacles, getGroundHeight);
+  }
+
+  // 2. Телеграфные лучи совят (честный статичный телеграф 1.5 с, каждый попавший луч наносит урон)
+  let beamsHitHeroCount = 0;
   for (let i = state.beams.length - 1; i >= 0; i--) {
     const beam = state.beams[i]!;
     beam.timer -= safeDt;
 
-    // Фаза 1 (прицеливание, пока timer > 0.4 с): луч мягко следует за лисом
-    if (beam.timer > 0.4) {
-      const owl = state.mobs.find((m) => m.id === beam.owlId);
-      if (owl) {
-        beam.startX = owl.x;
-        beam.startY = owl.y + 0.6;
-        beam.startZ = owl.z;
-        const targetY = heroY + 0.45;
-        const bdx = heroX - beam.startX;
-        const bdy = targetY - beam.startY;
-        const bdz = heroZ - beam.startZ;
-        const d3 = Math.hypot(bdx, bdy, bdz);
-        if (d3 > 0.001) {
-          beam.dirX = bdx / d3;
-          beam.dirY = bdy / d3;
-          beam.dirZ = bdz / d3;
-        }
-      }
-    }
-    // Фаза 2 (timer <= 0.4 с): луч намертво зафиксирован в пространстве — окно для уклонения!
-
-    // Фаза 3: момент выстрела (timer <= 0)
+    // Момент выстрела (timer <= 0)
     if (beam.timer <= 0) {
       // Честный 3D-расчёт расстояния от луча до центра тела героя (heroY + 0.45)
       const hx = heroX - beam.startX;
@@ -510,19 +737,47 @@ export function stepCombat(
       const hz = heroZ - beam.startZ;
       const t = hx * beam.dirX + hy * beam.dirY + hz * beam.dirZ;
 
-      if (t >= 0 && t <= beam.length) {
+      // Проверка препятствий (камней, стволов деревьев) между совёнком и героем
+      let isBlockedByObstacle = false;
+      for (const obs of obstacles) {
+        const obsHeight = obs.height ?? 1.2;
+        const obsGroundY = getGroundHeight(obs.x, obs.z);
+        const obsTopY = obsGroundY + obsHeight;
+
+        const ox = obs.x - beam.startX;
+        const oz = obs.z - beam.startZ;
+        const tObs = ox * beam.dirX + oz * beam.dirZ;
+
+        if (tObs > 0 && tObs < t) {
+          const ptX = beam.startX + beam.dirX * tObs;
+          const ptY = beam.startY + beam.dirY * tObs;
+          const ptZ = beam.startZ + beam.dirZ * tObs;
+          const distToObs = Math.hypot(obs.x - ptX, obs.z - ptZ);
+
+          if (distToObs < obs.radius && ptY >= obsGroundY && ptY <= obsTopY) {
+            isBlockedByObstacle = true;
+            break;
+          }
+        }
+      }
+
+      if (!isBlockedByObstacle && t >= 0 && t <= beam.length) {
         const closestX = beam.startX + beam.dirX * t;
         const closestY = beam.startY + beam.dirY * t;
         const closestZ = beam.startZ + beam.dirZ * t;
         const dist3D = Math.hypot(heroX - closestX, (heroY + 0.45) - closestY, heroZ - closestZ);
 
         // Если лис не подпрыгнул выше луча и не ушёл в сторону (радиус поражения луча 0.55 м)
-        if (dist3D < 0.55 && state.heroIFrameSec <= 0) {
+        // ВАЖНО: одновременный залп нескольких совят не должен глушиться i-frame одного луча!
+        if (dist3D < 0.55) {
           damageDealtToHero += beam.damage;
-          state.heroIFrameSec = 0.6;
+          beamsHitHeroCount++;
+
+          const jitterX = (rnd() - 0.5) * 0.4;
+          const jitterY = (rnd() - 0.5) * 0.3;
           damagePopups.push({
-            x: heroX,
-            y: heroY + 0.8,
+            x: heroX + jitterX,
+            y: heroY + 0.8 + jitterY,
             z: heroZ,
             damage: beam.damage,
             isCrit: false,
@@ -531,6 +786,36 @@ export function stepCombat(
         }
       }
       state.beams.splice(i, 1);
+    }
+  }
+
+  // Защитный i-frame выставляется только ПОСЛЕ того, как все одновременные лучи нанесли урон
+  if (beamsHitHeroCount > 0) {
+    state.heroIFrameSec = 0.4;
+  }
+
+  // 2.5. Предотвращение застревания кристаллов опыта внутри камней и деревьев (только для покоящихся)
+  for (const gem of state.gems) {
+    if (gem.flying) continue; // Летящие магнитом кристаллы свободно перемещаются в 3D к лису
+
+    for (const obs of obstacles) {
+      const obsHeight = obs.height ?? 1.2;
+      if (obsHeight >= 3.0) {
+        // Стволы деревьев и граничные скалы: выталкиваем кристаллы наружу
+        const gdx = gem.x - obs.x;
+        const gdz = gem.z - obs.z;
+        const gDistSq = gdx * gdx + gdz * gdz;
+        const minGemDist = obs.radius + 0.35;
+        if (gDistSq < minGemDist * minGemDist) {
+          const gDist = Math.sqrt(gDistSq);
+          const nx = gDist > 0.0001 ? gdx / gDist : 1;
+          const nz = gDist > 0.0001 ? gdz / gDist : 0;
+          const gOverlap = minGemDist - gDist;
+          gem.x += nx * gOverlap;
+          gem.z += nz * gOverlap;
+          gem.y = getGroundHeight(gem.x, gem.z) + 0.25;
+        }
+      }
     }
   }
 
@@ -558,6 +843,7 @@ export function stepCombat(
           z: mob.z,
           damage: hp.damage,
           isCrit: hp.isCrit ?? false,
+          isOvercrit: hp.isOvercrit ?? false,
           isHero: false,
         });
         hit = true;
@@ -609,7 +895,20 @@ export function stepCombat(
         }
       }
     } else {
-      gem.y = getGroundHeight(gem.x, gem.z) + 0.25;
+      let gemSurfaceY = getGroundHeight(gem.x, gem.z);
+      for (const obs of obstacles) {
+        const obsHeight = obs.height ?? 1.2;
+        if (obsHeight < 3.0) {
+          const gDist = Math.hypot(gem.x - obs.x, gem.z - obs.z);
+          if (gDist < obs.radius) {
+            const u = gDist / obs.radius;
+            const domeH = obsHeight * Math.sqrt(Math.max(0, 1 - u * u));
+            const rY = getGroundHeight(obs.x, obs.z) + domeH;
+            if (rY > gemSurfaceY) gemSurfaceY = rY;
+          }
+        }
+      }
+      gem.y = gemSurfaceY + 0.25;
     }
   }
 
@@ -632,7 +931,7 @@ export function stepCombat(
         const bx = Math.sin(heroFacingYaw);
         const bz = Math.cos(heroFacingYaw);
         let hits = 0;
-        const isCrit = state.critChance > 0 && rnd() < state.critChance;
+        const critRoll = rollCrit(state.critChance, rnd);
 
         for (let i = state.mobs.length - 1; i >= 0; i--) {
           const m = state.mobs[i]!;
@@ -649,7 +948,8 @@ export function stepCombat(
                 weaponLevelBonus: 0,
                 mightTomeBonus: mightBonus,
                 itemDamageMultiplier: state.itemDamageMultiplier,
-                isCrit,
+                isCrit: critRoll.isCrit,
+                isOvercrit: critRoll.isOvercrit,
               });
               m.hp -= dmg;
               hits++;
@@ -658,7 +958,8 @@ export function stepCombat(
                 y: m.y + m.radius + 0.3,
                 z: m.z,
                 damage: dmg,
-                isCrit,
+                isCrit: critRoll.isCrit,
+                isOvercrit: critRoll.isOvercrit,
                 isHero: false,
               });
               if (m.hp <= 0) {
@@ -685,7 +986,7 @@ export function stepCombat(
           state.ninthTailAttackCount++;
           if (state.ninthTailAttackCount >= 5) {
             state.ninthTailAttackCount = 0;
-            triggerNinthTailWave(state, heroX, heroY, heroZ, heroFacingYaw, mightBonus, attacks, damagePopups);
+            triggerNinthTailWave(state, heroX, heroY, heroZ, heroFacingYaw, mightBonus, attacks, damagePopups, rnd);
           }
         }
       } else if (w.id === 'spark_sling') {
@@ -705,14 +1006,15 @@ export function stepCombat(
           // Количество снарядов не превышает количества мобов
           const count = Math.min(maxProjs, inRangeMobs.length);
           const pSpeed = cfg.projSpeed ?? 22.0;
-          const isCrit = state.critChance > 0 && rnd() < state.critChance;
+          const critRoll = rollCrit(state.critChance, rnd);
 
           const dmg = calculateDamage({
             baseDamage: baseDmg,
             weaponLevelBonus: 0,
             mightTomeBonus: mightBonus,
             itemDamageMultiplier: state.itemDamageMultiplier,
-            isCrit,
+            isCrit: critRoll.isCrit,
+            isOvercrit: critRoll.isOvercrit,
           });
 
           const startX = heroX;
@@ -742,7 +1044,8 @@ export function stepCombat(
               damage: dmg,
               radius: 0.35,
               lifeSec: 1.2,
-              isCrit,
+              isCrit: critRoll.isCrit,
+              isOvercrit: critRoll.isOvercrit,
             });
           }
 
@@ -759,7 +1062,7 @@ export function stepCombat(
             state.ninthTailAttackCount++;
             if (state.ninthTailAttackCount >= 5) {
               state.ninthTailAttackCount = 0;
-              triggerNinthTailWave(state, heroX, heroY, heroZ, heroFacingYaw, mightBonus, attacks, damagePopups);
+              triggerNinthTailWave(state, heroX, heroY, heroZ, heroFacingYaw, mightBonus, attacks, damagePopups, rnd);
             }
           }
         }
@@ -781,9 +1084,9 @@ export function stepCombat(
 
   if (damageDealtToHero > 0) {
     if (state.hasMirrorBark && state.mirrorBarkReady) {
-      // Зеркальная кора (mirror_bark): раз в 10 с снимает один удар целиком
+      // Зеркальная кора (mirror_bark): поглощает удар целиком, перезарядка со сжатием КД
       state.mirrorBarkReady = false;
-      state.mirrorBarkCooldownSec = 10.0;
+      state.mirrorBarkCooldownSec = state.mirrorBarkBaseCooldown ?? 10.0;
       shieldBlocked = true;
       damageDealtToHero = 0;
       // Убираем цифру урона по лису
@@ -846,6 +1149,8 @@ export function stepCombat(
     bossMaxHp,
     shieldBlocked,
     revivedByPhoenix,
+    heroPushX,
+    heroPushZ,
   };
 }
 
@@ -877,12 +1182,15 @@ function triggerStormBead(
 
   if (inRange.length === 0) return;
 
+  const critRoll = rollCrit(state.critChance, rnd);
+  const isOvercrit = critRoll.isOvercrit;
   const lightningDmg = calculateDamage({
     baseDamage: 20,
     weaponLevelBonus: 0,
     mightTomeBonus: mightBonus,
     itemDamageMultiplier: state.itemDamageMultiplier,
     isCrit: true,
+    isOvercrit,
   });
 
   for (const { mob: m } of inRange) {
@@ -893,6 +1201,7 @@ function triggerStormBead(
       z: m.z,
       damage: lightningDmg,
       isCrit: true,
+      isOvercrit,
       isHero: false,
     });
     if (m.hp <= 0) killMob(state, m.id);
@@ -919,14 +1228,18 @@ function triggerNinthTailWave(
   mightBonus: number,
   attacks: AttackEvent[],
   damagePopups: DamagePopupEvent[],
+  rnd: () => number = Math.random,
 ): void {
   const waveRadius = 4.0;
+  const critRoll = rollCrit(state.critChance, rnd);
+  const isOvercrit = critRoll.isOvercrit;
   const waveDmg = calculateDamage({
     baseDamage: 45,
     weaponLevelBonus: 0,
     mightTomeBonus: mightBonus,
     itemDamageMultiplier: state.itemDamageMultiplier,
     isCrit: true,
+    isOvercrit,
   });
 
   let hits = 0;
@@ -944,6 +1257,7 @@ function triggerNinthTailWave(
         z: m.z,
         damage: waveDmg,
         isCrit: true,
+        isOvercrit,
         isHero: false,
       });
       if (m.hp <= 0) killMob(state, m.id);

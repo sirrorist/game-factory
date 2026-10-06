@@ -8,8 +8,8 @@ describe('Генерация мира "Солнечные холмы" (DESIGN.md
     const w2 = generateWorld(1337);
 
     assert.equal(w1.trees.length, w2.trees.length);
-    assert.equal(w1.rocks.length, w2.rocks.length);
-    assert.equal(w1.boundaryRocks.length, w2.boundaryRocks.length);
+    assert.equal(w1.rocks.length, 0);
+    assert.equal(w1.boundaryRocks.length, 0);
 
     for (let i = 0; i < w1.trees.length; i++) {
       assert.equal(w1.trees[i]!.x, w2.trees[i]!.x);
@@ -17,10 +17,10 @@ describe('Генерация мира "Солнечные холмы" (DESIGN.md
     }
   });
 
-  it('число внутренних препятствий в пределах 40-60 по DESIGN.md', () => {
+  it('число внутренних препятствий в пределах 40-60 по DESIGN.md (деревья)', () => {
     const world = generateWorld();
-    const innerObstaclesCount = world.trees.length + world.rocks.length;
-    // По DESIGN.md, раздел 6: "40-60 камней и деревьев как препятствия"
+    const innerObstaclesCount = world.trees.length;
+    // По DESIGN.md, раздел 6: 40-60 деревьев как укрытия и препятствия
     assert.ok(
       innerObstaclesCount >= 40 && innerObstaclesCount <= 60,
       `Число препятствий ${innerObstaclesCount} вне диапазона 40..60`,
@@ -38,14 +38,15 @@ describe('Генерация мира "Солнечные холмы" (DESIGN.md
     }
   });
 
-  it('кольцо скал оцепляет арену по периметру (радиус 60..70 м)', () => {
+  it('камни исключены: чистая арена Megabonk с деревьями строго внутри R <= 55 м', () => {
     const world = generateWorld();
-    assert.ok(world.boundaryRocks.length >= 40, 'Слишком мало граничных скал');
-    for (const rock of world.boundaryRocks) {
-      const dist = Math.hypot(rock.x, rock.z);
+    assert.equal(world.rocks.length, 0, 'Внутренние камни должны отсутствовать');
+    assert.equal(world.boundaryRocks.length, 0, 'Граничные скалы должны отсутствовать');
+    for (const tree of world.trees) {
+      const dist = Math.hypot(tree.x, tree.z);
       assert.ok(
-        dist >= 61.0 && dist <= 68.0,
-        `Граничная скала на dist = ${dist} вне диапазона 61..68 м`,
+        dist <= 55.0001,
+        `Дерево на dist = ${dist} выходит за безопасную зону арены (55 м)`,
       );
     }
   });

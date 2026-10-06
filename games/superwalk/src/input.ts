@@ -142,7 +142,13 @@ export class Input {
       e.preventDefault();
       return;
     }
-    if (down && (e.ctrlKey || e.metaKey)) return;
+    // ERR-10: Перехват системных шорткатов браузера при беге и взаимодействии (Ctrl+W, Ctrl+R и др.)
+    if (e.ctrlKey || e.metaKey) {
+      if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR', 'KeyT', 'KeyN', 'KeyQ', 'KeyP', 'KeyU', 'Space', 'Tab', 'Escape'].includes(e.code)) {
+        e.preventDefault();
+      }
+      // Клавиши продолжают регистрироваться в игре даже при зажатом Ctrl/Meta
+    }
 
     if (down) this.keys.add(e.code);
     else this.keys.delete(e.code);

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GameFactory, type Session } from '@gf/game-sdk';
 import { fillIcons, setIcon } from './icons.ts';
 import { Input } from './input.ts';
-import { stepPlayer, getTerrainHeight, DEFAULT_PLAYER_PARAMS, type PlayerState, type PlayerParams } from './core/movement.ts';
+import { stepPlayer, getTerrainHeight, getSurfaceHeight, DEFAULT_PLAYER_PARAMS, type PlayerState, type PlayerParams } from './core/movement.ts';
 import { generateWorld, type WorldData } from './core/world.ts';
 import {
   createInitialCombatState,
@@ -202,11 +202,11 @@ class SuperwalkApp {
   // Инвентарь и карточки прокачки
   private inventory: PlayerInventory = createInitialInventory();
   private upgradeModalOpen = false;
+  private upgradeModalOpenedAt = 0;
   private currentUpgradeChoices: UpgradeOption[] = [];
 
-  // Окно Tab (карта и характеристики)
+  // Окно Tab (единый 3-колоночный тактический обзор)
   private tabModalOpen = false;
-  private activeTab: 'map' | 'stats' = 'map';
 
   // Боевая система и мобы
   private combatState: CombatState;
@@ -397,13 +397,14 @@ class SuperwalkApp {
     // Хвост (прикреплен сзади к телу на +Z)
     this.tailPivot = new THREE.Group();
     this.tailPivot.position.set(0, 0.36, 0.24);
-    const tailBase = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.07, 0.6, 6), foxOrange);
-    tailBase.position.set(0, 0.22, 0.22);
-    tailBase.rotation.x = 0.8;
-    const tailTip = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.32, 6), whiteMat);
-    tailTip.position.set(0, 0.52, 0.46);
-    tailTip.rotation.x = 0.8;
-    this.tailPivot.add(tailBase, tailTip);
+    const tailMesh = new THREE.Group();
+    const tailBase = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.08, 0.5, 6), foxOrange);
+    tailBase.position.set(0, 0.25, 0);
+    const tailTip = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.28, 6), whiteMat);
+    tailTip.position.set(0, 0.64, 0);
+    tailMesh.add(tailBase, tailTip);
+    tailMesh.rotation.x = 0.85;
+    this.tailPivot.add(tailMesh);
     this.heroGroup.add(this.tailPivot);
 
     this.scene.add(this.heroGroup);
@@ -474,36 +475,30 @@ class SuperwalkApp {
     upperMesh.instanceMatrix.needsUpdate = true;
     this.scene.add(trunkMesh, lowerMesh, upperMesh);
 
-    // 7.2 Внутренние камни (low-poly додекаэдры)
-    const rockGeo = new THREE.DodecahedronGeometry(1.0, 0);
-    const rockMat = new THREE.MeshLambertMaterial({ color: 0xb2aba0, flatShading: true });
-    const rockMesh = new THREE.InstancedMesh(rockGeo, rockMat, this.world.rocks.length);
-    for (let i = 0; i < this.world.rocks.length; i++) {
-      const r = this.world.rocks[i]!;
-      const y = getTerrainHeight(r.x, r.z);
-      dummy.position.set(r.x, y + 0.5 * r.scale, r.z);
-      dummy.rotation.set(0, r.rotY, 0);
-      dummy.scale.set(r.scale, 0.8 * r.scale, r.scale);
-      dummy.updateMatrix();
-      rockMesh.setMatrixAt(i, dummy.matrix);
-    }
-    rockMesh.instanceMatrix.needsUpdate = true;
-    this.scene.add(rockMesh);
+    // 7.2 Силовой барьер арены (Force Field в стиле Megabonk) на R = 60.0 м
+    const barrierRadius = 60.0;
+    const barrierHeight = 6.0;
+    const barrierGeo = new THREE.CylinderGeometry(barrierRadius, barrierRadius, barrierHeight, 64, 1, true);
+    const barrierMat = new THREE.MeshBasicMaterial({
+      color: 0x48cae4,
+      transparent: true,
+      opacity: 0.18,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const barrierMesh = new THREE.Mesh(barrierGeo, barrierMat);
+    barrierMesh.position.set(0, barrierHeight * 0.5, 0);
+    this.scene.add(barrierMesh);
 
-    // 7.3 Граничные скалы по периметру (массивные валуны)
-    const boundaryMat = new THREE.MeshLambertMaterial({ color: 0x8c867d, flatShading: true });
-    const boundaryMesh = new THREE.InstancedMesh(rockGeo, boundaryMat, this.world.boundaryRocks.length);
-    for (let i = 0; i < this.world.boundaryRocks.length; i++) {
-      const br = this.world.boundaryRocks[i]!;
-      const y = getTerrainHeight(br.x, br.z);
-      dummy.position.set(br.x, y + 1.2 * br.scale, br.z);
-      dummy.rotation.set(0, br.rotY, 0);
-      dummy.scale.set(br.scale, 1.4 * br.scale, br.scale);
-      dummy.updateMatrix();
-      boundaryMesh.setMatrixAt(i, dummy.matrix);
-    }
-    boundaryMesh.instanceMatrix.needsUpdate = true;
-    this.scene.add(boundaryMesh);
+    // Верхний и нижний неоновые световые контуры барьера
+    const ringGeo = new THREE.TorusGeometry(barrierRadius, 0.08, 6, 64);
+    ringGeo.rotateX(Math.PI / 2);
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0x90e0ef, transparent: true, opacity: 0.65 });
+    const topRingMesh = new THREE.Mesh(ringGeo, ringMat);
+    topRingMesh.position.set(0, barrierHeight, 0);
+    const botRingMesh = new THREE.Mesh(ringGeo, ringMat);
+    botRingMesh.position.set(0, 0.05, 0);
+    this.scene.add(topRingMesh, botRingMesh);
 
     // 7.4 Декоративные пучки травы
     const grassGeo = new THREE.ConeGeometry(0.35, 0.6, 3);
@@ -740,8 +735,14 @@ class SuperwalkApp {
     $('btn-skip-upgrade').addEventListener('click', () => this.skipUpgrade());
     $('btn-tab').addEventListener('click', () => this.toggleTabModal());
     $('tab-btn-close').addEventListener('click', () => this.closeTabModal());
-    $('tab-btn-map').addEventListener('click', () => this.switchTab('map'));
-    $('tab-btn-stats').addEventListener('click', () => this.switchTab('stats'));
+
+    // Защита от случайного закрытия вкладки во время забега (ERR-10)
+    window.addEventListener('beforeunload', (e) => {
+      if (this.combatState && this.combatState.heroHp > 0 && this.runTime > 5) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
 
     if (document.fullscreenEnabled) {
       $('btn-fs').hidden = false;
@@ -749,7 +750,19 @@ class SuperwalkApp {
       $('btn-fs').addEventListener('click', () => void this.toggleFullscreen());
       $('btn-menu-fs').addEventListener('click', () => void this.toggleFullscreen());
       document.addEventListener('fullscreenchange', () => {
-        if (!document.fullscreenElement) this.fullscreenExitAt = performance.now();
+        if (!document.fullscreenElement) {
+          this.fullscreenExitAt = performance.now();
+          const navKey = (navigator as unknown as { keyboard?: { unlock?: () => void } }).keyboard;
+          if (navKey && typeof navKey.unlock === 'function') {
+            navKey.unlock();
+          }
+        } else {
+          // Keyboard Lock API при включении Fullscreen (ERR-10)
+          const navKey = (navigator as unknown as { keyboard?: { lock?: (keys?: string[]) => Promise<void> } }).keyboard;
+          if (navKey && typeof navKey.lock === 'function') {
+            navKey.lock(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Escape']).catch(() => {});
+          }
+        }
         this.syncFullscreenButtons();
       });
       this.syncFullscreenButtons();
@@ -772,7 +785,8 @@ class SuperwalkApp {
           this.chooseUpgrade(2);
           return;
         }
-        if (e.code === 'Digit0' || e.code === 'Numpad0' || e.code === 'Space') {
+        // ERR-11: убран Space, чтобы прыжок в момент появления окна не скипал улучшение!
+        if (e.code === 'Digit0' || e.code === 'Numpad0') {
           e.preventDefault();
           this.skipUpgrade();
           return;
@@ -821,9 +835,58 @@ class SuperwalkApp {
     this.recalculateHeroStats();
   }
 
+  private applyUpgradeChoice(choice: UpgradeOption): void {
+    applyUpgrade(this.inventory, choice.id);
+
+    // Синхронизируем состояние боя
+    this.combatState.hasteLevel = this.inventory.tomes.get('tome_haste') ?? 0;
+    this.combatState.mightLevel = this.inventory.tomes.get('tome_might') ?? 0;
+
+    for (const [wId, lvl] of this.inventory.weapons.entries()) {
+      let existing = this.combatState.weapons.find((w) => w.id === wId);
+      if (!existing) {
+        existing = { id: wId, level: lvl, cooldownTimer: 0.1 };
+        this.combatState.weapons.push(existing);
+      } else {
+        existing.level = lvl;
+      }
+    }
+
+    if (choice.id === 'tail_blade') {
+      this.updateSlashGeometry(this.inventory.weapons.get('tail_blade') ?? 1);
+    }
+
+    this.recalculateHeroStats();
+    this.updateInventoryHud();
+
+    this.combatState.pendingLevelUps = Math.max(0, this.combatState.pendingLevelUps - 1);
+  }
+
   private openUpgradeModal(): void {
     if (this.upgradeModalOpen) return;
+
+    this.currentUpgradeChoices = rollUpgradeChoices(this.inventory);
+
+    // Если нет доступных улучшений (всё улучшено до капа)
+    if (this.currentUpgradeChoices.length === 0) {
+      this.combatState.pendingLevelUps = 0;
+      return;
+    }
+
+    // Если доступен ровно 1 вариант улучшения: применяем в фоне без открытия модального окна и без паузы
+    if (this.currentUpgradeChoices.length === 1) {
+      const singleChoice = this.currentUpgradeChoices[0]!;
+      this.applyUpgradeChoice(singleChoice);
+      toast(`Авто-прокачка: ${singleChoice.name}`, 1800, 'ok');
+
+      if (this.combatState.pendingLevelUps > 0) {
+        this.openUpgradeModal();
+      }
+      return;
+    }
+
     this.upgradeModalOpen = true;
+    this.upgradeModalOpenedAt = performance.now();
     this.paused = true;
     if (this.tabModalOpen) {
       this.closeTabModal(false);
@@ -831,7 +894,6 @@ class SuperwalkApp {
     this.input.active = false;
     this.input.unlock();
 
-    this.currentUpgradeChoices = rollUpgradeChoices(this.inventory);
     const container = $('upgrade-cards');
     container.innerHTML = '';
 
@@ -868,30 +930,7 @@ class SuperwalkApp {
     const choice = this.currentUpgradeChoices[idx];
     if (!choice) return;
 
-    const res = applyUpgrade(this.inventory, choice.id);
-
-    // Синхронизируем состояние боя
-    this.combatState.hasteLevel = this.inventory.tomes.get('tome_haste') ?? 0;
-    this.combatState.mightLevel = this.inventory.tomes.get('tome_might') ?? 0;
-
-    for (const [wId, lvl] of this.inventory.weapons.entries()) {
-      let existing = this.combatState.weapons.find((w) => w.id === wId);
-      if (!existing) {
-        existing = { id: wId, level: lvl, cooldownTimer: 0.1 };
-        this.combatState.weapons.push(existing);
-      } else {
-        existing.level = lvl;
-      }
-    }
-
-    if (choice.id === 'tail_blade') {
-      this.updateSlashGeometry(this.inventory.weapons.get('tail_blade') ?? 1);
-    }
-
-    this.recalculateHeroStats();
-    this.updateInventoryHud();
-
-    this.combatState.pendingLevelUps = Math.max(0, this.combatState.pendingLevelUps - 1);
+    this.applyUpgradeChoice(choice);
     toast(`Выбрано: ${choice.name}`, 1800, 'ok');
 
     $('upgrade-modal').hidden = true;
@@ -908,6 +947,9 @@ class SuperwalkApp {
 
   private skipUpgrade(): void {
     if (!this.upgradeModalOpen) return;
+    // Защита от случайного скипа при появлении окна прокачки (debounce 300 мс, ERR-11)
+    if (performance.now() - this.upgradeModalOpenedAt < 300) return;
+
     this.combatState.pendingLevelUps = Math.max(0, this.combatState.pendingLevelUps - 1);
     toast('Прокачка пропущена', 1500);
 
@@ -938,7 +980,7 @@ class SuperwalkApp {
     $('tab-modal').hidden = false;
     // Игра НЕ встает на паузу, движение персонажа на WASD остается активным!
     this.input.unlock(); // Освобождаем мышь для работы с меню
-    this.updateTabStats();
+    this.updateDashboard();
   }
 
   private closeTabModal(restorePointerLock = true): void {
@@ -950,44 +992,103 @@ class SuperwalkApp {
     }
   }
 
-  private switchTab(tab: 'map' | 'stats'): void {
-    this.activeTab = tab;
-    if (tab === 'map') {
-      $('tab-btn-map').className = 'gf-tab-nav__btn gf-tab-nav__btn--active';
-      $('tab-btn-stats').className = 'gf-tab-nav__btn';
-      $('tab-pane-map').hidden = false;
-      $('tab-pane-stats').hidden = true;
-    } else {
-      $('tab-btn-map').className = 'gf-tab-nav__btn';
-      $('tab-btn-stats').className = 'gf-tab-nav__btn gf-tab-nav__btn--active';
-      $('tab-pane-map').hidden = true;
-      $('tab-pane-stats').hidden = false;
-      this.updateTabStats();
+  private renderInventoryItems(container: HTMLElement, isCompact = false): void {
+    container.innerHTML = '';
+    let hasAny = false;
+
+    // 1. Активное оружие
+    for (const [wId, lvl] of this.inventory.weapons.entries()) {
+      const cfg = WEAPON_CONFIGS[wId];
+      if (!cfg) continue;
+      hasAny = true;
+      const row = document.createElement('div');
+      row.className = 'gf-item-row gf-item-row--weapon';
+      row.innerHTML = `
+        <div class="gf-item-row__head">
+          <span class="gf-item-row__name">⚔ ${cfg.name}</span>
+          <span class="gf-item-row__badge">Ур. ${lvl}/5</span>
+        </div>
+        ${!isCompact ? `<span class="gf-item-row__desc">${cfg.description}</span>` : ''}
+      `;
+      container.appendChild(row);
+    }
+
+    // 2. Фолианты
+    for (const [tId, lvl] of this.inventory.tomes.entries()) {
+      if (lvl <= 0) continue;
+      const cfg = TOME_CONFIGS[tId];
+      if (!cfg) continue;
+      hasAny = true;
+      const row = document.createElement('div');
+      row.className = 'gf-item-row gf-item-row--tome';
+      row.innerHTML = `
+        <div class="gf-item-row__head">
+          <span class="gf-item-row__name">📖 ${cfg.name}</span>
+          <span class="gf-item-row__badge">Ур. ${lvl}/5</span>
+        </div>
+        ${!isCompact ? `<span class="gf-item-row__desc">${cfg.description}</span>` : ''}
+      `;
+      container.appendChild(row);
+    }
+
+    // 3. Предметы из сундуков
+    for (const [itId, count] of this.ownedItems.entries()) {
+      const cfg = ITEM_CONFIGS[itId];
+      if (!cfg || count <= 0) continue;
+      hasAny = true;
+      const row = document.createElement('div');
+      row.className = `gf-item-row gf-item-row--${cfg.rarity}`;
+      row.innerHTML = `
+        <div class="gf-item-row__head">
+          <span class="gf-item-row__name">${cfg.icon} ${cfg.name}</span>
+          <span class="gf-item-row__badge">×${count}</span>
+        </div>
+        <span class="gf-item-row__desc">${cfg.description}</span>
+      `;
+      container.appendChild(row);
+    }
+
+    if (!hasAny) {
+      const empty = document.createElement('div');
+      empty.className = 'gf-items-empty';
+      empty.textContent = 'Снаряжение пока не собрано. Ищите золотые сундуки на холмах!';
+      container.appendChild(empty);
     }
   }
 
-  private updateTabStats(): void {
-    const grid = $('tab-stats-grid');
-    grid.innerHTML = '';
-
+  private renderHeroStats(container: HTMLElement, isCompact = false): void {
+    container.innerHTML = '';
     const cs = this.combatState;
-    const inv = this.inventory;
     const itemBonuses = getItemStatBonuses(this.ownedItems, cs.heroMaxHp, cs.heroHp);
 
-    const stats = [
+    const stats: Array<{ label: string; val: string; sub: string }> = [
       { label: 'Здоровье лиса', val: `${Math.ceil(cs.heroHp)} / ${cs.heroMaxHp} HP`, sub: 'База 100 HP + чай + жёлуди' },
       { label: 'Скорость бега', val: `${this.playerParams.speed.toFixed(1)} м/с`, sub: `База 6.0 м/с (${Math.round(itemBonuses.speedMultiplier * 100)} %)` },
       { label: 'Высота прыжка', val: '1.6 м', sub: `Прыжков в воздухе: ${itemBonuses.airJumps}` },
-      { label: 'Сила', val: `+${cs.mightLevel * 3} к урону всех ударов`, sub: `Фолиант силы (Ур.${cs.mightLevel})` },
+      { label: 'Сила', val: `+${cs.mightLevel * 3} к урону`, sub: `Фолиант силы (Ур.${cs.mightLevel})` },
       { label: 'Спешка (скорость атаки)', val: `+${cs.hasteLevel * 12} %`, sub: `Фолиант быстроты (Ур.${cs.hasteLevel})` },
-      { label: 'Радиус сбора кристаллов', val: `${(HERO_CONFIG.pickupRadius * itemBonuses.pickupRadiusMultiplier).toFixed(1)} м`, sub: `Автомагнит (${Math.round(itemBonuses.pickupRadiusMultiplier * 100)} %)` },
+      { label: 'Радиус сбора', val: `${(HERO_CONFIG.pickupRadius * itemBonuses.pickupRadiusMultiplier).toFixed(1)} м`, sub: `Автомагнит (${Math.round(itemBonuses.pickupRadiusMultiplier * 100)} %)` },
       { label: 'Множитель урона', val: `×${itemBonuses.damageMultiplier.toFixed(2)}`, sub: 'Клыки и Тотем ярости' },
-      { label: 'Шанс крита', val: `${Math.round(itemBonuses.critChance * 100)} %`, sub: 'Заячья лапка (крит ×2)' },
+      {
+        label: 'Шанс крита',
+        val: `${Math.round(itemBonuses.critChance * 100)} %`,
+        sub: itemBonuses.critChance > 1.0
+          ? `Гарант крит ×2 + ${Math.round((itemBonuses.critChance - 1.0) * 100)}% оверкрит ×3`
+          : 'Заячья лапка (крит ×2)',
+      },
       { label: 'Регенерация HP', val: `+${itemBonuses.regenHpPerSec.toFixed(1)} HP/с`, sub: 'Лопух' },
       { label: 'Уровень героя', val: `Ур. ${cs.heroLevel}`, sub: `Опыт: ${cs.heroExp} / ${getRequiredExp(cs.heroLevel)}` },
       { label: 'Побеждено мобов', val: `${cs.kills}`, sub: 'Счётчик забега' },
-      { label: 'Время выживания', val: `${Math.floor(this.runTime / 60)}:${Math.floor(this.runTime % 60).toString().padStart(2, '0')}`, sub: 'Цель: 10:00+' },
+      { label: 'Время забега', val: `${Math.floor(this.runTime / 60)}:${Math.floor(this.runTime % 60).toString().padStart(2, '0')}`, sub: 'Цель: 10:00+' },
     ];
+
+    if (itemBonuses.hasMirrorBark) {
+      stats.push({
+        label: 'Зеркальная кора',
+        val: `${itemBonuses.mirrorBarkCooldown.toFixed(1)} с`,
+        sub: cs.mirrorBarkReady ? 'Щит готов' : `КД: ${cs.mirrorBarkCooldownSec.toFixed(1)} с`,
+      });
+    }
 
     if (cs.phoenixDownCharges > 0) {
       stats.push({
@@ -1003,36 +1104,34 @@ class SuperwalkApp {
       card.innerHTML = `
         <span class="gf-stat-card__label">${st.label}</span>
         <span class="gf-stat-card__val">${st.val}</span>
-        <span class="gf-stat-card__sub">${st.sub}</span>
+        ${!isCompact ? `<span class="gf-stat-card__sub">${st.sub}</span>` : ''}
       `;
-      grid.appendChild(card);
+      container.appendChild(card);
     }
+  }
 
-    // Активные оружия
-    for (const [wId, lvl] of inv.weapons.entries()) {
-      const cfg = WEAPON_CONFIGS[wId];
-      const card = document.createElement('div');
-      card.className = 'gf-stat-card';
-      card.innerHTML = `
-        <span class="gf-stat-card__label">⚔ Оружие: ${cfg.name}</span>
-        <span class="gf-stat-card__val">Уровень ${lvl} / 5</span>
-        <span class="gf-stat-card__sub">${cfg.description}</span>
-      `;
-      grid.appendChild(card);
+  private updateDashboard(): void {
+    if (this.tabModalOpen) {
+      const itemsContainer = document.getElementById('tab-items-list');
+      const statsContainer = document.getElementById('tab-stats-grid');
+      if (itemsContainer) this.renderInventoryItems(itemsContainer);
+      if (statsContainer) this.renderHeroStats(statsContainer);
+
+      // Радар карты: обновляем позицию лиса
+      const foxMarker = document.getElementById('map-fox-marker');
+      if (foxMarker) {
+        const arenaR = 60.0;
+        const radarR = 70.0;
+        const normX = Math.max(-1, Math.min(1, this.playerState.x / arenaR));
+        const normZ = Math.max(-1, Math.min(1, this.playerState.z / arenaR));
+        foxMarker.style.transform = `translate(${normX * radarR}px, ${normZ * radarR}px)`;
+      }
     }
-
-    // Собранные предметы из сундуков
-    for (const [itId, count] of this.ownedItems.entries()) {
-      const cfg = ITEM_CONFIGS[itId];
-      if (!cfg) continue;
-      const card = document.createElement('div');
-      card.className = 'gf-stat-card';
-      card.innerHTML = `
-        <span class="gf-stat-card__label">${cfg.icon} ${cfg.name} ${count > 1 ? '(×' + count + ')' : ''}</span>
-        <span class="gf-stat-card__val">${cfg.description}</span>
-        <span class="gf-stat-card__sub">Редкость: ${cfg.rarity}</span>
-      `;
-      grid.appendChild(card);
+    if (this.paused && !$('menu').hidden) {
+      const itemsContainer = document.getElementById('menu-items-list');
+      const statsContainer = document.getElementById('menu-stats-grid');
+      if (itemsContainer) this.renderInventoryItems(itemsContainer, true);
+      if (statsContainer) this.renderHeroStats(statsContainer, true);
     }
   }
 
@@ -1111,6 +1210,7 @@ class SuperwalkApp {
     this.input.active = false;
     this.input.unlock();
     $('menu').hidden = false;
+    this.updateDashboard();
   }
 
   private closeMenu(): void {
@@ -1288,11 +1388,12 @@ class SuperwalkApp {
       this.combatState.regenHpPerSec = bonuses.regenHpPerSec;
       this.combatState.healOnKill = bonuses.healOnKill;
       this.combatState.hasMirrorBark = bonuses.hasMirrorBark;
+      this.combatState.mirrorBarkBaseCooldown = bonuses.mirrorBarkCooldown;
       this.combatState.hasNinthTail = bonuses.hasNinthTail;
       this.combatState.stormBeadCount = bonuses.stormBeadCount;
       const effectivePickupRadius = HERO_CONFIG.pickupRadius * bonuses.pickupRadiusMultiplier;
 
-      // 6. Симуляция боя, автоатаки, снарядов и опыта
+      // 6. Симуляция боя, автоатаки, снарядов и опыта (с честными коллизиями с препятствиями)
       const combatRes = stepCombat(
         this.combatState,
         this.playerState.x,
@@ -1302,7 +1403,28 @@ class SuperwalkApp {
         this.heroGroup.rotation.y,
         effectivePickupRadius,
         getTerrainHeight,
+        Math.random,
+        this.world.obstacles,
+        60.0,
       );
+
+      if (combatRes.heroPushX || combatRes.heroPushZ) {
+        this.playerState.x += combatRes.heroPushX ?? 0;
+        this.playerState.z += combatRes.heroPushZ ?? 0;
+        if (this.playerState.grounded) {
+          this.playerState.y = getSurfaceHeight(
+            this.playerState.x,
+            this.playerState.z,
+            this.playerState.y,
+            this.world.obstacles,
+            this.playerParams.radius,
+          );
+        }
+      }
+
+      if (this.tabModalOpen) {
+        this.updateDashboard();
+      }
 
       if (combatRes.shieldBlocked) {
         toast('Кора-зеркало поглотила удар!', 2000, 'ok');
@@ -1327,7 +1449,15 @@ class SuperwalkApp {
 
       // Всплывающие цифры урона над врагами и героем
       for (const popup of combatRes.damagePopups) {
-        this.showDamageNumber(popup.x, popup.y, popup.z, popup.damage, popup.isCrit, popup.isHero);
+        this.showDamageNumber(
+          popup.x,
+          popup.y,
+          popup.z,
+          popup.damage,
+          popup.isCrit,
+          popup.isHero,
+          popup.isOvercrit ?? false,
+        );
       }
 
       if (this.slashTimer > 0) {
@@ -1598,8 +1728,8 @@ class SuperwalkApp {
       const expPct = Math.max(0, Math.min(100, (this.combatState.heroExp / reqExp) * 100));
       $('exp-bar-fill').style.width = `${expPct}%`;
 
-      if (this.tabModalOpen && this.activeTab === 'stats' && this.frameCount % 8 === 0) {
-        this.updateTabStats();
+      if (this.tabModalOpen && this.frameCount % 8 === 0) {
+        this.updateDashboard();
       }
     }
 
@@ -1620,6 +1750,7 @@ class SuperwalkApp {
     damage: number,
     isCrit = false,
     isHero = false,
+    isOvercrit = false,
   ): void {
     if (this.activeDamageNumbers.length >= 45) {
       const oldest = this.activeDamageNumbers.shift();
@@ -1628,9 +1759,12 @@ class SuperwalkApp {
 
     const el = document.createElement('div');
     const heroCls = isHero ? ' gf-damage-number--hero' : '';
-    const critCls = isCrit ? ' gf-damage-number--crit' : '';
+    const critCls = isOvercrit
+      ? ' gf-damage-number--overcrit'
+      : (isCrit ? ' gf-damage-number--crit' : '');
     el.className = `gf-damage-number${heroCls}${critCls}`;
-    el.textContent = `${isCrit ? '💥 ' : ''}${damage}`;
+    const icon = isOvercrit ? '🔥 ' : (isCrit ? '💥 ' : '');
+    el.textContent = `${icon}${damage}`;
     el.style.display = 'none'; // Будет спозиционирован в updateDamageNumbers
     this.damageLayer.appendChild(el);
 
@@ -1740,8 +1874,8 @@ class SuperwalkApp {
     this.showItemCardPopup(item, count);
     toast(`Найден предмет: ${item.icon} ${item.name}!`, 2500, 'ok');
     this.updateInventoryHud();
-    if (this.tabModalOpen && this.activeTab === 'stats') {
-      this.updateTabStats();
+    if (this.tabModalOpen) {
+      this.updateDashboard();
     }
   }
 
@@ -1805,6 +1939,10 @@ class SuperwalkApp {
     this.combatState.regenHpPerSec = bonuses.regenHpPerSec;
     this.combatState.healOnKill = bonuses.healOnKill;
     this.combatState.hasMirrorBark = bonuses.hasMirrorBark;
+    this.combatState.mirrorBarkBaseCooldown = bonuses.mirrorBarkCooldown;
+    if (this.combatState.mirrorBarkCooldownSec > bonuses.mirrorBarkCooldown) {
+      this.combatState.mirrorBarkCooldownSec = bonuses.mirrorBarkCooldown;
+    }
     this.combatState.hasNinthTail = bonuses.hasNinthTail;
     this.combatState.stormBeadCount = bonuses.stormBeadCount;
     if (bonuses.hasMirrorBark && !this.combatState.mirrorBarkReady && this.combatState.mirrorBarkCooldownSec <= 0) {

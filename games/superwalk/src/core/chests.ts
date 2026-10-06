@@ -253,6 +253,62 @@ export function checkChestPickup(
 }
 
 /**
+ * Расчёт перезарядки щита Зеркальной коры с гиперболическим сжатием (DESIGN.md, раздел 5.3):
+ * CD = 10.0 / (1.0 + 0.35 * (stacks - 1))
+ * Хард-кап: не менее 3.0 с.
+ */
+export function getMirrorBarkCooldown(stacks: number): number {
+  if (stacks <= 0) return 10.0;
+  const cd = 10.0 / (1.0 + 0.35 * Math.max(0, stacks - 1));
+  return Math.max(3.0, cd);
+}
+
+/**
+ * Прогрессивный скейл бонуса урона Тотема ярости (rage_totem, DESIGN.md 5.3):
+ * +25% за первый стак, +15% за каждый последующий стак при HP < 50%.
+ */
+export function getRageTotemBonus(rageCount: number): number {
+  if (rageCount <= 0) return 0;
+  return 0.25 + (rageCount - 1) * 0.15;
+}
+
+/**
+ * Множитель скорости бега от Перьев стрижа (swift_feather, DESIGN.md 5.3):
+ * +6% за стак до 8 стаков (+48%), свыше 8 стаков — +2% за стак.
+ * Хард-кап: +80% к скорости бега (максимум ×1.80, т.е. 10.8 м/с при базе 6.0 м/с).
+ */
+export function getSwiftFeatherMultiplier(count: number): number {
+  if (count <= 0) return 1.0;
+  let bonus = 0;
+  if (count <= 8) {
+    bonus = count * 0.06;
+  } else {
+    bonus = 8 * 0.06 + (count - 8) * 0.02;
+  }
+  bonus = Math.min(0.80, bonus);
+  return 1.0 + bonus;
+}
+
+/**
+ * Множитель радиуса сбора от Магнитного камешка (magnet_pebble, DESIGN.md 5.3):
+ * Базовый радиус героя: 2.5 м.
+ * +20% за стак до 5 стаков (софт-кап 5.0 м, т.е. +100%).
+ * Свыше 5 стаков — +5% за стак.
+ * Хард-кап: 7.5 м (максимум ×3.0 к базовому радиусу, т.е. бонус +200%).
+ */
+export function getMagnetPebbleMultiplier(count: number): number {
+  if (count <= 0) return 1.0;
+  let bonus = 0;
+  if (count <= 5) {
+    bonus = count * 0.20;
+  } else {
+    bonus = 5 * 0.20 + (count - 5) * 0.05;
+  }
+  bonus = Math.min(2.0, bonus);
+  return 1.0 + bonus;
+}
+
+/**
  * Суммированные бонусы от всех 14 предметов для применения в бою, движении и HUD.
  */
 export interface ItemStatBonuses {
@@ -266,6 +322,7 @@ export interface ItemStatBonuses {
   airJumps: number;
   cloverCount: number;
   hasMirrorBark: boolean;
+  mirrorBarkCooldown: number;
   hasNinthTail: boolean;
   phoenixDownCharges: number;
   stormBeadCount: number;
@@ -293,15 +350,17 @@ export function getItemStatBonuses(
 
   // Базовый множитель урона: Клык (+15% за стак)
   let dmgMult = 1.0 + fangCount * 0.15;
-  // Тотем ярости (+25% к урону, если здоровье ниже 50%)
+  // Тотем ярости: прогрессивный скейл при здоровье ниже 50% (+25% за 1-й стак, +15% далее)
   if (rageCount > 0 && heroHp < heroMaxHp * 0.5) {
-    dmgMult += 0.25;
+    dmgMult += getRageTotemBonus(rageCount);
   }
+
+  const mirrorBarkCooldown = getMirrorBarkCooldown(mirrorCount);
 
   return {
     maxHpBonus: acornCount * 10,
-    speedMultiplier: 1.0 + featherCount * 0.06,
-    pickupRadiusMultiplier: 1.0 + pebbleCount * 0.20,
+    speedMultiplier: getSwiftFeatherMultiplier(featherCount),
+    pickupRadiusMultiplier: getMagnetPebbleMultiplier(pebbleCount),
     regenHpPerSec: burdockCount * 0.4,
     critChance: pawCount * 0.05,
     damageMultiplier: dmgMult,
@@ -309,6 +368,7 @@ export function getItemStatBonuses(
     airJumps: bootsCount,
     cloverCount,
     hasMirrorBark: mirrorCount > 0,
+    mirrorBarkCooldown,
     hasNinthTail: ninthTailCount > 0,
     phoenixDownCharges: phoenixCount,
     stormBeadCount: stormCount,

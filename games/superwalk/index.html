@@ -74,47 +74,66 @@
             <span>Нажми <b>1</b>, <b>2</b>, <b>3</b> или коснись карточки</span>
           </div>
           <button id="btn-skip-upgrade" type="button" class="gf-btn gf-btn--ghost gf-btn--sm">
-            <span>Пропустить улучшение [0 / Пробел]</span>
+            <span>Пропустить улучшение [0]</span>
           </button>
         </div>
       </div>
     </div>
 
     <div id="tab-modal" class="gf-tab-modal" hidden>
-      <div class="gf-tab-panel" role="dialog" aria-label="Карта и характеристики">
+      <div class="gf-tab-panel gf-tab-panel--dashboard" role="dialog" aria-label="Тактический обзор забега">
         <div class="gf-tab-header">
-          <div class="gf-tab-nav">
-            <button id="tab-btn-map" type="button" class="gf-tab-nav__btn gf-tab-nav__btn--active">Карта арены</button>
-            <button id="tab-btn-stats" type="button" class="gf-tab-nav__btn">Характеристики лиса</button>
-          </div>
+          <h2 class="gf-dashboard-title">Тактический обзор забега</h2>
           <button id="tab-btn-close" type="button" class="gf-tab-close" aria-label="Закрыть">✕</button>
         </div>
-        <div id="tab-pane-map" class="gf-tab-pane gf-tab-pane--active">
-          <div class="gf-map-placeholder">
-            <div class="gf-map-radar">
-              <div class="gf-map-radar__circle"></div>
-              <div class="gf-map-radar__cross"></div>
-              <div class="gf-map-radar__fox" id="map-fox-marker">🦊</div>
-              <div class="gf-map-radar__tag">Солнечные холмы (R = 65 м)</div>
+        <div class="gf-dashboard-body">
+          <div class="gf-dashboard-col gf-dashboard-col--items">
+            <h3 class="gf-col-title">📦 Предметы и оружие</h3>
+            <div id="tab-items-list" class="gf-items-list">
+              <!-- Заполняется динамически -->
             </div>
-            <p class="gf-map-desc">Разведка местности: холмы, скальные кольца и тайники в разработке</p>
           </div>
-        </div>
-        <div id="tab-pane-stats" class="gf-tab-pane" hidden>
-          <div class="gf-stats-grid" id="tab-stats-grid">
-            <!-- Динамически заполняется списком характеристик -->
+          <div class="gf-dashboard-col gf-dashboard-col--map" id="tab-pane-map">
+            <h3 class="gf-col-title">🗺️ Карта арены</h3>
+            <div class="gf-map-placeholder">
+              <div class="gf-map-radar">
+                <div class="gf-map-radar__circle"></div>
+                <div class="gf-map-radar__cross"></div>
+                <div class="gf-map-radar__fox" id="map-fox-marker">🦊</div>
+                <div class="gf-map-radar__tag">Солнечные холмы (R = 65 м)</div>
+              </div>
+              <p class="gf-map-desc">Позиция лиса и ориентиры Солнечных холмов</p>
+            </div>
+          </div>
+          <div class="gf-dashboard-col gf-dashboard-col--stats" id="tab-pane-stats">
+            <h3 class="gf-col-title">📊 Характеристики лиса</h3>
+            <div class="gf-stats-grid" id="tab-stats-grid">
+              <!-- Заполняется динамически -->
+            </div>
           </div>
         </div>
         <div class="gf-tab-footer">
-          <span>Нажми <b>Tab</b>, чтобы закрыть окно и вернуть фокус камеры</span>
+          <span>Нажми <b>Tab</b> или <b>Esc</b>, чтобы вернуться в бой</span>
         </div>
       </div>
     </div>
 
     <div id="menu" hidden>
-      <div class="gf-panel" role="dialog" aria-label="Меню игры">
+      <div class="gf-panel gf-panel--pause" role="dialog" aria-label="Меню паузы">
         <h1 class="gf-panel__title">Superwalk</h1>
-        <p class="gf-panel__sub">3D роглайт на выживание</p>
+        <p class="gf-panel__sub">Пауза забега</p>
+
+        <div class="gf-menu-overview">
+          <div class="gf-menu-col">
+            <h3 class="gf-col-title">📦 Снаряжение</h3>
+            <div id="menu-items-list" class="gf-items-list gf-items-list--compact"></div>
+          </div>
+          <div class="gf-menu-col">
+            <h3 class="gf-col-title">📊 Характеристики</h3>
+            <div id="menu-stats-grid" class="gf-stats-grid gf-stats-grid--compact"></div>
+          </div>
+        </div>
+
         <button id="btn-resume" type="button" class="gf-btn gf-btn--primary gf-btn--lg" data-icon="play">
           <span>Продолжить</span>
         </button>
@@ -127,7 +146,7 @@
           </button>
         </div>
         <div class="help" id="help-desktop">
-          <p><b>WASD / стрелки</b> — бег, <b>пробел</b> — прыжок</p>
+          <p><b>WASD / стрелки</b> — бег, <b>пробел</b> — прыжок, <b>Tab</b> — обзор</p>
           <p><b>Мышь</b> — обзор, <b>Esc</b> — меню, <b>F3</b> — показатели</p>
         </div>
         <div class="help" id="help-touch" hidden>

@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   calculateDamage,
+  rollCrit,
   getWaveTargetCount,
   getAvailableMobTypes,
   spawnMobInRing,
@@ -9,6 +10,8 @@ import {
   stepCombat,
   killMob,
 } from '../src/core/combat.ts';
+import type { MobEntity } from '../src/core/combat.ts';
+import type { Obstacle } from '../src/core/movement.ts';
 import {
   getRequiredExp,
   getMobHpMultiplier,
@@ -707,6 +710,672 @@ describe('Боевая система и мобы (DESIGN.md, раздел 5 и 
     assert.equal(state.heroHp, 58, 'Все 4 моба восстановили здоровье через пул токенов');
     assert.equal(Math.round(state.honeycombTokens), 6, 'Израсходовано ровно 4 токена из 10');
   });
+
+  it('механика оверкрита: calculateDamage даёт множитель ×3 при isOvercrit', () => {
+    const baseParams = {
+      baseDamage: 20,
+      weaponLevelBonus: 0,
+      mightTomeBonus: 0,
+      itemDamageMultiplier: 1.0,
+    };
+
+    const normalDmg = calculateDamage({ ...baseParams, isCrit: false });
+    assert.equal(normalDmg, 20, 'Обычный удар: 20 урона (x1)');
+
+    const critDmg = calculateDamage({ ...baseParams, isCrit: true, isOvercrit: false });
+    assert.equal(critDmg, 40, 'Обычный крит: 40 урона (x2)');
+
+    const overcritDmg = calculateDamage({ ...baseParams, isCrit: true, isOvercrit: true });
+    assert.equal(overcritDmg, 60, 'Оверкрит: 60 урона (x3)');
+  });
+
+  it('ролл крита и оверкрита rollCrit: базовый крит x2 и оранжевый оверкрит x3', () => {
+    // 1. Шанс 0% -> никогда не критует
+    const roll0 = rollCrit(0, () => 0.1);
+    assert.equal(roll0.isCrit, false);
+    assert.equal(roll0.isOvercrit, false);
+    assert.equal(roll0.multiplier, 1.0);
+
+    // 2. Шанс 50% (0.5)
+    // При rnd = 0.3 (< 0.5) -> крит x2
+    const rollCritSuccess = rollCrit(0.5, () => 0.3);
+    assert.equal(rollCritSuccess.isCrit, true);
+    assert.equal(rollCritSuccess.isOvercrit, false);
+    assert.equal(rollCritSuccess.multiplier, 2.0);
+
+    // При rnd = 0.7 (>= 0.5) -> не крит
+    const rollCritFail = rollCrit(0.5, () => 0.7);
+    assert.equal(rollCritFail.isCrit, false);
+    assert.equal(rollCritFail.isOvercrit, false);
+    assert.equal(rollCritFail.multiplier, 1.0);
+
+    // 3. Шанс 100% (1.0) -> гарантированный базовый крит x2
+    const roll100 = rollCrit(1.0, () => 0.99);
+    assert.equal(roll100.isCrit, true);
+    assert.equal(roll100.isOvercrit, false);
+    assert.equal(roll100.multiplier, 2.0);
+
+    // 4. Шанс 135% (1.35) -> базовый крит гарантирован, 35% шанс оверкрита x3
+    // При rnd = 0.2 (< 0.35) -> оверкрит x3
+    const rollOvercritSuccess = rollCrit(1.35, () => 0.2);
+    assert.equal(rollOvercritSuccess.isCrit, true);
+    assert.equal(rollOvercritSuccess.isOvercrit, true);
+    assert.equal(rollOvercritSuccess.multiplier, 3.0);
+
+    // При rnd = 0.5 (>= 0.35) -> базовый крит x2 (не оверкрит, но и не обычный удар!)
+    const rollOvercritFail = rollCrit(1.35, () => 0.5);
+    assert.equal(rollOvercritFail.isCrit, true);
+    assert.equal(rollOvercritFail.isOvercrit, false);
+    assert.equal(rollOvercritFail.multiplier, 2.0);
+
+    // 5. Шанс 200%+ (>= 2.0) -> гарантированный оверкрит x3
+    const roll200 = rollCrit(2.0, () => 0.99);
+    assert.equal(roll200.isCrit, true);
+    assert.equal(roll200.isOvercrit, true);
+    assert.equal(roll200.multiplier, 3.0);
+  });
+
+  it('боевая симуляция stepCombat с оверкритом: мобы получают урон x3 с флагом isOvercrit', () => {
+    const state = createInitialCombatState();
+    state.critChance = 1.5; // 150% крита (50% шанс оверкрита)
+    state.weapons[0]!.cooldownTimer = 0; // tail_blade готов
+
+    state.mobs.push({
+      id: 99,
+      type: 'mushlet',
+      x: 0,
+      y: 0,
+      z: 2.0, // сзади лиса в секторе Хвоста-клинка
+      hp: 200,
+      maxHp: 200,
+      speed: 0,
+      radius: 0.5,
+      damage: 0,
+      exp: 1,
+      state: 'walk',
+      stateTimer: 0,
+      chargeDirX: 0,
+      chargeDirZ: 0,
+      shootCooldown: 0,
+    });
+
+    // Передаём rnd, возвращающий 0.2 (< 0.5) -> оверкрит x3!
+    // Базовый урон tail_blade ур. 1 = 14. 14 * 3.0 = 42 урона
+    const res = stepCombat(state, 0, 0, 0, 0.016, 0, 2.5, () => 0, () => 0.2);
+    const popup = res.damagePopups.find((p) => !p.isHero);
+    assert.ok(popup, 'Попап урона по мобу найден');
+    assert.equal(popup.isCrit, true, 'isCrit = true');
+    assert.equal(popup.isOvercrit, true, 'isOvercrit = true');
+    assert.equal(popup.damage, 42, 'Урон оверкрита: 14 * 3.0 = 42');
+    assert.equal(state.mobs[0]!.hp, 200 - 42, 'Здоровье моба уменьшилось на 42');
+  });
+
+  it('накопительный опыт: сбор кристалла на 40 опыта даёт 3 левелапа подряд без потерь остатка (Megabonk-style)', () => {
+    const state = createInitialCombatState();
+    // На уровне 1: getRequiredExp(1) = 5
+    // На уровне 2: getRequiredExp(2) = 9
+    // На уровне 3: getRequiredExp(3) = 13
+    // На уровне 4: getRequiredExp(4) = 17
+    // Сумма опыта на 3 повышения: 5 + 9 + 13 = 27 опыта.
+    // При кристалле в 40 опыта: 40 - 27 = 13 остатка опыта на уровне 4 (13 / 17).
+    state.gems.push({
+      id: 1,
+      x: 0,
+      y: 0,
+      z: 0.1, // прямо под ногами лиса
+      value: 40,
+      type: 'large',
+      flying: false,
+    });
+
+    const res = stepCombat(state, 0, 0, 0, 0.016, 0, 2.5);
+    assert.equal(res.leveledUp, true, 'Событие левелапа произошло');
+    assert.equal(state.heroLevel, 4, 'Герой мгновенно апнул 4 уровень (1 -> 4)');
+    assert.equal(state.pendingLevelUps, 3, 'Накоплено ровно 3 окна выбора улучшения подряд');
+    assert.equal(state.heroExp, 13, 'Остаток опыта сохранён (13 / 17)');
+    assert.equal(res.gemsCollected, 1, 'Кристалл успешно собран');
+
+    // Симуляция закрытия 3 окон выбора улучшений по очереди
+    state.pendingLevelUps--;
+    assert.equal(state.pendingLevelUps, 2);
+    state.pendingLevelUps--;
+    assert.equal(state.pendingLevelUps, 1);
+    state.pendingLevelUps--;
+    assert.equal(state.pendingLevelUps, 0, 'Все 3 улучшения получены');
+    assert.equal(state.heroExp, 13, 'Опыт 13/17 никуда не пропал после всех прокачек');
+  });
+
+  it('честный телеграф совуха: луч остаётся строго статичным на все 1.5 с и не доворачивает за героем', () => {
+    const state = createInitialCombatState();
+    // Спавним совуха на дистанции 10 м по оси Z
+    const owl: MobEntity = {
+      id: 1,
+      type: 'spit_owl',
+      x: 0,
+      y: 0,
+      z: 10,
+      hp: 20,
+      maxHp: 20,
+      speed: 0,
+      radius: 0.45,
+      damage: 15,
+      exp: 2,
+      state: 'walk',
+      stateTimer: 0,
+      chargeDirX: 0,
+      chargeDirZ: 0,
+      shootCooldown: 0.001, // готов выстрелить на следующем шаге
+    };
+    state.mobs.push(owl);
+
+    // Герой стоит в точке (0, 0, 0)
+    stepCombat(state, 0, 0, 0, 0.016, 0, 2.5);
+    assert.equal(state.beams.length, 1, 'Совух создал луч');
+    const beam = state.beams[0]!;
+
+    // Запоминаем исходное направление луча
+    const origDirX = beam.dirX;
+    const origDirZ = beam.dirZ;
+
+    // В следующем кадре герой смещается вправо на 4 метра (уклонение!)
+    stepCombat(state, 4.0, 0, 0, 0.05, 0, 2.5);
+
+    // Луч НЕ должен довернуться за героем!
+    assert.equal(beam.dirX, origDirX, 'Направление луча по X не изменилось');
+    assert.equal(beam.dirZ, origDirZ, 'Направление луча по Z не изменилось');
+
+    // Мотаем время до момента выстрела (1.6 с суммарно мелкими тиками по 0.05 с, так как safeDt ограничен 0.1 с)
+    let heroDmg = 0;
+    for (let i = 0; i < 32; i++) {
+      const res = stepCombat(state, 4.0, 0, 0, 0.05, 0, 2.5);
+      heroDmg += res.damageDealtToHero;
+    }
+
+    // Герой уклонился на 4 метра, поэтому урон по нему равен 0!
+    assert.equal(heroDmg, 0, 'Герой уклонился от статичного луча и не получил урона');
+    assert.equal(state.beams.length, 0, 'Луч завершил действие и удалился');
+  });
+
+  it('уникальность босса Старый Пень: повторный spawnMobInRing не создаёт дубликат', () => {
+    const state = createInitialCombatState();
+    const boss1 = spawnMobInRing(state, 0, 0, 'old_stump', 480, () => 0.5);
+    assert.equal(state.mobs.length, 1, 'Босс заспавнен');
+    assert.equal(boss1.type, 'old_stump');
+
+    // Попытка заспавнить босса второй раз
+    const boss2 = spawnMobInRing(state, 0, 0, 'old_stump', 500, () => 0.8);
+    assert.equal(state.mobs.length, 1, 'Второй босс НЕ создан (длина массива осталась 1)');
+    assert.equal(boss2.id, boss1.id, 'Возвращен существующий экземпляр босса');
+  });
+
+  it('взаимное расталкивание (Separation): мобы не слипаются в одну точку, а босс монолитен', () => {
+    const state = createInitialCombatState();
+    // Создаем двух грибышей в почти одной точке
+    state.mobs.push({
+      id: 1,
+      type: 'mushlet',
+      x: 0,
+      y: 0,
+      z: 0.05,
+      hp: 10,
+      maxHp: 10,
+      speed: 0,
+      radius: 0.45,
+      damage: 0,
+      exp: 1,
+      state: 'walk',
+      stateTimer: 0,
+      chargeDirX: 0,
+      chargeDirZ: 0,
+      shootCooldown: 0,
+    });
+    state.mobs.push({
+      id: 2,
+      type: 'mushlet',
+      x: 0,
+      y: 0,
+      z: 0,
+      hp: 10,
+      maxHp: 10,
+      speed: 0,
+      radius: 0.45,
+      damage: 0,
+      exp: 1,
+      state: 'walk',
+      stateTimer: 0,
+      chargeDirX: 0,
+      chargeDirZ: 0,
+      shootCooldown: 0,
+    });
+
+    stepCombat(state, 10, 0, 10, 0.016, 0, 2.5);
+
+    const m1 = state.mobs[0]!;
+    const m2 = state.mobs[1]!;
+    const dist = Math.hypot(m1.x - m2.x, m1.z - m2.z);
+    assert.ok(dist >= 0.89, `Мобы растолкнулись на расстояние суммарного радиуса (~0.90 м), факт: ${dist.toFixed(2)} м`);
+
+    // Проверяем монолитность босса: босс стоит на (0, 0), моб на (0, 0.5)
+    state.mobs = [];
+    state.mobs.push({
+      id: 3,
+      type: 'old_stump',
+      x: 0,
+      y: 0,
+      z: 0,
+      hp: 5000,
+      maxHp: 5000,
+      speed: 0,
+      radius: 1.8,
+      damage: 0,
+      exp: 50,
+      state: 'walk',
+      stateTimer: 0,
+      chargeDirX: 0,
+      chargeDirZ: 0,
+      shootCooldown: 0,
+    });
+    state.mobs.push({
+      id: 4,
+      type: 'mushlet',
+      x: 0,
+      y: 0,
+      z: 0.5,
+      hp: 10,
+      maxHp: 10,
+      speed: 0,
+      radius: 0.45,
+      damage: 0,
+      exp: 1,
+      state: 'walk',
+      stateTimer: 0,
+      chargeDirX: 0,
+      chargeDirZ: 0,
+      shootCooldown: 0,
+    });
+
+    stepCombat(state, 10, 0, 10, 0.016, 0, 2.5);
+    const boss = state.mobs[0]!;
+    const mushlet = state.mobs[1]!;
+
+    assert.equal(boss.x, 0, 'Босс не сдвинулся по X');
+    assert.equal(boss.z, 0, 'Босс не сдвинулся по Z');
+    assert.ok(mushlet.z >= 2.24, `Рядовой моб вытолкнут за пределы радиуса босса (1.8 + 0.45 = 2.25 м), факт: ${mushlet.z.toFixed(2)} м`);
+  });
+
+  it('перепрыгивание мобов: на земле моб выталкивает лиса, а в прыжке лис свободно перелетает над ним', () => {
+    const state = createInitialCombatState();
+    state.mobs.push({
+      id: 1,
+      type: 'mushlet',
+      x: 0,
+      y: 0,
+      z: 0.5,
+      hp: 10,
+      maxHp: 10,
+      speed: 0,
+      radius: 0.45,
+      damage: 0,
+      exp: 1,
+      state: 'walk',
+      stateTimer: 0,
+      chargeDirX: 0,
+      chargeDirZ: 0,
+      shootCooldown: 0,
+    });
+
+    // 1. Герой на земле (heroY = 0) пересекается с грибышем (z = 0.5, суммарный радиус 0.45 + 0.45 = 0.90)
+    const resGround = stepCombat(state, 0, 0, 0.4, 0.016, 0, 2.5);
+    assert.ok((resGround.heroPushZ ?? 0) < 0, 'На земле герой отталкивается от моба назад');
+
+    // 2. Герой в прыжке на высоте 1.2 м (heroY = 1.2 м) летит над грибышем (высота грибыша 0.65 м)
+    const resJump = stepCombat(state, 0, 1.2, 0.4, 0.016, 0, 2.5);
+    assert.equal(resJump.heroPushX ?? 0, 0, 'В воздухе нет бокового отталкивания');
+    assert.equal(resJump.heroPushZ ?? 0, 0, 'В воздухе нет продольного отталкивания — лис свободно летит над мобом!');
+  });
+
+  it('одновременный залп 3 совухов: все 3 луча наносят урон и дают 3 отдельных попапа без подавления i-frame', () => {
+    const state = createInitialCombatState();
+    const heroX = 0;
+    const heroY = 0;
+    const heroZ = 0;
+    const owlPositions = [
+      { x: -6, z: 8 },
+      { x: 0, z: 10 },
+      { x: 6, z: 8 },
+    ];
+    // 3 совуха на разных позициях целятся прямо в лиса
+    for (let i = 0; i < 3; i++) {
+      const pos = owlPositions[i]!;
+      const dx = heroX - pos.x;
+      const dy = (heroY + 0.45) - 0.6;
+      const dz = heroZ - pos.z;
+      const len = Math.hypot(dx, dy, dz);
+      state.beams.push({
+        id: i + 1,
+        owlId: i + 1,
+        startX: pos.x,
+        startY: 0.6,
+        startZ: pos.z,
+        dirX: dx / len,
+        dirY: dy / len,
+        dirZ: dz / len,
+        length: len + 5,
+        timer: 0.001, // луч срабатывает в следующем шаге
+        maxTimer: 1.5,
+        damage: 8,
+      });
+    }
+
+    // Герой стоит в точке (0, 0, 0) и находится на траектории всех 3 лучей
+    const res = stepCombat(state, heroX, heroY, heroZ, 0.016, 0, 2.5);
+
+    // Все 3 луча должны нанести урон: 8 * 3 = 24 урона!
+    assert.equal(res.damageDealtToHero, 24, 'Суммарный урон равен 24 (8 * 3 луча)');
+    const heroPopups = res.damagePopups.filter((p) => p.isHero);
+    assert.equal(heroPopups.length, 3, 'Появилось ровно 3 отдельных всплывающих цифры урона для каждого совуха!');
+    assert.ok(state.heroIFrameSec > 0, 'После залпа активирован защитный i-frame');
+  });
+
+  it('мобы сталкиваются со стволами деревьев и скалами (height >= 3.0) и не могут зайти внутрь', () => {
+    const state = createInitialCombatState();
+    // Дерево в точке (0, 5) с радиусом 1.0 м и высотой 5.0 м
+    const obstacles: Obstacle[] = [{ x: 0, z: 5, radius: 1.0, height: 5.0 }];
+    // Грибыш в точке (0, 6.2) идёт вниз к герою на (0, 0)
+    const mob: MobEntity = {
+      id: 1,
+      type: 'mushlet',
+      x: 0,
+      y: 0,
+      z: 6.2,
+      hp: 18,
+      maxHp: 18,
+      speed: 2.6,
+      radius: 0.45,
+      damage: 6,
+      exp: 1,
+      state: 'walk',
+      stateTimer: 0,
+      chargeDirX: 0,
+      chargeDirZ: 0,
+      shootCooldown: 0,
+    };
+    state.mobs.push(mob);
+
+    // Шаг симуляции в сторону дерева
+    stepCombat(state, 0, 0, 0, 0.05, 0, 2.5, () => 0, Math.random, obstacles);
+
+    // Расстояние грибыша до центра дерева должно оставаться >= 1.0 + 0.45 = 1.45 м!
+    const distToTree = Math.hypot(mob.x - obstacles[0]!.x, mob.z - obstacles[0]!.z);
+    assert.ok(distToTree >= 1.44, `Грибыш не заходит внутрь ствола дерева (дистанция ${distToTree} >= 1.45)`);
+  });
+
+  it('жук-таран в рывке врезается в дерево, прерывает рывок и переходит в cooldown', () => {
+    const state = createInitialCombatState();
+    const obstacles: Obstacle[] = [{ x: 0, z: 4, radius: 1.0, height: 5.0 }];
+    const beetle: MobEntity = {
+      id: 1,
+      type: 'ram_beetle',
+      x: 0,
+      y: 0,
+      z: 5.6,
+      hp: 30,
+      maxHp: 30,
+      speed: 2.0,
+      radius: 0.55,
+      damage: 12,
+      exp: 2,
+      state: 'charge',
+      stateTimer: 0.8,
+      chargeDirX: 0,
+      chargeDirZ: -1, // летит прямо в дерево
+      shootCooldown: 0,
+    };
+    state.mobs.push(beetle);
+
+    stepCombat(state, 0, 0, 0, 0.05, 0, 2.5, () => 0, Math.random, obstacles);
+
+    assert.equal(beetle.state, 'cooldown', 'Жук перешёл в состояние cooldown после удара о ствол');
+    assert.equal(beetle.stateTimer, 1.6, 'Таймер перезарядки установлен на 1.6 с');
+  });
+
+  it('мобы карабкаются на покатые камни поляны и наносят урон лису на вершине камня', () => {
+    const state = createInitialCombatState();
+    // Покатый валун поляны в (0, 0) радиусом 1.5 м и высотой 1.3 м
+    const stone: Obstacle = { x: 0, z: 0, radius: 1.5, height: 1.3 };
+    const obstacles: Obstacle[] = [stone];
+
+    // Грибыш подходит к центру камня, преследуя лиса
+    const mob: MobEntity = {
+      id: 1,
+      type: 'mushlet',
+      x: 0,
+      y: 0,
+      z: 0.3, // на вершине камня рядом с лисом
+      hp: 18,
+      maxHp: 18,
+      speed: 2.6,
+      radius: 0.45,
+      damage: 6,
+      exp: 1,
+      state: 'walk',
+      stateTimer: 0,
+      chargeDirX: 0,
+      chargeDirZ: 0,
+      shootCooldown: 0,
+    };
+    state.mobs.push(mob);
+
+    // Лис стоит на вершине камня: heroY = 1.3 м
+    const res = stepCombat(state, 0, 1.3, 0, 0.05, 0, 2.5, () => 0, Math.random, obstacles);
+
+    // Моб поднялся по высоте камня к лису
+    assert.ok(mob.y > 1.0, `Высота моба поднялась на камень: ${mob.y} > 1.0`);
+    // Моб достал лиса и нанёс урон на вершине камня (абуз устранён!)
+    assert.equal(res.damageDealtToHero, 6, 'Моб на камне наносит урон лису на камне');
+  });
+
+  it('лис на камне высотой 1.0 м неуязвим для касания грибышей на земле (без камня под мобом)', () => {
+    const state = createInitialCombatState();
+    // Грибыш стоит на уровне земли y = 0
+    const mob: MobEntity = {
+      id: 1,
+      type: 'mushlet',
+      x: 0,
+      y: 0,
+      z: 0.2, // прямо вплотную
+      hp: 18,
+      maxHp: 18,
+      speed: 2.6,
+      radius: 0.45,
+      damage: 6,
+      exp: 1,
+      state: 'walk',
+      stateTimer: 0,
+      chargeDirX: 0,
+      chargeDirZ: 0,
+      shootCooldown: 0,
+    };
+    state.mobs.push(mob);
+
+    // Герой высоко в воздухе/на отвесном уступе: heroY = 1.5 м
+    const res = stepCombat(state, 0, 1.5, 0, 0.05, 0, 2.5);
+
+    assert.equal(res.damageDealtToHero, 0, 'Грибыш снизу не наносит урон лису выше него');
+    assert.equal(res.heroPushX ?? 0, 0, 'Грибыш снизу не толкает лиса по X');
+    assert.equal(res.heroPushZ ?? 0, 0, 'Грибыш снизу не толкает лиса по Z');
+  });
+
+  it('луч совёнка блокируется камнем, стоящим между совёнком и лисом', () => {
+    const state = createInitialCombatState();
+    // Камень ровно посередине между совёнком и героем: x: 0, z: 5, r: 1.0, h: 2.0
+    const obstacles: Obstacle[] = [{ x: 0, z: 5, radius: 1.0, height: 2.0 }];
+
+    state.beams.push({
+      id: 1,
+      owlId: 1,
+      startX: 0,
+      startY: 0.6,
+      startZ: 10,
+      dirX: 0,
+      dirY: 0,
+      dirZ: -1, // луч летит прямо в героя на (0, 0, 0) сквозь камень на z = 5
+      length: 15,
+      timer: 0.001,
+      maxTimer: 1.5,
+      damage: 15,
+    });
+
+    const res = stepCombat(state, 0, 0, 0, 0.016, 0, 2.5, () => 0, Math.random, obstacles);
+
+    assert.equal(res.damageDealtToHero, 0, 'Урон равен 0 — луч полностью поглощён камнем');
+    assert.equal(res.damagePopups.filter((p) => p.isHero).length, 0, 'Никаких цифр урона по герою');
+  });
+
+  it('кристалл опыта выталкивается наружу из дерева на открытую поверхность', () => {
+    const state = createInitialCombatState();
+    const obstacles: Obstacle[] = [{ x: 5, z: 5, radius: 1.0, height: 5.0 }];
+    // Кристалл упал в центр дерева (5, 5)
+    state.gems.push({
+      id: 1,
+      x: 5,
+      y: 0.2,
+      z: 5,
+      value: 1,
+      type: 'small',
+      flying: false,
+    });
+
+    // Герой далеко, кристалл не летит магнитом
+    stepCombat(state, 20, 0, 20, 0.016, 0, 2.5, () => 0, Math.random, obstacles);
+
+    const gem = state.gems[0]!;
+    const distToTree = Math.hypot(gem.x - 5, gem.z - 5);
+    assert.ok(distToTree >= 1.34, `Кристалл вытолкнут на край дерева (дистанция ${distToTree} >= 1.35)`);
+  });
+
+  it('кристалл опыта свободно поднимается вверх по Y к лису на камне', () => {
+    const state = createInitialCombatState();
+    const stone: Obstacle = { x: 0, z: 0, radius: 1.5, height: 1.3 };
+    const obstacles: Obstacle[] = [stone];
+
+    // Кристалл на земле у основания камня
+    state.gems.push({
+      id: 1,
+      x: 0,
+      y: 0.2,
+      z: 0.5,
+      value: 5,
+      type: 'medium',
+      flying: false,
+    });
+
+    // Лис стоит на вершине камня: heroY = 1.3 м, радиус подбора 5.0 м
+    // Шаг 1: кристалл переходит в flying: true и начинает лететь вверх
+    stepCombat(state, 0, 1.3, 0, 0.05, 0, 5.0, () => 0, Math.random, obstacles);
+
+    const gem = state.gems[0]!;
+    assert.ok(gem.flying, 'Кристалл активировал магнит и перешёл в flying');
+    assert.ok(gem.y > 0.3, `Кристалл поднимается по оси Y к лису: ${gem.y} > 0.3`);
+  });
+
+  it('ERR-17: спавн моба у края арены (герой на (59, 0)) всегда удерживает моба внутри арены (дистанция <= 58.0 м)', () => {
+    const state = createInitialCombatState();
+    // Тестируем спавн с разными случайными углами, когда герой стоит вплотную к силовому барьеру (59, 0)
+    for (let r = 0; r <= 1.0; r += 0.1) {
+      const mob = spawnMobInRing(state, 59, 0, 'mushlet', 0, () => r);
+      const distFromCenter = Math.hypot(mob.x, mob.z);
+      assert.ok(
+        distFromCenter <= 58.0001,
+        `Моб не должен спавниться за пределами барьера: dist=${distFromCenter} > 58.0 (r=${r})`
+      );
+    }
+
+    // Проверяем, что stepCombat удерживает мобов внутри единой границы arenaRadius (60.0 м)
+    const outsideMob = state.mobs[0]!;
+    outsideMob.x = 65;
+    outsideMob.z = 0;
+    stepCombat(state, 0, 0, 0, 0.05, 0, 2.5);
+    const clampedDist = Math.hypot(outsideMob.x, outsideMob.z);
+    assert.ok(clampedDist <= 60.0001, `Моб ограничен радиусом арены: ${clampedDist} <= 60.0`);
+  });
+
+  it('ERR-19: моб свободно доходит до героя на краю арены (x = 59.5 м) и наносит урон, ликвидируя абуз 56.5 м', () => {
+    const state = createInitialCombatState();
+    // Герой стоит у самого края арены (x = 59.5 м при границе 60.0 м)
+    state.heroHp = 100;
+    state.mobs.push({
+      id: 201,
+      type: 'mushlet',
+      x: 55.0, // Моб начинает с 55 м (где раньше была невидимая стена 56.5 м)
+      y: 0,
+      z: 0,
+      hp: 100,
+      maxHp: 100,
+      speed: 3.0,
+      radius: 0.45,
+      damage: 10,
+      exp: 1,
+      state: 'walk',
+      stateTimer: 0,
+      chargeDirX: 0,
+      chargeDirZ: 0,
+      shootCooldown: 9,
+    });
+
+    let totalDmg = 0;
+    // Симулируем бег моба к герою на (59.5, 0)
+    for (let i = 0; i < 40; i++) {
+      const res = stepCombat(state, 59.5, 0, 0, 0.05, 0, 2.5);
+      totalDmg += res.damageDealtToHero;
+    }
+
+    const mob = state.mobs[0]!;
+    // Моб должен свободно пройти отметку 56.5 м и дойти до лиса на 59+ м
+    assert.ok(mob.x > 58.0, `Моб должен свободно пересечь 56.5 м и дойти к лису: mob.x = ${mob.x} > 58.0`);
+    assert.ok(totalDmg > 0, `Моб наносит урон лису на краю арены: урон ${totalDmg} > 0 (абуз ликвидирован)`);
+  });
+
+  it('ERR-18: моб, направляющийся к герою через ствол дерева, огибает препятствие по касательной, а не застревает', () => {
+    const state = createInitialCombatState();
+    const tree: Obstacle = { x: 0, z: 5, radius: 1.0, height: 5.0 };
+    const obstacles: Obstacle[] = [tree];
+
+    // Герой на (0, 0, 0). Моб на (0, 0, 6.2) — ствол дерева (0, 5) прямо на пути между мобом и героем
+    state.mobs.push({
+      id: 101,
+      type: 'mushlet',
+      x: 0,
+      y: 0,
+      z: 6.2,
+      hp: 100,
+      maxHp: 100,
+      speed: 3.0,
+      radius: 0.45,
+      damage: 10,
+      exp: 1,
+      state: 'walk',
+      stateTimer: 0,
+      chargeDirX: 0,
+      chargeDirZ: 0,
+      shootCooldown: 9,
+    });
+
+    const initialX = state.mobs[0]!.x;
+    // Делаем несколько шагов симуляции
+    for (let i = 0; i < 15; i++) {
+      stepCombat(state, 0, 0, 0, 0.05, 0, 2.5, () => 0, Math.random, obstacles);
+    }
+
+    const updatedMob = state.mobs[0]!;
+    // Моб должен получить смещение по X (касательная), огибая ствол
+    const lateralShift = Math.abs(updatedMob.x - initialX);
+    assert.ok(
+      lateralShift > 0.1,
+      `Моб должен плавно огибать дерево по касательной: сдвиг по X = ${lateralShift} > 0.1`
+    );
+  });
 });
+
 
 

@@ -8,6 +8,10 @@ import {
   stepChests,
   checkChestPickup,
   getItemStatBonuses,
+  getMirrorBarkCooldown,
+  getRageTotemBonus,
+  getSwiftFeatherMultiplier,
+  getMagnetPebbleMultiplier,
 } from '../src/core/chests.ts';
 import {
   ITEM_CONFIGS,
@@ -415,6 +419,97 @@ describe('Сундуки и 14 предметов (DESIGN.md, разделы 5.3
     const waveEvent = res5.attacks.find((a: any) => a.weaponId === 'ninth_tail');
     assert.ok(waveEvent, 'Событие огненной волны зафиксировано');
     assert.equal(waveEvent.hits, 2, 'Огненная волна поразила обоих врагов вокруг лиса');
+  });
+
+  it('диминишинг Коры-зеркала (mirror_bark): гиперболическое сжатие КД до хард-капа 3.0 с', () => {
+    // Формула: 10.0 / (1.0 + 0.35 * (n - 1)), хард-кап 3.0 с
+    assert.equal(getMirrorBarkCooldown(0), 10.0, '0 стаков: дефолтный КД 10.0 с');
+    assert.equal(getMirrorBarkCooldown(1), 10.0, '1 стак: 10.0 с');
+
+    const cd2 = getMirrorBarkCooldown(2);
+    assert.ok(Math.abs(cd2 - 10.0 / 1.35) < 0.001, `2 стака: ~7.41 с (получено ${cd2.toFixed(3)})`);
+
+    const cd3 = getMirrorBarkCooldown(3);
+    assert.ok(Math.abs(cd3 - 10.0 / 1.70) < 0.001, `3 стака: ~5.88 с (получено ${cd3.toFixed(3)})`);
+
+    // При больших стаках (например, 10 стаков: 10 / (1 + 0.35 * 9) = 10 / 4.15 = 2.41 с)
+    const cd10 = getMirrorBarkCooldown(10);
+    assert.equal(cd10, 3.0, '10 стаков: сжатие ограничено хард-капом 3.0 с');
+
+    const cd50 = getMirrorBarkCooldown(50);
+    assert.equal(cd50, 3.0, '50 стаков: хард-кап 3.0 с надёжно удерживается');
+
+    // Проверка применения в stepCombat: при блокировке урона щит получает сжатый КД
+    const cState = createInitialCombatState();
+    cState.hasMirrorBark = true;
+    cState.mirrorBarkReady = true;
+    cState.mirrorBarkBaseCooldown = cd3; // 3 стака (~5.88 с)
+    cState.mobs.push({
+      id: 301,
+      type: 'mushlet',
+      x: 0,
+      y: 0,
+      z: 0,
+      hp: 18,
+      maxHp: 18,
+      speed: 0,
+      radius: 0.5,
+      damage: 10,
+      exp: 1,
+      state: 'walk',
+      stateTimer: 0,
+      chargeDirX: 0,
+      chargeDirZ: 0,
+      shootCooldown: 1,
+    });
+    const res = stepCombat(cState, 0, 0, 0, 0.016);
+    assert.equal(res.shieldBlocked, true, 'Удар заблокирован щитом');
+    assert.equal(cState.mirrorBarkReady, false, 'Щит ушёл на перезарядку');
+    assert.ok(Math.abs(cState.mirrorBarkCooldownSec - cd3) < 0.001, 'Кулдаун щита выставлен со сжатием (~5.88 с, а не 10.0 с)');
+  });
+
+  it('тотем ярости (rage_totem): прогрессивный скейл (+25% за 1-й стак, +15% далее) при HP < 50%', () => {
+    // getRageTotemBonus:
+    assert.equal(getRageTotemBonus(0), 0, '0 стаков: 0%');
+    assert.equal(getRageTotemBonus(1), 0.25, '1 стак: +25%');
+    assert.ok(Math.abs(getRageTotemBonus(2) - 0.40) < 0.001, '2 стака: 25% + 15% = +40%');
+    assert.ok(Math.abs(getRageTotemBonus(3) - 0.55) < 0.001, '3 стака: 25% + 30% = +55%');
+    assert.ok(Math.abs(getRageTotemBonus(5) - 0.85) < 0.001, '5 стаков: 25% + 60% = +85%');
+
+    // Проверка через getItemStatBonuses:
+    const items = new Map<ItemId, number>([
+      ['rage_totem', 3],
+    ]);
+
+    // При HP >= 50% бонус не активен (1.0x)
+    const bonusHighHp = getItemStatBonuses(items, 100, 60);
+    assert.equal(bonusHighHp.damageMultiplier, 1.0, 'При HP 60/100 тотем не даёт бонуса');
+
+    // При HP < 50% бонус активен (+55% -> 1.55x)
+    const bonusLowHp = getItemStatBonuses(items, 100, 45);
+    assert.ok(Math.abs(bonusLowHp.damageMultiplier - 1.55) < 0.001, 'При HP 45/100 урон увеличен на +55% (множитель 1.55)');
+  });
+
+  it('софт-капы предметов: Перо стрижа (+80% макс) и Магнитный камешек (7.5 м макс)', () => {
+    // 1. Перо стрижа (swift_feather):
+    // +6% за стак до 8 стаков (+48%), свыше 8 стаков — +2% за стак. Хард-кап: +80%.
+    assert.equal(getSwiftFeatherMultiplier(0), 1.0);
+    assert.ok(Math.abs(getSwiftFeatherMultiplier(1) - 1.06) < 0.001, '1 стак: +6%');
+    assert.ok(Math.abs(getSwiftFeatherMultiplier(8) - 1.48) < 0.001, '8 стаков: +48% (софт-кап)');
+    assert.ok(Math.abs(getSwiftFeatherMultiplier(9) - 1.50) < 0.001, '9 стаков: +50% (+2% за стак)');
+    assert.ok(Math.abs(getSwiftFeatherMultiplier(24) - 1.80) < 0.001, '24 стака: достигнут хард-кап +80%');
+    assert.equal(getSwiftFeatherMultiplier(30), 1.80, '30 стаков: удерживается хард-кап +80% (1.80x)');
+    assert.equal(getSwiftFeatherMultiplier(100), 1.80, '100 стаков: удерживается хард-кап +80% (1.80x)');
+
+    // 2. Магнитный камешек (magnet_pebble):
+    // База 2.5 м. +20% за стак до 5 стаков (5.0 м / +100%). Свыше 5 стаков — +5% за стак. Хард-кап 7.5 м (+200% / 3.0x).
+    assert.equal(getMagnetPebbleMultiplier(0), 1.0);
+    assert.ok(Math.abs(getMagnetPebbleMultiplier(1) - 1.20) < 0.001, '1 стак: +20% (радиус 3.0 м)');
+    assert.ok(Math.abs(getMagnetPebbleMultiplier(5) - 2.00) < 0.001, '5 стаков: +100% (софт-кап 5.0 м)');
+    assert.ok(Math.abs(getMagnetPebbleMultiplier(6) - 2.05) < 0.001, '6 стаков: +105% (+5% за стак, радиус 5.125 м)');
+    assert.ok(Math.abs(getMagnetPebbleMultiplier(25) - 3.00) < 0.001, '25 стаков: достигнут хард-кап 7.5 м (3.0x)');
+    assert.equal(getMagnetPebbleMultiplier(50), 3.00, '50 стаков: удерживается хард-кап 7.5 м (3.0x)');
+    assert.equal(getMagnetPebbleMultiplier(200), 3.00, '200 стаков: удерживается хард-кап 7.5 м (3.0x)');
   });
 });
 

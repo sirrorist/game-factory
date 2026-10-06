@@ -30,6 +30,8 @@ export interface Obstacle {
   x: number;
   z: number;
   radius: number;
+  /** Высота препятствия над уровнем земли (м). Если герой выше — перепрыгивает */
+  height?: number;
 }
 
 export interface PlayerParams {
@@ -47,7 +49,7 @@ export const DEFAULT_PLAYER_PARAMS: PlayerParams = {
   jumpHeight: 1.6,  // м
   gravity: 24.0,    // м/с^2
   radius: 0.45,     // радиус коллизии героя
-  arenaRadius: 65.0,// радиус игровой арены "Солнечные холмы"
+  arenaRadius: 60.0,// радиус круговой арены (в стиле Megabonk)
   maxAirJumps: 0,
 };
 
@@ -59,6 +61,46 @@ export function getTerrainHeight(x: number, z: number): number {
   const dist = Math.hypot(x, z);
   const factor = Math.min(dist / 40, 1.0);
   return (Math.sin(x * 0.08) * Math.cos(z * 0.08) * 1.6 + Math.sin(x * 0.03 + z * 0.04) * 1.0) * factor;
+}
+
+/**
+ * Высота опорной поверхности под ногами сущности: ландшафт + опора на камни при падении/прыжке сверху.
+ */
+export function getSurfaceHeight(
+  x: number,
+  z: number,
+  currentY: number,
+  obstacles: readonly Obstacle[] = [],
+  radius = 0.45,
+): number {
+  let groundY = getTerrainHeight(x, z);
+  for (const obs of obstacles) {
+    const obsHeight = obs.height ?? 1.2;
+    const obsGroundY = getTerrainHeight(obs.x, obs.z);
+    const dist = Math.hypot(x - obs.x, z - obs.z);
+
+    if (obsHeight < 3.0) {
+      // Покатый валун арены: куполообразный профиль 3D-модели додекаэдра
+      const maxReach = obs.radius + radius * 0.4;
+      if (dist < maxReach) {
+        const u = Math.min(1.0, dist / maxReach);
+        const domeH = obsHeight * Math.sqrt(Math.max(0, 1 - u * u));
+        const rockSurfaceY = obsGroundY + domeH;
+        if (currentY >= rockSurfaceY - 0.35 && rockSurfaceY > groundY) {
+          groundY = rockSurfaceY;
+        }
+      }
+    } else {
+      // Отвесные монолитные преграды (стволы деревьев, граничные скалы)
+      const obsTopY = obsGroundY + obsHeight;
+      if (dist < obs.radius + radius * 0.5) {
+        if (currentY >= obsTopY - 0.25 && obsTopY > groundY) {
+          groundY = obsTopY;
+        }
+      }
+    }
+  }
+  return groundY;
 }
 
 /**
@@ -101,8 +143,30 @@ export function stepPlayer(
   let nextX = state.x + moveX * safeDt;
   let nextZ = state.z + moveZ * safeDt;
 
-  // Коллизии с препятствиями (камни, деревья) - скольжение по контуру
+  // Коллизии с препятствиями (камни, деревья) - скольжение по контуру в 3D
   for (const obs of obstacles) {
+    const obsHeight = obs.height ?? 1.2;
+    const obsGroundY = getTerrainHeight(obs.x, obs.z);
+
+    if (obsHeight < 3.0) {
+      // Покатый валун арены: если герой перепрыгивает контактный склон камня, коллизия снимается
+      const distToObs = Math.hypot(nextX - obs.x, nextZ - obs.z);
+      const reach = obs.radius + params.radius;
+      if (distToObs < reach) {
+        const u = Math.min(1.0, distToObs / reach);
+        const contactH = obsGroundY + obsHeight * Math.sqrt(Math.max(0, 1 - u * u));
+        if (state.y >= contactH - 0.2) {
+          continue;
+        }
+      }
+    } else {
+      // Высокое дерево или отвесная граничная скала
+      const obsTopY = obsGroundY + obsHeight;
+      if (state.y >= obsTopY - 0.1) {
+        continue;
+      }
+    }
+
     const minDist = obs.radius + params.radius;
     const dx = nextX - obs.x;
     const dz = nextZ - obs.z;
@@ -123,8 +187,8 @@ export function stepPlayer(
     }
   }
 
-  // Высота поверхности под ногами
-  const groundY = getGroundHeight(nextX, nextZ);
+  // Высота поверхности под ногами (ландшафт + опора на камнях при прыжке сверху)
+  const groundY = getSurfaceHeight(nextX, nextZ, state.y, obstacles, params.radius);
 
   // Вертикальная физика и прыжок
   const vy0 = Math.sqrt(2 * params.gravity * params.jumpHeight);

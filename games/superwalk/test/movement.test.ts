@@ -2,6 +2,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   stepPlayer,
+  getSurfaceHeight,
+  getTerrainHeight,
   DEFAULT_PLAYER_PARAMS,
   type PlayerState,
   type Obstacle,
@@ -111,14 +113,14 @@ describe('Физика движения и управление (dt, повор�
     assert.ok(state144.grounded);
   });
 
-  it('граница арены: герой не может убежать за пределы arenaRadius (65.0 м)', () => {
-    let state = { ...initial, x: 64.0, z: 0 };
+  it('граница арены: герой не может убежать за пределы arenaRadius (60.0 м)', () => {
+    let state = { ...initial, x: 59.0, z: 0 };
     // Бежим вправо (D) 60 кадров
     for (let i = 0; i < 60; i++) {
       state = stepPlayer(state, { forward: 0, strafe: 1, jump: false, yaw: 0 }, 1 / 60);
     }
     const dist = Math.hypot(state.x, state.z);
-    assert.ok(dist <= 65.0001, `Герой убежал за пределы арены! dist = ${dist}`);
+    assert.ok(dist <= 60.0001, `Герой убежал за пределы арены! dist = ${dist}`);
   });
 
   it('мутация: движение без dt приводит к катастрофическому расхождению между 60 и 144 Гц', () => {
@@ -162,6 +164,44 @@ describe('Физика движения и управление (dt, повор�
     const vyBeforeThird = state.vy;
     state = stepPlayer(state, { forward: 0, strafe: 0, jump: true, yaw: 0 }, dt, paramsWithBoots);
     assert.ok(state.vy < vyBeforeThird, 'Третий прыжок не срабатывает, продолжается падение');
+  });
+
+  it('перепрыгивание камней: на земле камень блокирует бег вперёд, а в прыжке лис свободно пролетает над ним', () => {
+    const rock = { x: 0, z: -2.0, radius: 1.0, height: 0.9 };
+    const obstacles = [rock];
+
+    // 1. Бег по земле в сторону камня (forward = 1, yaw = 0 -> движение в сторону -Z)
+    let stateGround = { x: 0, y: 0, z: 0, vy: 0, grounded: true, yaw: 0 };
+    for (let i = 0; i < 30; i++) {
+      stateGround = stepPlayer(stateGround, { forward: 1, strafe: 0, jump: false, yaw: 0 }, 1 / 60, DEFAULT_PLAYER_PARAMS, obstacles);
+    }
+    // Камень находится в z = -2.0, радиус 1.0 + радиус героя 0.45 = 1.45.
+    // Герой упирается в границу камня z ≈ -0.55 и не может пройти сквозь него.
+    assert.ok(stateGround.z > -0.60, `Герой на земле упёрся в камень: z = ${stateGround.z.toFixed(2)} м`);
+
+    // 2. Бег с прыжком через камень (jump = true на старте)
+    let stateJump = { x: 0, y: 0, z: 0, vy: 0, grounded: true, yaw: 0 };
+    for (let i = 0; i < 35; i++) {
+      stateJump = stepPlayer(stateJump, { forward: 1, strafe: 0, jump: i === 0, yaw: 0 }, 1 / 60, DEFAULT_PLAYER_PARAMS, obstacles);
+    }
+    // В прыжке (высота > 0.9 м) лис свободно перелетел через камень и продвинулся дальше z = -2.5 м!
+    assert.ok(stateJump.z < -2.2, `Герой в прыжке успешно перелетел камень: z = ${stateJump.z.toFixed(2)} м`);
+  });
+
+  it('getSurfaceHeight даёт честную высоту купола камня: верхушка в центре и плавный склон к краю', () => {
+    const rock = { x: 10, z: 10, radius: 2.0, height: 1.5 };
+    const obstacles = [rock];
+    const centerTerrain = getTerrainHeight(10, 10);
+
+    // Герой на верхушке камня (currentY ≈ terrain + 1.5)
+    const centerH = getSurfaceHeight(10, 10, centerTerrain + 1.5, obstacles, 0.45);
+    assert.ok(Math.abs(centerH - (centerTerrain + 1.5)) < 0.05, `Высота в центре: ${centerH} ≈ ${centerTerrain + 1.5}`);
+
+    // На склоне камня (dist = 1.2 м) опора ниже центра, но выше уровня земли
+    const slopeTerrain = getTerrainHeight(11.2, 10);
+    const slopeH = getSurfaceHeight(11.2, 10, slopeTerrain + 1.3, obstacles, 0.45);
+    assert.ok(slopeH > slopeTerrain + 0.5, `Высота на склоне выше земли: ${slopeH} > ${slopeTerrain + 0.5}`);
+    assert.ok(slopeH < centerH, `Высота на склоне ниже вершины: ${slopeH} < ${centerH}`);
   });
 });
 

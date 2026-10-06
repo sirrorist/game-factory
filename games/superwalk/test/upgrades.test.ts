@@ -120,4 +120,22 @@ describe('Система улучшений и карточек (DESIGN.md, ша
     const targetMaxHp = baseHp + acornBonus + (inv.healBonusCount * 20);
     assert.equal(targetMaxHp, 170, 'Max HP равен 100 + 30 + 40 = 170');
   });
+
+  it('автопрокачка: при наличии ровно 1 доступной опции выбор применяется автоматически', () => {
+    const inv = createInitialInventory();
+    // Заполняем всё оружие и фолианты до капа, кроме spark_sling на 4 уровне
+    inv.weapons.set('tail_blade', 5);
+    inv.weapons.set('spark_sling', 4);
+    inv.tomes.set('tome_might', 5);
+    inv.tomes.set('tome_haste', 5);
+
+    // Доступен ТОЛЬКО spark_sling (4 -> 5 ур)!
+    const choices = rollUpgradeChoices(inv);
+    assert.equal(choices.length, 1, 'В ролле доступна ровно 1 опция');
+    assert.equal(choices[0]!.id, 'spark_sling', 'Единственная опция — spark_sling');
+
+    // Проверяем применение этой единственной опции
+    applyUpgrade(inv, choices[0]!.id);
+    assert.equal(inv.weapons.get('spark_sling'), 5, 'spark_sling повышен до 5 уровня');
+  });
 });
