@@ -13,6 +13,8 @@ import type { Browser, Frame, Page } from 'playwright';
 import { buildData, close, freePort, gameVersion, launchBrowser, startHub, startPlay, type Hub } from './helpers.ts';
 
 const GAMES = ['k8s-at-home', 'phaser-2d', 'snake', 'three-3d'] as const;
+/** Игры до 1.0.0: гостю хаб их не показывает (D-060). Владельцу - auth.test.ts. */
+const PRERELEASE = ['rogue-destiny'] as const;
 
 let browser: Browser;
 let play: { server: Server; port: number };
@@ -206,6 +208,27 @@ test('/healthz без базы - 503 и без подробностей', async 
   const r = await fetch(hub.origin.replace('localhost', '127.0.0.1') + '/healthz');
   assert.equal(r.status, 503);
   assert.equal(await r.text(), 'unavailable\n', 'наружу - без причины');
+});
+
+test('гостю пререлизы и Web kit не видны: нет в каталоге и шапке, страница игры - 404, /kit - на вход', async () => {
+  for (const id of PRERELEASE) assert.match(gameVersion(id), /^0\./, `${id}: уже не пререлиз - убрать из PRERELEASE`);
+  const page = await browser.newPage();
+  await page.goto(`${hub.origin}/`);
+  for (const id of PRERELEASE) assert.equal(await page.locator(`[data-game-id="${id}"]`).count(), 0, `${id} в каталоге`);
+  assert.equal(await page.getByTestId('prerelease').count(), 0);
+  assert.equal(await page.getByRole('link', { name: 'Web kit' }).count(), 0, 'Web kit в шапке');
+
+  // Пререлиз гостю - как несуществующая игра: 404, и в заголовке нет названия
+  const base = hub.origin.replace('localhost', '127.0.0.1');
+  for (const id of PRERELEASE) {
+    const r = await fetch(`${base}/games/${id}`);
+    assert.equal(r.status, 404, id);
+    assert.doesNotMatch(await r.text(), /Rogue Destiny/);
+  }
+
+  await page.goto(`${hub.origin}/kit`);
+  await page.waitForURL(`${hub.origin}/login`);
+  await page.close();
 });
 
 test('неизвестная игра и мусор вместо id - 404', async () => {

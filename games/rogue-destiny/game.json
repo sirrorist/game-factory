@@ -1,0 +1,20 @@
+{
+  "$schema": "../../packages/manifest/game.schema.json",
+  "id": "rogue-destiny",
+  "title": "Rogue Destiny",
+  "version": "0.2.0",
+  "description": "3D Souls-like сурвайвал-рогалик в затопленных криптах оккупированных земель.",
+  "kind": "static",
+  "toolchain": "vite-ts",
+  "output": "dist",
+  "entry": "index.html",
+  "offline": true,
+  "permissions": [
+    "saves",
+    "leaderboard",
+    "fullscreen",
+    "pointer-lock"
+  ],
+  "tags": ["3d", "roguelike", "survival", "action"],
+  "cover": "cover.svg"
+}

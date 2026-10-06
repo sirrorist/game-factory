@@ -7,7 +7,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { offlineProblems } from './gf.ts';
+import { offlineProblems, pnpmCommand } from './gf.ts';
 
 const run = promisify(execFile);
 
@@ -149,4 +149,11 @@ test('new: игра из шаблона vite-ts проходит проверк�
   assert.equal(again.status, 1);
   assert.match(again.stderr, /уже есть/);
   assert.equal(gf(['new', 'admin'], { GF_GAMES_DIR: games }).status, 1);
+});
+
+test('pnpm для сборки игры: под pnpm run - скрипт pnpm текущим Node (Windows без .cmd), иначе pnpm из PATH', () => {
+  const cjs = join('C:', 'Program Files', 'nodejs', 'node_modules', 'pnpm', 'bin', 'pnpm.cjs');
+  assert.deepEqual(pnpmCommand({ npm_execpath: cjs }), { cmd: process.execPath, pre: [cjs] });
+  assert.deepEqual(pnpmCommand({ npm_execpath: '/usr/lib/node_modules/npm/bin/npm-cli.js' }), { cmd: 'pnpm', pre: [] });
+  assert.deepEqual(pnpmCommand({}), { cmd: 'pnpm', pre: [] });
 });

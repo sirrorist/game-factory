@@ -1,12 +1,16 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { Icon, ICON_NAMES } from '@/components/icons.tsx';
 import { Logo } from '@/components/logo.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
-import { HotbarDemo, Replay } from './demos.tsx';
+import { currentOwner } from '@/lib/session.ts';
+import { HotbarDemo, Replay, RogueDestinyHudDemo } from './demos.tsx';
 
 export const metadata: Metadata = { title: 'Web kit' };
+// Витрина дизайн-системы - только владельцу (D-060): страница решает по сессии на каждый запрос.
+export const dynamic = 'force-dynamic';
 
 // Цвета - имена токенов из app/globals.css; образцы берут значения оттуда же, через var().
 const COLORS = [
@@ -47,7 +51,8 @@ function Scene({ children, className = '' }: { children: ReactNode; className?: 
   );
 }
 
-export default function KitPage() {
+export default async function KitPage() {
+  if (!(await currentOwner())) redirect('/login');
   return (
     <div className="flex flex-col gap-12">
       <header className="flex flex-col gap-2">
@@ -238,6 +243,15 @@ export default function KitPage() {
             </div>
           </div>
         </Replay>
+      </Section>
+
+      <Section
+        title="Rogue Destiny - Souls-like Roguelite"
+        note="Специализированные компоненты хардкорного сурвайвала: интерактивная шкала Эфирного Перегрева мага с красной чертой риска (80-95%), механика серого здоровья (неизлечимой травмы плоти) и Нити Судьбы."
+      >
+        <Scene className="flex items-center justify-center p-8 min-h-[260px]">
+          <RogueDestinyHudDemo />
+        </Scene>
       </Section>
     </div>
   );

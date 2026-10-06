@@ -8,6 +8,7 @@
   },
   "scripts": {
     "gf": "node tools/gf.ts",
+    "shots": "node tests/shots.ts",
     "games:build": "node tools/gf.ts build",
     "games:export": "node tools/gf.ts export",
     "play": "node --env-file-if-exists=.env apps/play-server/src/main.ts",
