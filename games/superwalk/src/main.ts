@@ -38,6 +38,7 @@ import {
   type PlayerInventory,
   type UpgradeOption,
 } from './core/upgrades.ts';
+import { calculateScore, isAllowedGameOverKey } from './core/scoring.ts';
 import './style.css';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
@@ -254,6 +255,13 @@ class SuperwalkApp {
   private fireWaveMat: THREE.MeshBasicMaterial;
   private fireWaveTimer = 0;
 
+  // Эффект удара корнями босса Старый Пень (R = 5.0 м)
+  private bossRootRingMesh: THREE.Mesh;
+  private bossRootMat: THREE.MeshBasicMaterial;
+
+  private best: number | null = null;
+  private isGameOver = false;
+
   private mobDummy = new THREE.Object3D();
   private tempDmgVec = new THREE.Vector3();
   private flashColor = new THREE.Color();
@@ -280,6 +288,7 @@ class SuperwalkApp {
 
   constructor(session: Session, best: number | null) {
     this.session = session;
+    this.best = best;
     const touchDevice = matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window);
 
     // 1. WebGL рендерер с соблюдением бюджета (docs/GAME-TZ.md):
@@ -696,6 +705,21 @@ class SuperwalkApp {
     this.fireWaveMesh.visible = false;
     this.scene.add(this.fireWaveMesh);
 
+    // Эффект удара корнями босса Старый Пень (R = 5.0 м)
+    const rootRingGeo = new THREE.RingGeometry(0.1, 5.0, 48);
+    rootRingGeo.rotateX(-Math.PI / 2);
+    this.bossRootMat = new THREE.MeshBasicMaterial({
+      color: 0xff3333,
+      transparent: true,
+      opacity: 0,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    this.bossRootRingMesh = new THREE.Mesh(rootRingGeo, this.bossRootMat);
+    this.bossRootRingMesh.visible = false;
+    this.bossRootRingMesh.renderOrder = 2;
+    this.scene.add(this.bossRootRingMesh);
+
     this.damageLayer = $('damage-layer');
 
     // 8. Контроллер ввода (ПК и телефон)
@@ -735,6 +759,7 @@ class SuperwalkApp {
     $('btn-skip-upgrade').addEventListener('click', () => this.skipUpgrade());
     $('btn-tab').addEventListener('click', () => this.toggleTabModal());
     $('tab-btn-close').addEventListener('click', () => this.closeTabModal());
+    $('btn-restart').addEventListener('click', () => this.restartGame());
 
     // Защита от случайного закрытия вкладки во время забега (ERR-10)
     window.addEventListener('beforeunload', (e) => {
@@ -769,6 +794,16 @@ class SuperwalkApp {
     }
 
     window.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (this.isGameOver) {
+        if (isAllowedGameOverKey(e.code)) {
+          e.preventDefault();
+          this.restartGame();
+        } else if (['Tab', 'Escape', 'KeyB', 'Digit1', 'Digit2', 'Digit3', 'Digit0'].includes(e.code)) {
+          e.preventDefault();
+        }
+        return;
+      }
+
       if (this.upgradeModalOpen) {
         if (e.code === 'Digit1' || e.code === 'Numpad1') {
           e.preventDefault();
@@ -824,6 +859,10 @@ class SuperwalkApp {
 
     // Удержание Tab (Hold-to-open): при отпускании клавиши окно автоматически закрывается
     window.addEventListener('keyup', (e) => {
+      if (this.isGameOver) {
+        if (e.code === 'Tab') e.preventDefault();
+        return;
+      }
       if (e.code === 'Tab') {
         e.preventDefault();
         if (this.tabModalOpen && !this.upgradeModalOpen) {
@@ -966,7 +1005,7 @@ class SuperwalkApp {
   }
 
   private toggleTabModal(): void {
-    if (this.upgradeModalOpen) return;
+    if (this.upgradeModalOpen || this.isGameOver) return;
     if (this.tabModalOpen) {
       this.closeTabModal();
     } else {
@@ -975,7 +1014,7 @@ class SuperwalkApp {
   }
 
   private openTabModal(): void {
-    if (this.upgradeModalOpen) return;
+    if (this.upgradeModalOpen || this.isGameOver) return;
     this.tabModalOpen = true;
     $('tab-modal').hidden = false;
     // Игра НЕ встает на паузу, движение персонажа на WASD остается активным!
@@ -987,7 +1026,7 @@ class SuperwalkApp {
     if (!this.tabModalOpen) return;
     this.tabModalOpen = false;
     $('tab-modal').hidden = true;
-    if (restorePointerLock && !this.paused && !this.upgradeModalOpen) {
+    if (restorePointerLock && !this.paused && !this.upgradeModalOpen && !this.isGameOver) {
       this.input.lock(); // Возвращаем фокус мыши только если игра продолжается
     }
   }
@@ -1196,13 +1235,13 @@ class SuperwalkApp {
   }
 
   private toggleMenu(): void {
-    if (this.upgradeModalOpen) return;
+    if (this.upgradeModalOpen || this.isGameOver) return;
     if (this.paused) this.closeMenu();
     else this.openMenu();
   }
 
   private openMenu(): void {
-    if (this.upgradeModalOpen) return;
+    if (this.upgradeModalOpen || this.isGameOver) return;
     this.paused = true;
     if (this.tabModalOpen) {
       this.closeTabModal(false);
@@ -1269,7 +1308,7 @@ class SuperwalkApp {
       this.fpsTimer = time;
     }
 
-    if (!this.paused) {
+    if (!this.paused && !this.isGameOver) {
       // 1. Движение лиса через чистую функцию физики stepPlayer с учётом коллизий ROCKS и холмов
       const move = this.input.move();
       const jump = this.input.jump();
@@ -1342,6 +1381,15 @@ class SuperwalkApp {
         this.bossSpawned = true;
         spawnMobInRing(this.combatState, this.playerState.x, this.playerState.z, 'old_stump', this.runTime, () => 0.5);
         toast('ДРЕВНИЙ ПЕНЬ ПРОБУДИЛСЯ!', 3500, 'err');
+      }
+
+      // Ярость босса на 10-й минуте (600 сек) (DESIGN.md, раздел 3.7)
+      if (this.runTime >= 600 && this.bossSpawned) {
+        const boss = this.combatState.mobs.find((m) => m.type === 'old_stump');
+        if (boss && !boss.isEnraged) {
+          boss.isEnraged = true;
+          toast('СТАРЫЙ ПЕНЬ ВПАЛ В ЯРОСТЬ!', 3000, 'err');
+        }
       }
 
       const targetCount = getWaveTargetCount(this.runTime, this.input.touchMode);
@@ -1485,6 +1533,36 @@ class SuperwalkApp {
         if (this.fireWaveTimer <= 0) {
           this.fireWaveMesh.visible = false;
         }
+      }
+
+      // Эффект удара корнями босса Старый Пень
+      if (combatRes.bossRootAttack) {
+        const bra = combatRes.bossRootAttack;
+        this.bossRootRingMesh.position.set(bra.x, bra.y + 0.04, bra.z);
+        this.bossRootRingMesh.visible = true;
+        if (bra.isSlam) {
+          this.bossRootMat.opacity = 0.85;
+          this.bossRootMat.color.setHex(0xffffff);
+        } else {
+          const prog = Math.max(0, Math.min(1, 1.0 - bra.timer));
+          const pulse = 0.4 + Math.sin(this.runTime * 25) * 0.15;
+          this.bossRootMat.opacity = 0.25 + prog * 0.45 + pulse * 0.15;
+          this.bossRootMat.color.setHex(0xff3333);
+        }
+      } else if (this.bossRootRingMesh.visible) {
+        if (this.bossRootMat.opacity > 0.05) {
+          this.bossRootMat.opacity -= dt * 3.0;
+        } else {
+          this.bossRootRingMesh.visible = false;
+          this.bossRootMat.opacity = 0;
+        }
+      }
+
+      // Проверка завершения забега (победа над боссом или гибель лиса)
+      if (combatRes.bossDefeated) {
+        this.endGame(true);
+      } else if (this.combatState.heroHp <= 0) {
+        this.endGame(false);
       }
 
       // 7. Отрисовка мобов через InstancedMesh (бюджет вызовов)
@@ -1719,6 +1797,15 @@ class SuperwalkApp {
       $('hud-timer').textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
       $('hud-level').textContent = String(this.combatState.heroLevel);
       $('hud-kills').textContent = String(this.combatState.kills);
+
+      const currentScore = calculateScore({
+        killedMobs: this.combatState.kills,
+        survivalSeconds: this.runTime,
+        bossDefeated: this.combatState.bossDefeated,
+        heroLevel: this.combatState.heroLevel,
+      });
+      const hudScoreEl = document.getElementById('hud-score');
+      if (hudScoreEl) hudScoreEl.textContent = String(currentScore);
 
       const hpPct = Math.max(0, Math.min(100, (this.combatState.heroHp / this.combatState.heroMaxHp) * 100));
       $('hp-bar-fill').style.width = `${hpPct}%`;
@@ -2002,6 +2089,205 @@ class SuperwalkApp {
       `сундуки ${activeChests}/${this.chests.length} · предметов ${totalItems} · клевер ${this.ownedItems.get('four_leaf') ?? 0}`,
       `мышь ${this.input.mouseStats.events} соб/с · макс шаг ${this.input.mouseStats.maxStep} px`,
     ].join('\n');
+  }
+
+  private endGame(isVictory: boolean): void {
+    if (this.isGameOver) return;
+    this.isGameOver = true;
+
+    // Скрываем другие окна, если были открыты
+    if (this.upgradeModalOpen) {
+      this.upgradeModalOpen = false;
+      $('upgrade-modal').hidden = true;
+    }
+    if (this.tabModalOpen) {
+      this.closeTabModal(false);
+    }
+    this.closeMenu();
+    this.input.unlock();
+    this.input.active = false;
+
+    const score = calculateScore({
+      killedMobs: this.combatState.kills,
+      survivalSeconds: this.runTime,
+      bossDefeated: isVictory,
+      heroLevel: this.combatState.heroLevel,
+    });
+
+    const isNewRecord = this.best === null || score > this.best;
+    if (isNewRecord) {
+      this.best = score;
+      $('best').textContent = String(score);
+    }
+
+    // Отправка в SDK платформы
+    void this.session.submitScore(score).catch((err) => {
+      console.warn('Ошибка при вызове submitScore:', err);
+    });
+
+    const mins = Math.floor(this.runTime / 60);
+    const secs = Math.floor(this.runTime % 60);
+    const timeFormatted = `${mins}:${secs.toString().padStart(2, '0')}`;
+
+    const modal = $('game-over-modal');
+    const panel = modal.querySelector('.gf-panel--gameover') as HTMLElement;
+    const titleEl = $('gameover-title');
+    const subtitleEl = $('gameover-subtitle');
+    const scoreEl = $('gameover-score');
+    const recordBadge = $('gameover-new-record');
+    const timeEl = $('gameover-time');
+    const killsEl = $('gameover-kills');
+    const levelEl = $('gameover-level');
+    const bossBonusEl = $('gameover-boss-bonus');
+    const bestEl = $('gameover-best');
+    const itemsListEl = $('gameover-items-list');
+
+    if (panel) {
+      panel.classList.remove('gf-panel--victory', 'gf-panel--defeat');
+      panel.classList.add(isVictory ? 'gf-panel--victory' : 'gf-panel--defeat');
+    }
+
+    if (titleEl) {
+      titleEl.textContent = isVictory ? 'ПОБЕДА!' : 'ЗАБЕГ ОКОНЧЕН';
+    }
+    if (subtitleEl) {
+      subtitleEl.textContent = isVictory
+        ? 'Старый Пень повержен, Солнечные холмы спасены!'
+        : 'Лис пал в бою, но легенда о нём будет жить...';
+    }
+    if (scoreEl) scoreEl.textContent = String(score);
+    if (recordBadge) recordBadge.hidden = !isNewRecord;
+    if (timeEl) timeEl.textContent = timeFormatted;
+    if (killsEl) killsEl.textContent = String(this.combatState.kills);
+    if (levelEl) levelEl.textContent = String(this.combatState.heroLevel);
+    if (bossBonusEl) bossBonusEl.textContent = isVictory ? '+500' : '0';
+    if (bestEl) bestEl.textContent = String(this.best ?? score);
+
+    // Отрисовка снаряжения через проверенный хелпер
+    if (itemsListEl) {
+      this.renderInventoryItems(itemsListEl, true);
+    }
+
+    modal.hidden = false;
+    toast(
+      isVictory ? '🏆 Триумф! Босс повержен!' : '💀 Забег окончен. Нажми Пробел или кнопку для нового забега',
+      3500,
+      isVictory ? 'ok' : 'err',
+    );
+  }
+
+  private restartGame(): void {
+    $('game-over-modal').hidden = true;
+    this.isGameOver = false;
+
+    // Сброс времени и расписания спавна
+    this.runTime = 0;
+    this.spawnTimer = 0;
+    this.lastChestMinute = 0;
+    this.bossSpawned = false;
+    this.prngSeed = 42;
+
+    // Сброс инвентаря и боевого состояния
+    this.ownedItems.clear();
+    this.inventory = createInitialInventory();
+    this.combatState = createInitialCombatState();
+    this.playerState = {
+      x: 0,
+      y: 0,
+      z: 0,
+      vy: 0,
+      grounded: true,
+      yaw: 0,
+    };
+    this.playerParams = { ...DEFAULT_PLAYER_PARAMS };
+    this.input.yaw = 0;
+    this.input.pitch = 0.25;
+
+    // Сброс Three.js мешей героя и камеры (без создания новых объектов!)
+    this.heroGroup.position.set(0, 0, 0);
+    this.heroGroup.rotation.set(0, 0, 0);
+    this.camera.position.set(0, 3.8, 6.2);
+    this.camera.lookAt(0, 1.0, 0);
+
+    // Очистка активных всплывающих чисел урона
+    for (const num of this.activeDamageNumbers) {
+      num.el.remove();
+    }
+    this.activeDamageNumbers.length = 0;
+
+    // Сброс сундуков (чистый массив без утечек Three.js)
+    this.chests = createInitialChests(
+      this.world.obstacles,
+      getTerrainHeight,
+      () => Math.random(),
+      INITIAL_CHEST_COUNT,
+      65,
+    );
+
+    // Сброс счетчиков InstancedMesh (число объектов Three.js строго неизменно!)
+    this.mushletStemMesh.count = 0;
+    this.mushletCapMesh.count = 0;
+    this.mushletStemMesh.instanceMatrix.needsUpdate = true;
+    this.mushletCapMesh.instanceMatrix.needsUpdate = true;
+
+    this.beetleBodyMesh.count = 0;
+    this.beetleHornMesh.count = 0;
+    this.beetleBodyMesh.instanceMatrix.needsUpdate = true;
+    this.beetleHornMesh.instanceMatrix.needsUpdate = true;
+
+    this.owlBodyMesh.count = 0;
+    this.owlEyesMesh.count = 0;
+    this.owlBodyMesh.instanceMatrix.needsUpdate = true;
+    this.owlEyesMesh.instanceMatrix.needsUpdate = true;
+
+    this.projMesh.count = 0;
+    this.sparkProjMesh.count = 0;
+    this.projMesh.instanceMatrix.needsUpdate = true;
+    this.sparkProjMesh.instanceMatrix.needsUpdate = true;
+
+    this.gemMesh.count = 0;
+    this.gemMesh.instanceMatrix.needsUpdate = true;
+
+    this.beamMesh.count = 0;
+    this.beamMesh.instanceMatrix.needsUpdate = true;
+
+    // Скрытие эффектов и босса
+    this.bossGroup.visible = false;
+    this.bossRootRingMesh.visible = false;
+    this.bossRootMat.opacity = 0;
+
+    this.slashMesh.visible = false;
+    this.slashTimer = 0;
+    this.sparkFlashMesh.visible = false;
+    this.sparkFlashTimer = 0;
+    this.fireWaveMesh.visible = false;
+    this.fireWaveTimer = 0;
+
+    const bossHud = document.getElementById('boss-hud');
+    if (bossHud) bossHud.hidden = true;
+
+    // Сброс интерфейса HUD
+    $('hud-timer').textContent = '0:00';
+    $('hud-level').textContent = '1';
+    $('hud-kills').textContent = '0';
+    $('hp-bar-fill').style.width = '100%';
+    $('hp-bar-text').textContent = `${HERO_CONFIG.maxHp} / ${HERO_CONFIG.maxHp}`;
+    $('exp-bar-fill').style.width = '0%';
+    const hudScoreEl = document.getElementById('hud-score');
+    if (hudScoreEl) hudScoreEl.textContent = '0';
+
+    this.updateInventoryHud();
+    this.recalculateHeroStats();
+
+    // Закрываем меню и диалоги
+    this.upgradeModalOpen = false;
+    $('upgrade-modal').hidden = true;
+    this.tabModalOpen = false;
+    $('tab-modal').hidden = true;
+    this.closeMenu();
+    this.input.active = true;
+
+    toast('Новый забег начался!', 2000, 'ok');
   }
 }
 

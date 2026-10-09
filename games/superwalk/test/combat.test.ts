@@ -1375,6 +1375,91 @@ describe('Боевая система и мобы (DESIGN.md, раздел 5 и 
       `Моб должен плавно огибать дерево по касательной: сдвиг по X = ${lateralShift} > 0.1`
     );
   });
+
+  it('босс Старый Пень: удар корнями по кругу 5 м наносит 20 урона на земле, телеграф 1.0 с', () => {
+    const state = createInitialCombatState();
+    state.heroHp = 100;
+    const boss = spawnMobInRing(state, 0, 0, 'old_stump', 480, () => 0.5);
+    boss.x = 0;
+    boss.z = 3.0; // 3 м от лиса (в радиусе корней 5 м)
+    boss.rootAttackCooldown = 1.05; // 0.05 с до старта телеграфа
+
+    // Шаг 1: через 0.05 с активируется телеграф
+    let res = stepCombat(state, 0, 0, 0, 0.05, 0, 2.5);
+    assert.ok(res.bossRootAttack, 'Телеграф корней должен быть активен');
+    assert.equal(res.bossRootAttack.isSlam, false);
+    assert.equal(res.bossRootAttack.radius, 5.0);
+
+    // Симулируем 1.0 с телеграфа (20 шагов по 0.05 с)
+    let totalDmg = 0;
+    for (let i = 0; i < 20; i++) {
+      res = stepCombat(state, 0, 0, 0, 0.05, 0, 2.5);
+      totalDmg += res.damageDealtToHero;
+    }
+
+    assert.ok(res.bossRootAttack?.isSlam, 'Должен произойти удар корнями');
+    assert.equal(totalDmg, 20, 'Удар корнями должен нанести ровно 20 урона');
+  });
+
+  it('босс Старый Пень: честный 3D-прыжок (высота 1.4 м) полностью защищает от удара корней', () => {
+    const state = createInitialCombatState();
+    state.heroHp = 100;
+    const boss = spawnMobInRing(state, 0, 0, 'old_stump', 480, () => 0.5);
+    boss.x = 0;
+    boss.z = 3.0;
+    boss.rootAttackCooldown = 0.05; // 1 шаг до удара
+
+    // Герой подпрыгнул на высоту 1.4 м (выше 1.2 м над землёй)
+    const res = stepCombat(state, 0, 1.4, 0, 0.05, 0, 2.5);
+    assert.ok(res.bossRootAttack?.isSlam, 'Удар корнями произошёл');
+    assert.equal(res.damageDealtToHero, 0, 'В воздухе лис не получает урона от корней');
+    assert.equal(state.heroHp, 100, 'HP лиса осталось нетронутым');
+  });
+
+  it('босс Старый Пень: призыв 6 грибышей раз в 12 секунд вокруг себя', () => {
+    const state = createInitialCombatState();
+    const boss = spawnMobInRing(state, 0, 0, 'old_stump', 480, () => 0.5);
+    boss.x = 10;
+    boss.z = 10;
+    boss.minionSummonCooldown = 0.05; // 1 шаг до призыва
+
+    const initialMobs = state.mobs.length; // 1 (сам босс)
+    stepCombat(state, 0, 0, 0, 0.05, 0, 2.5);
+
+    assert.equal(state.mobs.length, initialMobs + 6, 'Босс должен призвать ровно 6 грибышей');
+    const minions = state.mobs.filter((m) => m.type === 'mushlet');
+    assert.equal(minions.length, 6);
+  });
+
+  it('босс Старый Пень: фаза ярости при HP < 50% увеличивает скорость на +30%', () => {
+    const state = createInitialCombatState();
+    const boss = spawnMobInRing(state, 0, 0, 'old_stump', 480, () => 0.5);
+    boss.x = 0;
+    boss.z = 20;
+    boss.speed = 1.8;
+    boss.hp = 2000; // < 2500 (50% от 5000)
+
+    for (let i = 0; i < 20; i++) {
+      stepCombat(state, 0, 0, 0, 0.05, 0, 2.5);
+    }
+    assert.ok(boss.isEnraged, 'Босс должен войти в ярость');
+    // При скорости 1.8 * 1.3 = 2.34 м/с за 1 с он сдвинется на 2.34 м по направлению к 0 (z = 20 - 2.34 = 17.66)
+    const movedDist = 20 - boss.z;
+    assert.ok(Math.abs(movedDist - 2.34) < 0.1, `Скорость босса в ярости ${movedDist} должна быть около 2.34 м/с`);
+  });
+
+  it('смерть босса Старый Пень: даёт 50 опыта и флаг bossDefeated', () => {
+    const state = createInitialCombatState();
+    const boss = spawnMobInRing(state, 0, 0, 'old_stump', 480, () => 0.5);
+    boss.hp = 10;
+
+    // Убиваем босса
+    killMob(state, boss.id);
+
+    assert.equal(state.bossDefeated, true, 'Флаг bossDefeated должен быть установлен в true');
+    const largeGem = state.gems.find((g) => g.value === 50);
+    assert.ok(largeGem, 'Должен выпасть кристалл на 50 опыта');
+  });
 });
 
 

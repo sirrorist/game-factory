@@ -139,6 +139,12 @@ export interface MobEntity {
   chargeDirX: number;
   chargeDirZ: number;
   shootCooldown: number;
+  /** Таймер удара корнями босса (раз в 6.0 с, DESIGN.md) */
+  rootAttackCooldown?: number;
+  /** Таймер призыва 6 грибышей боссом (раз в 12.0 с, DESIGN.md) */
+  minionSummonCooldown?: number;
+  /** Фаза ярости босса при HP < 50% */
+  isEnraged?: boolean;
 }
 
 export interface ExpGemEntity {
@@ -239,6 +245,8 @@ export interface CombatState {
   ninthTailAttackCount: number;
   hasNinthTail: boolean;
   phoenixDownCharges: number;
+  /** Повержен ли босс Старый Пень */
+  bossDefeated: boolean;
 }
 
 export function createInitialCombatState(): CombatState {
@@ -282,6 +290,7 @@ export function createInitialCombatState(): CombatState {
     ninthTailAttackCount: 0,
     hasNinthTail: false,
     phoenixDownCharges: 0,
+    bossDefeated: false,
   };
 }
 
@@ -364,6 +373,15 @@ export interface AttackEvent {
   hits: number;
 }
 
+export interface BossRootAttackEvent {
+  x: number;
+  y: number;
+  z: number;
+  radius: number;
+  timer: number;
+  isSlam: boolean;
+}
+
 export interface StepCombatResult {
   leveledUp: boolean;
   pendingLevelUps: number;
@@ -374,6 +392,8 @@ export interface StepCombatResult {
   bossAlive: boolean;
   bossHp: number | null;
   bossMaxHp: number | null;
+  bossDefeated?: boolean;
+  bossRootAttack?: BossRootAttackEvent | null;
   shieldBlocked?: boolean;
   revivedByPhoenix?: boolean;
   heroPushX?: number;
@@ -429,6 +449,7 @@ export function stepCombat(
   let damageDealtToHero = 0;
   let gemsCollected = 0;
   let leveledUp = false;
+  let bossRootAttack: BossRootAttackEvent | null = null;
   const damagePopups: DamagePopupEvent[] = [];
 
   if (state.heroIFrameSec > 0) {
@@ -541,10 +562,93 @@ export function stepCombat(
         }
       }
     } else if (mob.type === 'old_stump') {
-      // Старый Пень (босс): медленно шагает к герою
+      // Инициализируем кулдауны способностей босса
+      if (mob.rootAttackCooldown === undefined) mob.rootAttackCooldown = 6.0;
+      if (mob.minionSummonCooldown === undefined) mob.minionSummonCooldown = 12.0;
+
+      // Фаза ярости: при HP < 50% скорость возрастает на +30% (DESIGN.md, раздел 5.4)
+      const isEnraged = mob.hp < mob.maxHp * 0.5;
+      mob.isEnraged = isEnraged;
+      const effectiveSpeed = isEnraged ? mob.speed * 1.30 : mob.speed;
+
+      // Медленно шагает к герою
       if (dist > 0.001) {
-        mob.x += (dx / dist) * mob.speed * safeDt;
-        mob.z += (dz / dist) * mob.speed * safeDt;
+        mob.x += (dx / dist) * effectiveSpeed * safeDt;
+        mob.z += (dz / dist) * effectiveSpeed * safeDt;
+      }
+
+      // Способность 1: Удар корнями по кругу 5.0 м раз в 6.0 с с телеграфом 1.0 с
+      mob.rootAttackCooldown -= safeDt;
+      if (mob.rootAttackCooldown <= 1.0 && mob.rootAttackCooldown > 0) {
+        // Телеграф-предупреждение
+        bossRootAttack = {
+          x: mob.x,
+          y: mob.y,
+          z: mob.z,
+          radius: 5.0,
+          timer: mob.rootAttackCooldown,
+          isSlam: false,
+        };
+      } else if (mob.rootAttackCooldown <= 0) {
+        // Удар корнями!
+        bossRootAttack = {
+          x: mob.x,
+          y: mob.y,
+          z: mob.z,
+          radius: 5.0,
+          timer: 0,
+          isSlam: true,
+        };
+
+        // Проверка попадания по герою в радиусе 5.0 м
+        const heroGroundY = getGroundHeight(heroX, heroZ);
+        const heightAboveGround = heroY - heroGroundY;
+        const xzDist = Math.hypot(heroX - mob.x, heroZ - mob.z);
+        // Честный 3D: если лис прыгнул выше 1.2 м над землёй, корни проходят под ним!
+        if (xzDist <= 5.0 && heightAboveGround < 1.2 && state.heroIFrameSec <= 0) {
+          damageDealtToHero += 20;
+          state.heroIFrameSec = 0.8;
+          damagePopups.push({
+            x: heroX,
+            y: heroY + 0.8,
+            z: heroZ,
+            damage: 20,
+            isCrit: false,
+            isHero: true,
+          });
+        }
+        mob.rootAttackCooldown = 6.0;
+      }
+
+      // Способность 2: Призыв 6 грибышей раз в 12.0 с
+      mob.minionSummonCooldown -= safeDt;
+      if (mob.minionSummonCooldown <= 0) {
+        mob.minionSummonCooldown = 12.0;
+        const mushletCfg = MOB_CONFIGS.mushlet;
+        for (let k = 0; k < 6; k++) {
+          const sAngle = (k / 6) * Math.PI * 2 + (rnd() - 0.5) * 0.4;
+          const sDist = 2.5 + rnd() * 1.5;
+          const sx = mob.x + Math.cos(sAngle) * sDist;
+          const sz = mob.z + Math.sin(sAngle) * sDist;
+          state.mobs.push({
+            id: state.nextMobId++,
+            type: 'mushlet',
+            x: sx,
+            y: getGroundHeight(sx, sz),
+            z: sz,
+            hp: mushletCfg.baseHp,
+            maxHp: mushletCfg.baseHp,
+            speed: mushletCfg.speed,
+            radius: mushletCfg.radius,
+            damage: mushletCfg.damage,
+            exp: mushletCfg.exp,
+            state: 'walk',
+            stateTimer: 0,
+            chargeDirX: 0,
+            chargeDirZ: 0,
+            shootCooldown: 0,
+          });
+        }
       }
     }
 
@@ -1147,6 +1251,8 @@ export function stepCombat(
     bossAlive,
     bossHp,
     bossMaxHp,
+    bossDefeated: state.bossDefeated,
+    bossRootAttack,
     shieldBlocked,
     revivedByPhoenix,
     heroPushX,
@@ -1281,6 +1387,10 @@ export function killMob(state: CombatState, mobId: number): boolean {
   const mob = state.mobs[idx]!;
   state.mobs.splice(idx, 1);
   state.kills++;
+
+  if (mob.type === 'old_stump') {
+    state.bossDefeated = true;
+  }
 
   // Эффект Соты (honeycomb): +2 здоровья за убийство (Token Bucket до 10 токенов, ERR-09)
   if (state.healOnKill > 0 && state.honeycombTokens >= 1.0) {

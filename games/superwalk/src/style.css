@@ -1170,4 +1170,179 @@ button {
 .gf-inv-badge--epic { border-color: rgba(159, 122, 234, 0.5); color: #b794f4; }
 .gf-inv-badge--legendary { border-color: rgba(236, 201, 75, 0.6); color: #f6e05e; }
 
+/* ---------- Экран завершения забега (Game Over / Victory) ---------- */
+.gf-game-over-modal {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 12, 20, 0.82);
+  backdrop-filter: blur(10px);
+  padding: calc(16px + var(--safe-t)) calc(16px + var(--safe-r)) calc(16px + var(--safe-b)) calc(16px + var(--safe-l));
+  z-index: 35;
+  overflow-y: auto;
+}
+
+.gf-panel--gameover {
+  width: min(560px, 95vw);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  background: var(--bg-100);
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85);
+  animation: gf-pop var(--dur-slow) var(--ease-spring) both;
+  overflow-y: auto;
+}
+
+.gf-panel--victory {
+  border-color: #f2cc60;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85), 0 0 50px rgba(242, 204, 96, 0.28);
+}
+
+.gf-panel--defeat {
+  border-color: #ff4d4d;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85), 0 0 50px rgba(255, 77, 77, 0.28);
+}
+
+.gf-gameover-header {
+  text-align: center;
+}
+
+.gf-gameover-title {
+  margin: 0;
+  font: 900 28px/1.1 var(--font-display);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.gf-panel--victory .gf-gameover-title {
+  color: #f2cc60;
+  text-shadow: 0 0 20px rgba(242, 204, 96, 0.5);
+}
+
+.gf-panel--defeat .gf-gameover-title {
+  color: #ff4d4d;
+  text-shadow: 0 0 20px rgba(255, 77, 77, 0.5);
+}
+
+.gf-gameover-sub {
+  margin: var(--space-2) 0 0;
+  font: 500 13px/1.4 var(--font-body);
+  color: var(--ink-muted);
+}
+
+.gf-gameover-score-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  text-align: center;
+}
+
+.gf-gameover-score-label {
+  font: 700 11px/1 var(--font-body);
+  letter-spacing: 0.15em;
+  color: var(--ink-subtle);
+  text-transform: uppercase;
+}
+
+.gf-gameover-score-val {
+  font: 900 42px/1.1 var(--font-display);
+  color: #ffffff;
+  margin: 4px 0;
+}
+
+.gf-panel--victory .gf-gameover-score-val {
+  color: #f2cc60;
+  text-shadow: 0 0 16px rgba(242, 204, 96, 0.4);
+}
+
+.gf-gameover-record-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(242, 204, 96, 0.2);
+  color: #f2cc60;
+  border: 1px solid rgba(242, 204, 96, 0.5);
+  border-radius: var(--radius-pill);
+  padding: 4px 12px;
+  font: 700 11px/1 var(--font-body);
+  letter-spacing: 0.08em;
+  animation: gf-pop 400ms var(--ease-spring) both;
+}
+
+.gf-gameover-breakdown {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-2);
+}
+
+.gf-gameover-stat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-200);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font: 500 13px/1.2 var(--font-body);
+}
+
+.gf-stat-label {
+  color: var(--ink-muted);
+}
+
+.gf-stat-val {
+  font: 700 14px/1 var(--font-display);
+  color: var(--ink);
+}
+
+.gf-gameover-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.gf-gameover-items-title {
+  font: 700 12px/1 var(--font-body);
+  letter-spacing: 0.08em;
+  color: var(--ink-subtle);
+  text-transform: uppercase;
+}
+
+.gf-gameover-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-2);
+}
+
+.gf-gameover-actions .gf-btn {
+  width: 100%;
+}
+
+@media (max-width: 480px) {
+  .gf-panel--gameover {
+    padding: var(--space-3);
+  }
+  .gf-gameover-breakdown {
+    grid-template-columns: 1fr;
+  }
+  .gf-gameover-score-val {
+    font-size: 32px;
+  }
+  .gf-gameover-title {
+    font-size: 22px;
+  }
+}
+
 

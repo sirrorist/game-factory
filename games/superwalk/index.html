@@ -17,6 +17,7 @@
       <header id="hud" class="gf-hud-top">
         <span class="gf-hud-stat"><span id="mode"></span></span>
         <span class="gf-hud-stat" data-icon="trophy"><span>рекорд</span><b id="best">-</b></span>
+        <span class="gf-hud-stat"><span>забег</span><b id="hud-score">0</b></span>
         <span class="gf-hud-stat"><span>время</span><b id="hud-timer">0:00</b></span>
         <span class="gf-hud-stat"><span>ур.</span><b id="hud-level">1</b></span>
         <span class="gf-hud-stat"><span>врагов</span><b id="hud-kills">0</b></span>
@@ -152,6 +153,51 @@
         <div class="help" id="help-touch" hidden>
           <p><b>Джойстик слева</b> — бег, <b>касание справа</b> — обзор</p>
           <p><b>Кнопка меню</b> — пауза и полный экран</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="game-over-modal" class="gf-game-over-modal" hidden>
+      <div class="gf-panel gf-panel--gameover" role="dialog" aria-label="Итоги забега">
+        <div class="gf-gameover-header">
+          <h1 id="gameover-title" class="gf-gameover-title">ПОБЕДА!</h1>
+          <p id="gameover-subtitle" class="gf-gameover-sub">Старый Пень повержен, Солнечные холмы спасены!</p>
+        </div>
+        <div class="gf-gameover-score-box">
+          <div class="gf-gameover-score-label">ИТОГОВЫЙ СЧЁТ</div>
+          <div id="gameover-score" class="gf-gameover-score-val">0</div>
+          <div id="gameover-new-record" class="gf-gameover-record-badge" hidden>🏆 НОВЫЙ РЕКОРД!</div>
+        </div>
+        <div class="gf-gameover-breakdown">
+          <div class="gf-gameover-stat">
+            <span class="gf-stat-label">⏱️ Время забега</span>
+            <span id="gameover-time" class="gf-stat-val">0:00</span>
+          </div>
+          <div class="gf-gameover-stat">
+            <span class="gf-stat-label">⚔️ Побеждено врагов</span>
+            <span id="gameover-kills" class="gf-stat-val">0</span>
+          </div>
+          <div class="gf-gameover-stat">
+            <span class="gf-stat-label">⭐ Уровень лиса</span>
+            <span id="gameover-level" class="gf-stat-val">1</span>
+          </div>
+          <div class="gf-gameover-stat">
+            <span class="gf-stat-label">👑 Бонус за босса</span>
+            <span id="gameover-boss-bonus" class="gf-stat-val">+500</span>
+          </div>
+          <div class="gf-gameover-stat">
+            <span class="gf-stat-label">🏆 Рекорд</span>
+            <span id="gameover-best" class="gf-stat-val">0</span>
+          </div>
+        </div>
+        <div class="gf-gameover-items">
+          <div class="gf-gameover-items-title">📦 Снаряжение забега</div>
+          <div id="gameover-items-list" class="gf-items-list gf-items-list--compact"></div>
+        </div>
+        <div class="gf-gameover-actions">
+          <button id="btn-restart" type="button" class="gf-btn gf-btn--primary gf-btn--lg">
+            <span>Играть снова [Пробел]</span>
+          </button>
         </div>
       </div>
     </div>
