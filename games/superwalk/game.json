@@ -2,7 +2,7 @@
   "$schema": "../../packages/manifest/game.schema.json",
   "id": "superwalk",
   "title": "Superwalk",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Лис бежит по солнечным холмам: оружие бьёт само, из врагов сыплется опыт, на каждом уровне - выбор улучшения, в конце - босс. На ПК и на телефоне.",
   "kind": "static",
   "toolchain": "vite-ts",
