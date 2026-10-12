@@ -14,7 +14,7 @@ export const HERO_CONFIG: HeroConfig = {
   id: 'fox',
   name: 'Лис',
   maxHp: 100,
-  speed: 6.0,        // м/с
+  speed: 5.4,        // м/с (баланс v1.1.0: комфортная динамика и маневренность)
   jumpHeight: 1.6,   // м
   pickupRadius: 2.5, // м
   armor: 0,
@@ -37,7 +37,7 @@ export const MOB_CONFIGS: Record<MobType, MobConfig> = {
     id: 'mushlet',
     name: 'Грибыш',
     baseHp: 18,
-    speed: 2.6,
+    speed: 3.3, // v1.1.0: 3.3 м/с (было 2.6, мобы нагоняют и создают давление)
     damage: 6, // касанием
     exp: 1,
     radius: 0.45,
@@ -46,7 +46,7 @@ export const MOB_CONFIGS: Record<MobType, MobConfig> = {
     id: 'ram_beetle',
     name: 'Жук-таран',
     baseHp: 30,
-    speed: 2.0,
+    speed: 2.5, // v1.1.0: 2.5 м/с при ходьбе (было 2.0), при рывке 9.0 м/с
     damage: 12, // при рывке (скорость рывка 9 м/с)
     exp: 2,
     radius: 0.55,
@@ -55,7 +55,7 @@ export const MOB_CONFIGS: Record<MobType, MobConfig> = {
     id: 'spit_owl',
     name: 'Плевун-совёнок',
     baseHp: 14,
-    speed: 2.2,
+    speed: 2.4, // v1.1.0: 2.4 м/с (было 2.2)
     damage: 8, // снарядом (10 м/с)
     exp: 2,
     radius: 0.45,
@@ -129,10 +129,10 @@ export function getMobHpMultiplier(runTimeSec: number): number {
   return Math.pow(1.10, regularMinutes) * Math.pow(1.20, extraMinutes);
 }
 
-/** Опыт до следующего уровня N: 5 + (N - 1) * 4 (DESIGN.md, раздел 5.5) */
+/** Опыт до следующего уровня N: 12 + (N - 1) * 6 (v1.1.0: устранён спам модалок на первых секундах) */
 export function getRequiredExp(level: number): number {
   const safeLvl = Math.max(1, Math.floor(level));
-  return 5 + (safeLvl - 1) * 4;
+  return 12 + (safeLvl - 1) * 6;
 }
 
 /** Ценность кристаллика опыта по типу */

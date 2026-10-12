@@ -9,12 +9,15 @@ import {
   createInitialCombatState,
   stepCombat,
   killMob,
+  safeRepelMobs,
 } from '../src/core/combat.ts';
 import type { MobEntity } from '../src/core/combat.ts';
 import type { Obstacle } from '../src/core/movement.ts';
 import {
   getRequiredExp,
   getMobHpMultiplier,
+  HERO_CONFIG,
+  MOB_CONFIGS,
 } from '../src/core/content.ts';
 
 describe('Боевая система и мобы (DESIGN.md, раздел 5 и 7)', () => {
@@ -116,21 +119,21 @@ describe('Боевая система и мобы (DESIGN.md, раздел 5 и 
     assert.ok(Math.abs(getMobHpMultiplier(190) - 1.331) < 1e-4);
   });
 
-  it('кривая опыта N: 5 + (N - 1) * 4 и повышение уровня', () => {
-    assert.equal(getRequiredExp(1), 5);
-    assert.equal(getRequiredExp(2), 9);
-    assert.equal(getRequiredExp(3), 13);
-    assert.equal(getRequiredExp(5), 21);
-    assert.equal(getRequiredExp(10), 41);
+  it('кривая опыта N: 12 + (N - 1) * 6 и повышение уровня (v1.1.0)', () => {
+    assert.equal(getRequiredExp(1), 12);
+    assert.equal(getRequiredExp(2), 18);
+    assert.equal(getRequiredExp(3), 24);
+    assert.equal(getRequiredExp(5), 36);
+    assert.equal(getRequiredExp(10), 66);
 
     const state = createInitialCombatState();
-    // Спавним кристалл опыта ценностью 5 рядом с героем (в радиусе магнита)
+    // Спавним кристалл опыта ценностью 12 рядом с героем (в радиусе магнита)
     state.gems.push({
       id: 1,
       x: 1.0,
       y: 0,
       z: 0,
-      value: 5,
+      value: 12,
       type: 'large',
       flying: false,
     });
@@ -810,20 +813,20 @@ describe('Боевая система и мобы (DESIGN.md, раздел 5 и 
     assert.equal(state.mobs[0]!.hp, 200 - 42, 'Здоровье моба уменьшилось на 42');
   });
 
-  it('накопительный опыт: сбор кристалла на 40 опыта даёт 3 левелапа подряд без потерь остатка (Megabonk-style)', () => {
+  it('накопительный опыт: сбор кристалла на 65 опыта даёт 3 левелапа подряд без потерь остатка (Megabonk-style, v1.1.0)', () => {
     const state = createInitialCombatState();
-    // На уровне 1: getRequiredExp(1) = 5
-    // На уровне 2: getRequiredExp(2) = 9
-    // На уровне 3: getRequiredExp(3) = 13
-    // На уровне 4: getRequiredExp(4) = 17
-    // Сумма опыта на 3 повышения: 5 + 9 + 13 = 27 опыта.
-    // При кристалле в 40 опыта: 40 - 27 = 13 остатка опыта на уровне 4 (13 / 17).
+    // На уровне 1: getRequiredExp(1) = 12
+    // На уровне 2: getRequiredExp(2) = 18
+    // На уровне 3: getRequiredExp(3) = 24
+    // На уровне 4: getRequiredExp(4) = 30
+    // Сумма опыта на 3 повышения: 12 + 18 + 24 = 54 опыта.
+    // При кристалле в 65 опыта: 65 - 54 = 11 остатка опыта на уровне 4 (11 / 30).
     state.gems.push({
       id: 1,
       x: 0,
       y: 0,
       z: 0.1, // прямо под ногами лиса
-      value: 40,
+      value: 65,
       type: 'large',
       flying: false,
     });
@@ -832,7 +835,7 @@ describe('Боевая система и мобы (DESIGN.md, раздел 5 и 
     assert.equal(res.leveledUp, true, 'Событие левелапа произошло');
     assert.equal(state.heroLevel, 4, 'Герой мгновенно апнул 4 уровень (1 -> 4)');
     assert.equal(state.pendingLevelUps, 3, 'Накоплено ровно 3 окна выбора улучшения подряд');
-    assert.equal(state.heroExp, 13, 'Остаток опыта сохранён (13 / 17)');
+    assert.equal(state.heroExp, 11, 'Остаток опыта сохранён (11 / 30)');
     assert.equal(res.gemsCollected, 1, 'Кристалл успешно собран');
 
     // Симуляция закрытия 3 окон выбора улучшений по очереди
@@ -842,7 +845,14 @@ describe('Боевая система и мобы (DESIGN.md, раздел 5 и 
     assert.equal(state.pendingLevelUps, 1);
     state.pendingLevelUps--;
     assert.equal(state.pendingLevelUps, 0, 'Все 3 улучшения получены');
-    assert.equal(state.heroExp, 13, 'Опыт 13/17 никуда не пропал после всех прокачек');
+    assert.equal(state.heroExp, 11, 'Опыт 11/30 никуда не пропал после всех прокачек');
+  });
+
+  it('баланс v1.1.0: скорость героя 5.4 м/с и повышенные скорости мобов (mushlet 3.3, ram 2.5, owl 2.4)', () => {
+    assert.equal(HERO_CONFIG.speed, 5.4);
+    assert.equal(MOB_CONFIGS.mushlet.speed, 3.3);
+    assert.equal(MOB_CONFIGS.ram_beetle.speed, 2.5);
+    assert.equal(MOB_CONFIGS.spit_owl.speed, 2.4);
   });
 
   it('честный телеграф совуха: луч остаётся строго статичным на все 1.5 с и не доворачивает за героем', () => {
@@ -1459,6 +1469,141 @@ describe('Боевая система и мобы (DESIGN.md, раздел 5 и 
     assert.equal(state.bossDefeated, true, 'Флаг bossDefeated должен быть установлен в true');
     const largeGem = state.gems.find((g) => g.value === 50);
     assert.ok(largeGem, 'Должен выпасть кристалл на 50 опыта');
+  });
+
+  it('safeRepelMobs: мобы в радиусе 2.8 м отталкиваются наружу на 1.8 м, сбрасывая телеграф жука (v1.1.0)', () => {
+    const state = createInitialCombatState();
+    // 1. Моб вблизи (1.0 м)
+    const closeMob: MobEntity = {
+      id: 1,
+      type: 'mushlet',
+      x: 1.0,
+      y: 0,
+      z: 0,
+      hp: 18,
+      maxHp: 18,
+      speed: 3.3,
+      radius: 0.45,
+      damage: 6,
+      exp: 1,
+      state: 'walk',
+      stateTimer: 0,
+      chargeDirX: 0,
+      chargeDirZ: 0,
+      shootCooldown: 0,
+    };
+    // 2. Жук в телеграфе вблизи (2.0 м)
+    const chargingBeetle: MobEntity = {
+      id: 2,
+      type: 'ram_beetle',
+      x: 0,
+      y: 0,
+      z: 2.0,
+      hp: 30,
+      maxHp: 30,
+      speed: 2.5,
+      radius: 0.55,
+      damage: 12,
+      exp: 2,
+      state: 'telegraph',
+      stateTimer: 0.5,
+      chargeDirX: 0,
+      chargeDirZ: -1,
+      shootCooldown: 0,
+    };
+    // 3. Моб далеко (5.0 м) - не должен сдвинуться
+    const farMob: MobEntity = {
+      id: 3,
+      type: 'spit_owl',
+      x: 0,
+      y: 0,
+      z: 5.0,
+      hp: 14,
+      maxHp: 14,
+      speed: 2.4,
+      radius: 0.45,
+      damage: 8,
+      exp: 2,
+      state: 'walk',
+      stateTimer: 0,
+      chargeDirX: 0,
+      chargeDirZ: 0,
+      shootCooldown: 0,
+    };
+    state.mobs.push(closeMob, chargingBeetle, farMob);
+
+    const repelled = safeRepelMobs(state, 0, 0, 2.8, 1.8);
+    assert.equal(repelled, 2, 'Ровно 2 моба в радиусе 2.8 м должны быть оттолкнуты');
+
+    // closeMob сдвинут с 1.0 м до 2.8 м (1.0 + 1.8 = 2.8 м)
+    assert.ok(Math.abs(closeMob.x - 2.8) < 1e-4, 'Близкий моб оттолкнут на 1.8 м наружу');
+
+    // chargingBeetle сдвинут с 2.0 м до 3.8 м (2.0 + 1.8 = 3.8 м) и сброшен из телеграфа в walk
+    assert.ok(Math.abs(chargingBeetle.z - 3.8) < 1e-4, 'Жук оттолкнут на 1.8 м наружу');
+    assert.equal(chargingBeetle.state, 'walk', 'Телеграф жука сброшен в walk для безопасности');
+    assert.equal(chargingBeetle.stateTimer, 0);
+
+    // farMob не сдвинут
+    assert.equal(farMob.z, 5.0, 'Далекий моб остался на месте');
+  });
+
+  it('safeRepelMobs: удерживает мобов внутри границы арены (R <= 58.0 м)', () => {
+    const state = createInitialCombatState();
+    // Герой на краю поляны (x = 57.5, z = 0), моб на x = 58.0
+    const edgeMob: MobEntity = {
+      id: 1,
+      type: 'mushlet',
+      x: 58.0,
+      y: 0,
+      z: 0,
+      hp: 18,
+      maxHp: 18,
+      speed: 3.3,
+      radius: 0.45,
+      damage: 6,
+      exp: 1,
+      state: 'walk',
+      stateTimer: 0,
+      chargeDirX: 0,
+      chargeDirZ: 0,
+      shootCooldown: 0,
+    };
+    state.mobs.push(edgeMob);
+
+    safeRepelMobs(state, 57.5, 0, 2.8, 1.8, 58.0);
+    assert.ok(Math.hypot(edgeMob.x, edgeMob.z) <= 58.0001, 'Моб у границы клампится внутри 58.0 м');
+  });
+
+  it('кинематографичный выход из прокачки: неуязвимость heroIFrameSec = 1.5 с полностью блокирует урон', () => {
+    const state = createInitialCombatState();
+    state.heroIFrameSec = 1.5;
+    state.heroHp = 100;
+
+    const mob: MobEntity = {
+      id: 1,
+      type: 'mushlet',
+      x: 0,
+      y: 0,
+      z: 0.2, // прямо в теле лиса
+      hp: 18,
+      maxHp: 18,
+      speed: 3.3,
+      radius: 0.45,
+      damage: 10,
+      exp: 1,
+      state: 'walk',
+      stateTimer: 0,
+      chargeDirX: 0,
+      chargeDirZ: 0,
+      shootCooldown: 0,
+    };
+    state.mobs.push(mob);
+
+    // Шаг боя на 0.05 с
+    const res = stepCombat(state, 0, 0, 0, 0.05, 0, 2.5);
+    assert.equal(state.heroHp, 100, 'Здоровье героя не уменьшилось благодаря i-frame');
+    assert.ok(state.heroIFrameSec > 1.4 && state.heroIFrameSec <= 1.5, 'Таймер i-frame корректно уменьшается (1.5 -> 1.45)');
+    assert.equal(res.damagePopups.filter((p) => p.isHero).length, 0, 'Цифры урона герою не генерируются');
   });
 });
 

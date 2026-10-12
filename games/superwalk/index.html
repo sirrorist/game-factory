@@ -50,6 +50,9 @@
     <pre id="debug" hidden></pre>
 
     <div id="corner">
+      <button id="btn-wallet" class="gf-icon-btn gf-icon-btn--hud gf-coin-btn" type="button" aria-label="Кошелёк $GFC" title="Кошелёк Gram ($GFC)">
+        <span class="gf-coin-icon">🪙</span><span id="hud-gfc-val">100</span>
+      </button>
       <button id="btn-tab" class="gf-icon-btn gf-icon-btn--hud" type="button" aria-label="Карта и характеристики (Tab)" title="Карта и характеристики (Tab)">📊</button>
       <button id="btn-fs" class="gf-icon-btn gf-icon-btn--hud" type="button" data-icon="fullscreen" aria-label="На весь экран" title="На весь экран" hidden></button>
       <button id="btn-menu" class="gf-icon-btn gf-icon-btn--hud" type="button" data-icon="menu" aria-label="Меню" title="Меню"></button>
@@ -138,9 +141,15 @@
         <button id="btn-resume" type="button" class="gf-btn gf-btn--primary gf-btn--lg" data-icon="play">
           <span>Продолжить</span>
         </button>
+        <button id="btn-menu-wallet" class="gf-btn gf-btn--secondary gf-btn--md" type="button" style="margin-bottom: 8px;">
+          <span>🪙 Кошелёк Gram ($GFC)</span>
+        </button>
         <div class="gf-panel__row">
           <button id="btn-menu-fs" class="gf-btn gf-btn--sm" type="button" data-icon="fullscreen" hidden>
             <span id="fs-label">На весь экран</span>
+          </button>
+          <button id="btn-camera-toggle" class="gf-btn gf-btn--sm" type="button">
+            <span id="camera-label">Автокамера: выкл</span>
           </button>
           <button id="btn-debug-toggle" class="gf-btn gf-btn--sm" type="button">
             <span id="debug-label">Показатели: выкл</span>
@@ -198,6 +207,197 @@
           <button id="btn-restart" type="button" class="gf-btn gf-btn--primary gf-btn--lg">
             <span>Играть снова [Пробел]</span>
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Модалка Gram Wallet ($GFC, Слоты 777, CS-кейсы, AMM-вывод) -->
+    <div id="wallet-modal" class="gf-wallet-backdrop" hidden>
+      <div class="gf-wallet-panel" role="dialog" aria-label="Gram Wallet">
+        <div class="gf-wallet-header">
+          <div class="gf-wallet-brand">
+            <span class="gf-wallet-tg-icon">✈️</span>
+            <div>
+              <h2 class="gf-wallet-title">Gram Wallet</h2>
+              <span class="gf-wallet-tag">@superfox_gram • TON Forest L2</span>
+            </div>
+          </div>
+          <button id="btn-wallet-close" class="gf-wallet-close" type="button" aria-label="Закрыть">✕</button>
+        </div>
+
+        <div class="gf-wallet-balance-card">
+          <div class="gf-wallet-sublabel">Баланс $GFC</div>
+          <div class="gf-wallet-amount-row">
+            <span id="wallet-balance-num" class="gf-wallet-big-num">100</span>
+            <span class="gf-wallet-cur-badge">$GFC</span>
+          </div>
+          <div class="gf-wallet-fiat-row">
+            <span>≈ $<span id="wallet-fiat-num">25.00</span> USD</span>
+            <span class="gf-wallet-rate-pill">1 $GFC = $<span id="wallet-rate-val">0.2500</span> <b id="wallet-trend-val" class="gf-green">+12.4% 📈</b></span>
+          </div>
+          <div class="gf-chart-wrap">
+            <svg id="wallet-chart-svg" class="gf-wallet-chart" viewBox="0 0 300 50" preserveAspectRatio="none">
+              <!-- Линия свечей AMM -->
+            </svg>
+          </div>
+        </div>
+
+        <nav class="gf-wallet-tabs">
+          <button id="wtab-btn-slots" class="gf-wtab-btn gf-wtab-btn--active" type="button">🎰 Слоты 777</button>
+          <button id="wtab-btn-cases" class="gf-wtab-btn" type="button">📦 CS-Кейс</button>
+          <button id="wtab-btn-skins" class="gf-wtab-btn" type="button">🧥 Скины</button>
+          <button id="wtab-btn-withdraw" class="gf-wtab-btn" type="button">💳 Вывод</button>
+        </nav>
+
+        <div class="gf-wallet-tab-content">
+          <!-- Вкладка: СЛОТЫ -->
+          <div id="wtab-slots" class="gf-wtab-view">
+            <div class="gf-slots-machine">
+              <div class="gf-slots-reels" id="slots-reels-box">
+                <div class="gf-slot-reel-window" id="reel-win-1">
+                  <div class="gf-reel-strip" id="reel-strip-1">
+                    <div class="gf-reel-symbol">🦊</div>
+                  </div>
+                </div>
+                <div class="gf-slot-reel-window" id="reel-win-2">
+                  <div class="gf-reel-strip" id="reel-strip-2">
+                    <div class="gf-reel-symbol">🦊</div>
+                  </div>
+                </div>
+                <div class="gf-slot-reel-window" id="reel-win-3">
+                  <div class="gf-reel-strip" id="reel-strip-3">
+                    <div class="gf-reel-symbol">🦊</div>
+                  </div>
+                </div>
+              </div>
+              <div id="slot-status" class="gf-slot-status">Крути барабаны за 10 $GFC!</div>
+              <button id="btn-slot-spin" class="gf-btn gf-btn--primary gf-btn--block" type="button">
+                <span>🎰 Крутить (10 $GFC)</span>
+              </button>
+              <div class="gf-slots-table">
+                <span>🍒 x3</span><span>🌰 x6</span><span>🦊 x15</span><span>💎 x40</span><span>7️⃣ x150</span>
+              </div>
+              <div class="gf-provably-fair">
+                <span>🔒 Provably Fair: <code id="slot-seed-hash">готов к спину</code></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Вкладка: КЕЙСЫ -->
+          <div id="wtab-cases" class="gf-wtab-view" hidden>
+            <div class="gf-cases-box">
+              <div class="gf-case-header">
+                <div class="gf-case-preview-pill">📦 Лесной Заповедник Case • 50 $GFC</div>
+              </div>
+
+              <!-- Горизонтальная CS-рулетка -->
+              <div class="gf-roulette-container" id="case-roulette-container">
+                <div class="gf-roulette-marker"></div>
+                <div class="gf-roulette-track" id="case-roulette-track"></div>
+              </div>
+
+              <div id="case-result-display" class="gf-case-result" hidden>
+                <div id="case-win-badge" class="gf-case-win-badge"></div>
+                <div id="case-win-title" class="gf-case-win-title"></div>
+                <button id="btn-case-equip" class="gf-btn gf-btn--sm gf-btn--primary" type="button">Надеть скин</button>
+              </div>
+
+              <button id="btn-open-case" class="gf-btn gf-btn--primary gf-btn--block" type="button">
+                <span>📦 Открыть кейс (50 $GFC)</span>
+              </button>
+              <div class="gf-case-odds">
+                <span style="color:#b0c3d9">Ширпотреб 50%</span> • 
+                <span style="color:#4b69ff">Армейское 30%</span> • 
+                <span style="color:#d32ce6">Засекреченное 15%</span> • 
+                <span style="color:#eb4b4b">Тайное ★ 5%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Вкладка: ГАРДЕРОБ -->
+          <div id="wtab-skins" class="gf-wtab-view" hidden>
+            <div id="skins-grid" class="gf-skins-grid">
+              <!-- Скины из коллекции -->
+            </div>
+          </div>
+
+          <!-- Вкладка: ВЫВОД -->
+          <div id="wtab-withdraw" class="gf-wtab-view" hidden>
+            <div class="gf-withdraw-form" id="withdraw-form-card">
+              <div class="gf-form-group">
+                <div class="gf-withdraw-label-row">
+                  <label for="input-withdraw-amount">Сумма вывода ($GFC):</label>
+                  <span class="gf-withdraw-max-btn" id="btn-withdraw-max">Макс</span>
+                </div>
+                <div class="gf-withdraw-input-wrap">
+                  <input id="input-withdraw-amount" type="number" min="10" max="100000" value="50" class="gf-input">
+                  <span class="gf-withdraw-input-unit">$GFC</span>
+                </div>
+              </div>
+              <div class="gf-withdraw-calc">
+                <div class="gf-calc-row"><span>Курс обмена AMM:</span><b id="w-calc-rate">-</b></div>
+                <div class="gf-calc-row"><span>Проскальзывание (Slippage):</span><b id="w-calc-slip">~0.1%</b></div>
+                <div class="gf-calc-row"><span>Сеть и комиссия:</span><b>TON Forest L2 (0.3%)</b></div>
+                <div class="gf-calc-row gf-calc-total"><span>К зачислению:</span><b id="w-calc-usd" class="gf-usd-highlight">-</b></div>
+              </div>
+              <button id="btn-exec-withdraw" class="gf-btn gf-btn--primary gf-btn--block" type="button">
+                <span>💸 Запросить вывод в Gram</span>
+              </button>
+              <div id="withdraw-status-box" class="gf-withdraw-status-box" hidden>
+                <div class="gf-withdraw-progress-track">
+                  <div id="withdraw-progress" class="gf-withdraw-progress-bar"></div>
+                </div>
+                <div id="withdraw-status-text" class="gf-withdraw-status-text"></div>
+              </div>
+              <p class="gf-parody-disclaimer">
+                * Внимание: данный кошелёк, курс $GFC и операции вывода являются юмористической игровой пародией. Никакие реальные деньги или криптовалюты не привлекаются и не выплачиваются.
+              </p>
+            </div>
+
+            <!-- Экран УСПЕШНОГО ЧЕКА -->
+            <div id="withdraw-receipt-card" class="gf-receipt-card" hidden>
+              <div class="gf-receipt-badge-wrap">
+                <div class="gf-receipt-check-icon">✓</div>
+              </div>
+              <h3 class="gf-receipt-title">Перевод успешно отправлен!</h3>
+              <div class="gf-receipt-amount-display">
+                <span class="gf-receipt-amount-usd" id="receipt-usd">+$12.50 USD</span>
+                <span class="gf-receipt-amount-sub" id="receipt-gfc">(50 $GFC списано)</span>
+              </div>
+
+              <div class="gf-receipt-details">
+                <div class="gf-receipt-row">
+                  <span>Получатель</span>
+                  <b id="receipt-recipient">@superfox_gram</b>
+                </div>
+                <div class="gf-receipt-row">
+                  <span>Сеть</span>
+                  <b>TON Forest L2 (Instant)</b>
+                </div>
+                <div class="gf-receipt-row">
+                  <span>Статус</span>
+                  <b class="gf-receipt-confirmed">Зачислено • Блок #<span id="receipt-block">145293</span></b>
+                </div>
+                <div class="gf-receipt-row gf-receipt-hash-row">
+                  <span>Tx Hash</span>
+                  <div class="gf-hash-copy-wrap">
+                    <code id="receipt-txhash">0x7f4c...3e1a</code>
+                    <button type="button" id="btn-copy-receipt" class="gf-copy-btn" title="Скопировать чек">📋</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="gf-receipt-actions">
+                <button id="btn-receipt-new" class="gf-btn gf-btn--primary gf-btn--block" type="button">
+                  Сделать новый вывод
+                </button>
+              </div>
+
+              <p class="gf-parody-disclaimer">
+                * Пародия: все транзакции и валюта $GFC являются внутриигровой симуляцией и не имеют финансовой ценности.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
