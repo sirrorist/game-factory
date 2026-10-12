@@ -32,9 +32,9 @@ describe('Физика движения и управление (dt, повор�
       state144 = stepPlayer(state144, { forward: 1, strafe: 0, jump: false, yaw: 0 }, dt144);
     }
 
-    // Дистанция: 6.0 м/с * 1.0 с = 6.0 м (-Z при yaw=0 вглубь экрана)
-    assert.ok(Math.abs(state60.z - (-6.0)) < 1e-4, `state60.z = ${state60.z}, ожидалось -6.0`);
-    assert.ok(Math.abs(state144.z - (-6.0)) < 1e-4, `state144.z = ${state144.z}, ожидалось -6.0`);
+    // Дистанция: 5.4 м/с * 1.0 с = 5.4 м (-Z при yaw=0 вглубь экрана, баланс v1.1.0)
+    assert.ok(Math.abs(state60.z - (-5.4)) < 1e-4, `state60.z = ${state60.z}, ожидалось -5.4`);
+    assert.ok(Math.abs(state144.z - (-5.4)) < 1e-4, `state144.z = ${state144.z}, ожидалось -5.4`);
     assert.ok(
       Math.abs(state60.z - state144.z) < 1e-6,
       `Разница между 60 и 144 Гц (${Math.abs(state60.z - state144.z)}) больше 1e-6`,
@@ -52,29 +52,29 @@ describe('Физика движения и управление (dt, повор�
     // W -> -Z, S -> +Z
     // D -> +X (вправо на экране), A -> -X (влево на экране)
     const stepFwd = run1s({ forward: 1, strafe: 0, jump: false, yaw: 0 });
-    assert.ok(Math.abs(stepFwd.z - (-6.0)) < 1e-4 && Math.abs(stepFwd.x) < 1e-4, 'W не пошел в -Z');
+    assert.ok(Math.abs(stepFwd.z - (-5.4)) < 1e-4 && Math.abs(stepFwd.x) < 1e-4, 'W не пошел в -Z');
 
     const stepBack = run1s({ forward: -1, strafe: 0, jump: false, yaw: 0 });
-    assert.ok(Math.abs(stepBack.z - 6.0) < 1e-4 && Math.abs(stepBack.x) < 1e-4, 'S не пошел в +Z');
+    assert.ok(Math.abs(stepBack.z - 5.4) < 1e-4 && Math.abs(stepBack.x) < 1e-4, 'S не пошел в +Z');
 
     const stepRight = run1s({ forward: 0, strafe: 1, jump: false, yaw: 0 });
-    assert.ok(Math.abs(stepRight.x - 6.0) < 1e-4 && Math.abs(stepRight.z) < 1e-4, 'D не пошел в +X (вправо)');
+    assert.ok(Math.abs(stepRight.x - 5.4) < 1e-4 && Math.abs(stepRight.z) < 1e-4, 'D не пошел в +X (вправо)');
 
     const stepLeft = run1s({ forward: 0, strafe: -1, jump: false, yaw: 0 });
-    assert.ok(Math.abs(stepLeft.x - (-6.0)) < 1e-4 && Math.abs(stepLeft.z) < 1e-4, 'A не пошел в -X (влево)');
+    assert.ok(Math.abs(stepLeft.x - (-5.4)) < 1e-4 && Math.abs(stepLeft.z) < 1e-4, 'A не пошел в -X (влево)');
 
     // 2. Повернули камеру на 90 градусов вправо вокруг героя (yaw = -Math.PI / 2):
     // Камера смотрит в сторону +X.
     // Теперь вперёд - это +X, вправо - это +Z, влево - это -Z
     const yawLookRight = -Math.PI / 2;
     const stepFwd90 = run1s({ forward: 1, strafe: 0, jump: false, yaw: yawLookRight });
-    assert.ok(Math.abs(stepFwd90.x - 6.0) < 1e-4 && Math.abs(stepFwd90.z) < 1e-4, 'W при повороте направо не пошел в +X');
+    assert.ok(Math.abs(stepFwd90.x - 5.4) < 1e-4 && Math.abs(stepFwd90.z) < 1e-4, 'W при повороте направо не пошел в +X');
 
     const stepRight90 = run1s({ forward: 0, strafe: 1, jump: false, yaw: yawLookRight });
-    assert.ok(Math.abs(stepRight90.z - 6.0) < 1e-4 && Math.abs(stepRight90.x) < 1e-4, 'D при повороте направо не пошел в +Z');
+    assert.ok(Math.abs(stepRight90.z - 5.4) < 1e-4 && Math.abs(stepRight90.x) < 1e-4, 'D при повороте направо не пошел в +Z');
 
     const stepLeft90 = run1s({ forward: 0, strafe: -1, jump: false, yaw: yawLookRight });
-    assert.ok(Math.abs(stepLeft90.z - (-6.0)) < 1e-4 && Math.abs(stepLeft90.x) < 1e-4, 'A при повороте направо не пошел в -Z');
+    assert.ok(Math.abs(stepLeft90.z - (-5.4)) < 1e-4 && Math.abs(stepLeft90.x) < 1e-4, 'A при повороте направо не пошел в -Z');
   });
 
   it('коллизии: герой не проходит сквозь препятствия и скользит вдоль них', () => {

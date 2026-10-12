@@ -1411,3 +1411,45 @@ export function killMob(state: CombatState, mobId: number): boolean {
 
   return true;
 }
+
+/**
+ * Расталкивание мобов вокруг героя при выходе из прокачки (Safe Push / Safe Repel, v1.1.0)
+ * Создаёт игроку безопасное пространство для ориентации (2.8 м радиус опасности -> отодвигает мобов наружу на 1.8 м).
+ * Возвращает количество растолканных мобов.
+ */
+export function safeRepelMobs(
+  state: CombatState,
+  heroX: number,
+  heroZ: number,
+  radius = 2.8,
+  pushDistance = 1.8,
+  arenaRadius = 58.0,
+): number {
+  let repelledCount = 0;
+  for (const mob of state.mobs) {
+    if (mob.hp <= 0) continue;
+    const dx = mob.x - heroX;
+    const dz = mob.z - heroZ;
+    const dist = Math.hypot(dx, dz);
+    if (dist < radius) {
+      repelledCount++;
+      const angle = dist > 0.001 ? Math.atan2(dz, dx) : Math.random() * Math.PI * 2;
+      mob.x += Math.cos(angle) * pushDistance;
+      mob.z += Math.sin(angle) * pushDistance;
+
+      // Удерживаем моба внутри арены
+      const distFromCenter = Math.hypot(mob.x, mob.z);
+      if (distFromCenter > arenaRadius) {
+        mob.x = (mob.x / distFromCenter) * arenaRadius;
+        mob.z = (mob.z / distFromCenter) * arenaRadius;
+      }
+
+      // Если жук готовился к рывку, сбрасываем телеграф обратно в спокойную ходьбу
+      if (mob.type === 'ram_beetle' && mob.state === 'telegraph') {
+        mob.state = 'walk';
+        mob.stateTimer = 0;
+      }
+    }
+  }
+  return repelledCount;
+}

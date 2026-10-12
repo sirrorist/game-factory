@@ -45,7 +45,7 @@ export interface PlayerParams {
 }
 
 export const DEFAULT_PLAYER_PARAMS: PlayerParams = {
-  speed: 6.0,       // м/с
+  speed: 5.4,       // м/с (баланс v1.1.0: комфортная динамика и маневренность)
   jumpHeight: 1.6,  // м
   gravity: 24.0,    // м/с^2
   radius: 0.45,     // радиус коллизии героя

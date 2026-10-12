@@ -129,7 +129,14 @@ export class Input {
     }
   }
 
+  lastManualLookTime = 0;
+
+  isManualLookActive(timeoutMs = 1500): boolean {
+    return (performance.now() - this.lastManualLookTime) < timeoutMs;
+  }
+
   private turn(dx: number, dy: number): void {
+    this.lastManualLookTime = performance.now();
     this.yaw -= dx;
     // Ограничиваем угол наклона камеры (не даём уйти под землю или перевернуться через голову)
     this.pitch = Math.max(-0.25, Math.min(0.85, this.pitch + dy));
