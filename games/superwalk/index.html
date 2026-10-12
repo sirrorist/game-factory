@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Superwalk</title>
+</head>
+<body>
+  <div id="app">
+    <div id="stage"></div>
+
+    <div id="exp-bar-container">
+      <div id="exp-bar-fill"></div>
+    </div>
+
+    <div class="gf-hud-left-group">
+      <header id="hud" class="gf-hud-top">
+        <span class="gf-hud-stat gf-hud-stat--mode"><span id="mode"></span></span>
+        <span class="gf-hud-stat" data-icon="trophy"><span>рекорд</span><b id="best">-</b></span>
+        <span class="gf-hud-stat"><span>забег</span><b id="hud-score">0</b></span>
+        <span class="gf-hud-stat"><span>время</span><b id="hud-timer">0:00</b></span>
+        <span class="gf-hud-stat"><span>ур.</span><b id="hud-level">1</b></span>
+        <span class="gf-hud-stat"><span>врагов</span><b id="hud-kills">0</b></span>
+        <span class="gf-hud-stat gf-hud-stat--hp">
+          <span class="gf-hp-bar">
+            <span id="hp-bar-fill" class="gf-hp-bar__fill"></span>
+            <b id="hp-bar-text" class="gf-hp-bar__text">100 / 100</b>
+          </span>
+        </span>
+      </header>
+
+      <div id="hud-inventory" class="gf-hud-inv" title="Активное снаряжение">
+        <div id="inv-slots" class="gf-inv-slots"></div>
+      </div>
+    </div>
+
+    <div id="damage-layer" class="gf-damage-layer"></div>
+
+    <div id="boss-hud" class="gf-boss-hud" hidden>
+      <div class="gf-boss-hud__info">
+        <span class="gf-boss-hud__badge">БОСС</span>
+        <span class="gf-boss-hud__name">Старый Пень</span>
+        <span id="boss-hp-text" class="gf-boss-hud__hp">5000 / 5000</span>
+      </div>
+      <div class="gf-boss-hud__bar">
+        <div id="boss-hp-fill" class="gf-boss-hud__fill" style="width: 100%;"></div>
+      </div>
+    </div>
+
+    <pre id="debug" hidden></pre>
+
+    <div id="corner">
+      <button id="btn-tab" class="gf-icon-btn gf-icon-btn--hud" type="button" aria-label="Карта и характеристики (Tab)" title="Карта и характеристики (Tab)">📊</button>
+      <button id="btn-fs" class="gf-icon-btn gf-icon-btn--hud" type="button" data-icon="fullscreen" aria-label="На весь экран" title="На весь экран" hidden></button>
+      <button id="btn-menu" class="gf-icon-btn gf-icon-btn--hud" type="button" data-icon="menu" aria-label="Меню" title="Меню"></button>
+    </div>
+
+    <div id="toast" class="gf-toast" hidden></div>
+
+    <div id="item-card-popup" class="gf-item-popup" hidden></div>
+
+    <div id="touch" hidden>
+      <div id="stick"><div id="knob"></div></div>
+      <button id="btn-jump" class="gf-icon-btn gf-icon-btn--hud" type="button" data-icon="jump" aria-label="Прыжок" title="Прыжок"></button>
+    </div>
+
+    <div id="upgrade-modal" hidden>
+      <div class="gf-upgrade-panel" role="dialog" aria-label="Выбор улучшения">
+        <div class="gf-upgrade-header">
+          <h2 class="gf-upgrade-title">НОВЫЙ УРОВЕНЬ!</h2>
+        </div>
+        <div id="upgrade-cards" class="gf-upgrade-cards"></div>
+        <div class="gf-upgrade-footer">
+          <div class="gf-upgrade-hint">
+            <span>Нажми <b>1</b>, <b>2</b>, <b>3</b> или коснись карточки</span>
+          </div>
+          <button id="btn-skip-upgrade" type="button" class="gf-btn gf-btn--ghost gf-btn--sm">
+            <span>Пропустить улучшение [0]</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-modal" class="gf-tab-modal" hidden>
+      <div class="gf-tab-panel gf-tab-panel--dashboard" role="dialog" aria-label="Тактический обзор забега">
+        <div class="gf-tab-header">
+          <h2 class="gf-dashboard-title">Тактический обзор забега</h2>
+          <button id="tab-btn-close" type="button" class="gf-tab-close" aria-label="Закрыть">✕</button>
+        </div>
+        <div class="gf-dashboard-body">
+          <div class="gf-dashboard-col gf-dashboard-col--items">
+            <h3 class="gf-col-title">📦 Предметы и оружие</h3>
+            <div id="tab-items-list" class="gf-items-list">
+              <!-- Заполняется динамически -->
+            </div>
+          </div>
+          <div class="gf-dashboard-col gf-dashboard-col--map" id="tab-pane-map">
+            <h3 class="gf-col-title">🗺️ Карта арены</h3>
+            <div class="gf-map-placeholder">
+              <div class="gf-map-radar">
+                <div class="gf-map-radar__circle"></div>
+                <div class="gf-map-radar__cross"></div>
+                <div class="gf-map-radar__fox" id="map-fox-marker">🦊</div>
+                <div class="gf-map-radar__tag">Солнечные холмы (R = 65 м)</div>
+              </div>
+              <p class="gf-map-desc">Позиция лиса и ориентиры Солнечных холмов</p>
+            </div>
+          </div>
+          <div class="gf-dashboard-col gf-dashboard-col--stats" id="tab-pane-stats">
+            <h3 class="gf-col-title">📊 Характеристики лиса</h3>
+            <div class="gf-stats-grid" id="tab-stats-grid">
+              <!-- Заполняется динамически -->
+            </div>
+          </div>
+        </div>
+        <div class="gf-tab-footer">
+          <span>Нажми <b>Tab</b> или <b>Esc</b>, чтобы вернуться в бой</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="menu" hidden>
+      <div class="gf-panel gf-panel--pause" role="dialog" aria-label="Меню паузы">
+        <h1 class="gf-panel__title">Superwalk</h1>
+        <p class="gf-panel__sub">Пауза забега</p>
+
+        <div class="gf-menu-overview">
+          <div class="gf-menu-col">
+            <h3 class="gf-col-title">📦 Снаряжение</h3>
+            <div id="menu-items-list" class="gf-items-list gf-items-list--compact"></div>
+          </div>
+          <div class="gf-menu-col">
+            <h3 class="gf-col-title">📊 Характеристики</h3>
+            <div id="menu-stats-grid" class="gf-stats-grid gf-stats-grid--compact"></div>
+          </div>
+        </div>
+
+        <button id="btn-resume" type="button" class="gf-btn gf-btn--primary gf-btn--lg" data-icon="play">
+          <span>Продолжить</span>
+        </button>
+        <div class="gf-panel__row">
+          <button id="btn-menu-fs" class="gf-btn gf-btn--sm" type="button" data-icon="fullscreen" hidden>
+            <span id="fs-label">На весь экран</span>
+          </button>
+          <button id="btn-debug-toggle" class="gf-btn gf-btn--sm" type="button">
+            <span id="debug-label">Показатели: выкл</span>
+          </button>
+        </div>
+        <div class="help" id="help-desktop">
+          <p><b>WASD / стрелки</b> — бег, <b>пробел</b> — прыжок, <b>Tab</b> — обзор</p>
+          <p><b>Мышь</b> — обзор, <b>Esc</b> — меню, <b>F3</b> — показатели</p>
+        </div>
+        <div class="help" id="help-touch" hidden>
+          <p><b>Джойстик слева</b> — бег, <b>касание справа</b> — обзор</p>
+          <p><b>Кнопка меню</b> — пауза и полный экран</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="game-over-modal" class="gf-game-over-modal" hidden>
+      <div class="gf-panel gf-panel--gameover" role="dialog" aria-label="Итоги забега">
+        <div class="gf-gameover-header">
+          <h1 id="gameover-title" class="gf-gameover-title">ПОБЕДА!</h1>
+          <p id="gameover-subtitle" class="gf-gameover-sub">Старый Пень повержен, Солнечные холмы спасены!</p>
+        </div>
+        <div class="gf-gameover-score-box">
+          <div class="gf-gameover-score-label">ИТОГОВЫЙ СЧЁТ</div>
+          <div id="gameover-score" class="gf-gameover-score-val">0</div>
+          <div id="gameover-new-record" class="gf-gameover-record-badge" hidden>🏆 НОВЫЙ РЕКОРД!</div>
+        </div>
+        <div class="gf-gameover-breakdown">
+          <div class="gf-gameover-stat">
+            <span class="gf-stat-label">⏱️ Время забега</span>
+            <span id="gameover-time" class="gf-stat-val">0:00</span>
+          </div>
+          <div class="gf-gameover-stat">
+            <span class="gf-stat-label">⚔️ Побеждено врагов</span>
+            <span id="gameover-kills" class="gf-stat-val">0</span>
+          </div>
+          <div class="gf-gameover-stat">
+            <span class="gf-stat-label">⭐ Уровень лиса</span>
+            <span id="gameover-level" class="gf-stat-val">1</span>
+          </div>
+          <div class="gf-gameover-stat">
+            <span class="gf-stat-label">👑 Бонус за босса</span>
+            <span id="gameover-boss-bonus" class="gf-stat-val">+500</span>
+          </div>
+          <div class="gf-gameover-stat">
+            <span class="gf-stat-label">🏆 Рекорд</span>
+            <span id="gameover-best" class="gf-stat-val">0</span>
+          </div>
+        </div>
+        <div class="gf-gameover-items">
+          <div class="gf-gameover-items-title">📦 Снаряжение забега</div>
+          <div id="gameover-items-list" class="gf-items-list gf-items-list--compact"></div>
+        </div>
+        <div class="gf-gameover-actions">
+          <button id="btn-restart" type="button" class="gf-btn gf-btn--primary gf-btn--lg">
+            <span>Играть снова [Пробел]</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>
