@@ -12,7 +12,7 @@ import { pathToFileURL } from 'node:url';
 import type { Browser, Frame, Page } from 'playwright';
 import { buildData, close, freePort, gameVersion, launchBrowser, startHub, startPlay, type Hub } from './helpers.ts';
 
-const GAMES = ['k8s-at-home', 'phaser-2d', 'snake', 'three-3d'] as const;
+const GAMES = ['k8s-at-home', 'phaser-2d', 'snake', 'superwalk', 'three-3d'] as const;
 /** Игры до 1.0.0: гостю хаб их не показывает (D-060). Владельцу - auth.test.ts. */
 const PRERELEASE = ['rogue-destiny'] as const;
 

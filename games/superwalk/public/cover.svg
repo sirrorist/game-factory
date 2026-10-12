@@ -1,4 +1,209 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" width="320" height="180">
-  <rect width="320" height="180" fill="#161b22"/>
-  <text x="160" y="100" fill="#8b949e" font-family="sans-serif" font-size="28" text-anchor="middle">vite-ts</text>
+  <defs>
+    <!-- Атмосферный сумеречный градиент заката «Солнечных холмов» -->
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0b1329" />
+      <stop offset="55%" stop-color="#182747" />
+      <stop offset="100%" stop-color="#24385e" />
+    </linearGradient>
+
+    <!-- Тёплое закатное свечение горизонта -->
+    <radialGradient id="sunGlow" cx="78%" cy="45%" r="40%">
+      <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.55" />
+      <stop offset="50%" stop-color="#ea580c" stop-opacity="0.25" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Свечение кристалла опыта -->
+    <radialGradient id="gemGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.8" />
+      <stop offset="50%" stop-color="#0284c7" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#0284c7" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Мягкий силовой барьер Megabonk на горизонте -->
+    <linearGradient id="barrierGlow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0" />
+      <stop offset="50%" stop-color="#38bdf8" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#a855f7" stop-opacity="0" />
+    </linearGradient>
+  </defs>
+
+  <!-- Фон неба -->
+  <rect width="320" height="180" fill="url(#sky)" />
+
+  <!-- Закатное зарево -->
+  <rect width="320" height="180" fill="url(#sunGlow)" />
+
+  <!-- Закатное солнце -->
+  <circle cx="252" cy="62" r="22" fill="#fde047" opacity="0.3" />
+  <circle cx="252" cy="62" r="14" fill="#fef08a" opacity="0.75" />
+  <circle cx="252" cy="62" r="8" fill="#ffffff" />
+
+  <!-- Лёгкие облака на закате -->
+  <rect x="140" y="42" width="46" height="5" rx="2.5" fill="#f8fafc" opacity="0.25" />
+  <rect x="270" y="36" width="34" height="4" rx="2" fill="#f8fafc" opacity="0.2" />
+
+  <!-- Тонкая дуга силового барьера поляны -->
+  <ellipse cx="225" cy="120" rx="95" ry="38" fill="none" stroke="url(#barrierGlow)" stroke-width="1.5" stroke-dasharray="6 3" />
+
+  <!-- ==================== ТИПОГРАФИКА СЛЕВА ==================== -->
+  <text x="24" y="66" fill="#ff7a1a" font-family="ui-monospace, monospace" font-size="28" font-weight="700" letter-spacing="-0.5">super</text>
+  <text x="24" y="98" fill="#f8fafc" font-family="ui-monospace, monospace" font-size="28" font-weight="700" letter-spacing="-0.5">walk</text>
+
+  <!-- Декоративные полоски дизайн-системы -->
+  <rect x="24" y="118" width="52" height="3" fill="#ff7a1a" opacity="0.9" rx="1.5" />
+  <rect x="24" y="126" width="28" height="2" fill="#38bdf8" opacity="0.75" rx="1" />
+  <text x="24" y="146" fill="#94a3b8" font-family="ui-monospace, monospace" font-size="10" font-weight="600" letter-spacing="1.5">3D ROGUELITE</text>
+
+  <!-- ==================== ИЗОМЕТРИЧЕСКИЕ ХОЛМЫ ==================== -->
+  <!-- Нижний ярус холма -->
+  <g>
+    <polygon points="225,116 288,144 225,174 162,144" fill="#4d7c0f" />
+    <polygon points="162,144 225,174 225,182 162,152" fill="#365314" />
+    <polygon points="225,174 288,144 288,152 225,182" fill="#1a2e05" />
+  </g>
+
+  <!-- Верхняя освещённая площадка холма -->
+  <g>
+    <polygon points="225,104 278,128 225,154 172,128" fill="#65a30d" />
+    <polygon points="172,128 225,154 225,162 172,136" fill="#4d7c0f" />
+    <polygon points="225,154 278,128 278,136 225,162" fill="#365314" />
+  </g>
+
+  <!-- Травинки на холме -->
+  <polygon points="200,126 202,120 204,126" fill="#a3e635" />
+  <polygon points="246,122 248,116 250,122" fill="#a3e635" />
+  <polygon points="256,134 258,128 260,134" fill="#84cc16" />
+
+  <!-- ==================== LOW-POLY ЕЛЬ СЛЕВА СЗАДИ ==================== -->
+  <g>
+    <!-- Ствол -->
+    <polygon points="172,96 178,96 178,122 172,122" fill="#5c3d2e" />
+    <polygon points="175,96 178,96 178,122 175,122" fill="#43281c" />
+
+    <!-- Нижний ярус кроны -->
+    <polygon points="175,64 192,98 158,98" fill="#15803d" />
+    <polygon points="175,64 192,98 175,98" fill="#166534" />
+
+    <!-- Средний ярус кроны -->
+    <polygon points="175,48 188,78 162,78" fill="#16a34a" />
+    <polygon points="175,48 188,78 175,78" fill="#15803d" />
+
+    <!-- Верхний ярус кроны -->
+    <polygon points="175,34 184,58 166,58" fill="#22c55e" />
+    <polygon points="175,34 184,58 175,58" fill="#16a34a" />
+  </g>
+
+  <!-- Маленькая дальняя ель у горизонта -->
+  <g opacity="0.6">
+    <polygon points="146,90 152,106 140,106" fill="#15803d" />
+    <polygon points="146,90 152,106 146,106" fill="#166534" />
+    <polygon points="146,78 150,94 142,94" fill="#22c55e" />
+    <polygon points="146,78 150,94 146,94" fill="#16a34a" />
+  </g>
+
+  <!-- ==================== ЛИС (ГЕРОЙ) В ЦЕНТРЕ ==================== -->
+  <g>
+    <!-- Тень под лисом -->
+    <ellipse cx="222" cy="118" rx="14" ry="6" fill="#1a2e05" opacity="0.6" />
+
+    <!-- Задние лапки -->
+    <polygon points="216,110 220,110 219,118 215,118" fill="#292524" />
+    <polygon points="224,110 228,110 227,118 223,118" fill="#1c1917" />
+
+    <!-- Пушистый хвост с белым кончиком (закручен вправо) -->
+    <!-- Рыжая часть хвоста -->
+    <polygon points="224,100 242,94 246,105 228,107" fill="#ea580c" />
+    <polygon points="242,94 252,86 256,96 246,105" fill="#f97316" />
+    <polygon points="228,107 246,105 244,111 226,109" fill="#c2410c" />
+    <!-- Белый кончик хвоста -->
+    <polygon points="252,86 262,78 260,90 256,96" fill="#ffffff" />
+    <polygon points="256,96 260,90 255,100 248,100" fill="#e2e8f0" />
+
+    <!-- Тело лиса -->
+    <polygon points="214,88 230,88 228,112 216,112" fill="#ea580c" />
+    <polygon points="222,88 230,88 228,112 222,112" fill="#c2410c" />
+    <!-- Белая манишка на грудке -->
+    <polygon points="218,92 226,92 224,104 220,104" fill="#f8fafc" />
+
+    <!-- Синий шарф вокруг шеи -->
+    <polygon points="212,84 232,84 234,91 210,91" fill="#2563eb" />
+    <polygon points="222,84 232,84 234,91 222,91" fill="#1d4ed8" />
+    <!-- Развевающийся конец шарфа -->
+    <polygon points="226,89 236,99 231,102 222,91" fill="#1e40af" />
+
+    <!-- Голова лиса -->
+    <polygon points="222,66 233,76 222,86 211,76" fill="#ff7a1a" />
+    <polygon points="222,66 233,76 222,86" fill="#ea580c" />
+
+    <!-- Белые щечки и мордочка -->
+    <polygon points="222,80 227,84 222,86 217,84" fill="#ffffff" />
+    <!-- Носик -->
+    <polygon points="221,84.5 223,84.5 222,86" fill="#0f172a" />
+    <!-- Глазки -->
+    <circle cx="218" cy="76" r="1.2" fill="#0f172a" />
+    <circle cx="226" cy="76" r="1.2" fill="#0f172a" />
+    <circle cx="217.6" cy="75.6" r="0.4" fill="#ffffff" />
+    <circle cx="225.6" cy="75.6" r="0.4" fill="#ffffff" />
+
+    <!-- Ушки лиса -->
+    <!-- Левое ушко -->
+    <polygon points="212,72 210,58 219,66" fill="#ea580c" />
+    <polygon points="212,70 212,62 217,66" fill="#fed7aa" />
+    <polygon points="210,58 212,60 211,62" fill="#0f172a" />
+    <!-- Правое ушко -->
+    <polygon points="225,66 234,58 232,72" fill="#c2410c" />
+    <polygon points="227,66 232,62 231,70" fill="#fdba74" />
+    <polygon points="234,58 232,60 233,62" fill="#0f172a" />
+  </g>
+
+  <!-- ==================== СВЕТЯЩИЙСЯ КРИСТАЛЛ ОПЫТА (EXP) ==================== -->
+  <g>
+    <!-- Аура свечения -->
+    <circle cx="274" cy="88" r="20" fill="url(#gemGlow)" />
+
+    <!-- Кристалл (ромбический октаэдр в 3D) -->
+    <!-- Верхняя светлая грань -->
+    <polygon points="274,70 283,82 274,89 265,82" fill="#e0f2fe" />
+    <polygon points="274,70 283,82 274,89" fill="#7dd3fc" />
+    <!-- Нижние грани -->
+    <polygon points="265,82 274,89 274,106" fill="#0284c7" />
+    <polygon points="274,89 283,82 274,106" fill="#0369a1" />
+
+    <!-- Искры и частицы опыта -->
+    <circle cx="280" cy="66" r="1.2" fill="#38bdf8" />
+    <circle cx="264" cy="74" r="1" fill="#7dd3fc" />
+    <circle cx="286" cy="98" r="1.4" fill="#38bdf8" />
+    <circle cx="268" cy="104" r="0.9" fill="#bae6fd" />
+    <line x1="274" y1="62" x2="274" y2="67" stroke="#38bdf8" stroke-width="1.2" stroke-linecap="round" />
+    <line x1="271.5" y1="64.5" x2="276.5" y2="64.5" stroke="#38bdf8" stroke-width="1.2" stroke-linecap="round" />
+  </g>
+
+  <!-- ==================== ГРИБЫШ (MUSHLET) СЛЕВА ==================== -->
+  <g>
+    <!-- Ножка гриба -->
+    <polygon points="193,141 197,141 198,147 192,147" fill="#f8fafc" />
+    <polygon points="195,141 197,141 198,147 195,147" fill="#cbd5e1" />
+
+    <!-- Красная низкополигональная шляпка -->
+    <polygon points="186,141 195,133 204,141" fill="#ef4444" />
+    <polygon points="195,133 204,141 195,141" fill="#b91c1c" />
+    <polygon points="190,141 195,133 195,141" fill="#dc2626" />
+
+    <!-- Белые точки -->
+    <circle cx="192" cy="138" r="1" fill="#ffffff" />
+    <circle cx="197" cy="136" r="1.2" fill="#ffffff" />
+    <circle cx="200" cy="139" r="0.8" fill="#ffffff" />
+
+    <!-- Глазки грибыша -->
+    <circle cx="194" cy="143.5" r="0.6" fill="#0f172a" />
+    <circle cx="196" cy="143.5" r="0.6" fill="#0f172a" />
+  </g>
+
+  <!-- ==================== ЗОЛОТЫЕ ИСПРЫ В ВОЗДУХЕ ==================== -->
+  <circle cx="214" cy="48" r="1.2" fill="#fde047" opacity="0.8" />
+  <circle cx="238" cy="54" r="1" fill="#fde047" opacity="0.6" />
+  <circle cx="286" cy="52" r="1" fill="#fde047" opacity="0.7" />
+  <circle cx="156" cy="74" r="0.9" fill="#fde047" opacity="0.5" />
 </svg>
