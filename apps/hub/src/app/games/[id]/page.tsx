@@ -1,10 +1,9 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { frameAttributes } from '@gf/hub-bridge';
 import { DownloadLink } from '@/components/download-link.tsx';
-import { Icon } from '@/components/icons.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
+import { GameTags } from '@/components/game-tags.tsx';
 import { findGame } from '@/lib/catalog.ts';
 import { currentOwner } from '@/lib/session.ts';
 import { GameFrame } from './game-frame.tsx';
@@ -31,31 +30,24 @@ export default async function GamePage({ params }: Props) {
   const frame = frameAttributes(manifest.permissions);
 
   return (
-    <section className="flex flex-col gap-5">
-      <div className="flex flex-col gap-3">
-        <Link href="/" className="gf-back-link inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-          <Icon name="back" className="size-4" />
-          Каталог
-        </Link>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">{manifest.title}</h1>
+    <GameFrame
+      gameId={entry.id}
+      gameOrigin={gameOrigin}
+      title={manifest.title}
+      sandbox={frame.sandbox}
+      allow={frame.allow}
+      metadata={
+        <div className="gf-game-metadata">
+          <GameTags tags={manifest.tags} title={manifest.title} />
           <Badge tone="version">v{entry.version}</Badge>
           {prerelease ? <Badge data-testid="prerelease">пререлиз</Badge> : null}
-          {manifest.tags.map((t) => (
-            <Badge key={t}>{t}</Badge>
-          ))}
         </div>
+      }
+    >
+      <div className="gf-game-info">
         {manifest.description ? <p className="max-w-prose text-muted-foreground">{manifest.description}</p> : null}
+        {download ? <div><DownloadLink url={download.url} bytes={download.bytes} /></div> : null}
       </div>
-      <GameFrame
-        gameId={entry.id}
-        gameOrigin={gameOrigin}
-        title={manifest.title}
-        sandbox={frame.sandbox}
-        allow={frame.allow}
-      >
-        {download ? <DownloadLink url={download.url} bytes={download.bytes} /> : null}
-      </GameFrame>
-    </section>
+    </GameFrame>
   );
 }

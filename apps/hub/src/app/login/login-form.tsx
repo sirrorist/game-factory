@@ -37,8 +37,8 @@ export function LoginForm() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <form className="gf-form" onSubmit={submit} data-testid="login-form">
+    <div className="gf-login-controls">
+      <form className="gf-form gf-login-form" onSubmit={submit} data-testid="login-form">
         <label className="gf-field">
           <span>Почта</span>
           <input className="gf-input" name="email" type="email" autoComplete="username webauthn" required />
@@ -48,7 +48,7 @@ export function LoginForm() {
           <input className="gf-input" name="password" type="password" autoComplete="current-password" required />
         </label>
         {error ? (
-          <p className="gf-form__error" role="alert" data-testid="login-error">
+          <p className="gf-form__error gf-login-message" role="alert" data-testid="login-error">
             {error}
           </p>
         ) : null}

@@ -5,8 +5,10 @@ import { Icon, ICON_NAMES } from '@/components/icons.tsx';
 import { Logo } from '@/components/logo.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
+import { FirstScreen } from '@/components/first-screen.tsx';
 import { currentOwner } from '@/lib/session.ts';
 import { HotbarDemo, Replay, RogueDestinyHudDemo } from './demos.tsx';
+import { KitNavigation } from './kit-navigation.tsx';
 
 export const metadata: Metadata = { title: 'Web kit' };
 // Витрина дизайн-системы - только владельцу (D-060): страница решает по сессии на каждый запрос.
@@ -27,11 +29,28 @@ const COLORS = [
   ['danger', 'Опасное'],
 ] as const;
 
-function Section({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
+const SECTIONS = [
+  { id: 'kit-logo', label: 'Знак' },
+  { id: 'kit-colors', label: 'Цвета' },
+  { id: 'kit-fonts', label: 'Шрифты' },
+  { id: 'kit-buttons', label: 'Кнопки' },
+  { id: 'kit-badges', label: 'Метки' },
+  { id: 'kit-icons', label: 'Иконки' },
+  { id: 'kit-toolbar', label: 'Тулбар игры' },
+  { id: 'kit-toasts', label: 'Уведомления' },
+  { id: 'kit-hud', label: 'HUD игр' },
+  { id: 'kit-menu', label: 'Меню игры' },
+  { id: 'kit-rogue-destiny', label: 'Rogue Destiny' },
+] as const;
+
+function Section({ id, title, note, children }: { id: string; title: string; note?: string; children: ReactNode }) {
   return (
-    <section className="flex flex-col gap-4">
+    <section id={id} className="gf-kit-section flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <h2 className="font-display text-xl font-semibold tracking-tight">{title}</h2>
+        <div className="gf-kit-section-heading">
+          <h2 className="font-display text-xl font-semibold tracking-tight">{title}</h2>
+          {id !== 'kit-logo' ? <a href="#kit-navigation" className="gf-kit-back">К разделам ↑</a> : null}
+        </div>
         {note ? <p className="max-w-prose text-sm text-muted-foreground">{note}</p> : null}
       </div>
       {children}
@@ -54,30 +73,34 @@ function Scene({ children, className = '' }: { children: ReactNode; className?: 
 export default async function KitPage() {
   if (!(await currentOwner())) redirect('/login');
   return (
-    <div className="flex flex-col gap-12">
-      <header className="flex flex-col gap-2">
-        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Дизайн-система</p>
-        <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">Web kit</h1>
-        <p className="max-w-prose text-muted-foreground">
-          Интерфейс хаба и наших игр - живыми компонентами, теми же, что на страницах. Наведи и нажми: анимации
-          настоящие. Тема - по системе: тёмная "Ночь" или светлый "День".
-        </p>
-      </header>
+    <div className="gf-kit-page">
+      <FirstScreen>
+        <div className="gf-kit-overview">
+          <header className="gf-kit-heading flex flex-col gap-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Дизайн-система</p>
+            <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">Web kit</h1>
+            <p className="max-w-prose text-muted-foreground">
+              Компоненты интерфейса хаба и игр. Цвета следуют теме устройства.
+            </p>
+          </header>
 
-      <Section title="Знак">
-        <div className="flex flex-wrap items-center gap-6">
-          <Logo size={64} />
-          <Logo size={32} />
-          <span className="gf-logo">
-            <Logo />
-            <span className="gf-logo__word">
-              Game <b>Factory</b>
-            </span>
-          </span>
+          <KitNavigation sections={SECTIONS} />
+          <Section id="kit-logo" title="Знак">
+            <div className="gf-kit-logo-demo">
+              <Logo size={64} />
+              <Logo size={32} />
+              <span className="gf-logo">
+                <Logo />
+                <span className="gf-logo__word">
+                  Game <b>Factory</b>
+                </span>
+              </span>
+            </div>
+          </Section>
         </div>
-      </Section>
+      </FirstScreen>
 
-      <Section title="Цвета" note="Компоненты берут цвет только из токенов: тема меняет значения, разметка та же.">
+      <Section id="kit-colors" title="Цвета" note="Компоненты берут цвет только из токенов: тема меняет значения, разметка та же.">
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {COLORS.map(([name, role]) => (
             <li key={name} className="flex items-center gap-3 rounded-md bg-card p-2 shadow-[inset_0_0_0_0.0625rem_var(--line)]">
@@ -91,7 +114,7 @@ export default async function KitPage() {
         </ul>
       </Section>
 
-      <Section title="Шрифты" note="Unbounded, Onest, JetBrains Mono, Press Start 2P - все с кириллицей. Пока файлов шрифтов нет, видны запасные.">
+      <Section id="kit-fonts" title="Шрифты" note="Unbounded, Onest, JetBrains Mono и Press Start 2P — с поддержкой кириллицы.">
         <div className="flex flex-col gap-3">
           <p className="font-display text-4xl font-bold tracking-tight">k8s at home</p>
           <p className="font-display text-xl font-semibold">Новые игры</p>
@@ -101,7 +124,7 @@ export default async function KitPage() {
         </div>
       </Section>
 
-      <Section title="Кнопки" note="Аркадная клавиша: нажатие - опускание на бортик, отпускание - отскок.">
+      <Section id="kit-buttons" title="Кнопки" note="Аркадная клавиша: нажатие - опускание на бортик, отпускание - отскок.">
         <div className="gf-row">
           <Button size="lg">
             <Icon name="play" />
@@ -135,7 +158,7 @@ export default async function KitPage() {
         </div>
       </Section>
 
-      <Section title="Метки">
+      <Section id="kit-badges" title="Метки">
         <div className="gf-row">
           <Badge>sandbox</Badge>
           <Badge>3d</Badge>
@@ -145,18 +168,18 @@ export default async function KitPage() {
         </div>
       </Section>
 
-      <Section title="Иконки" note="Сетка 24, обводка 2px, в каждой - пиксель brand. У трофея и пьедестала пиксель - coin.">
-        <ul className="grid grid-cols-4 gap-3 sm:grid-cols-8">
+      <Section id="kit-icons" title="Иконки" note="Сетка 24, обводка 2px, в каждой - пиксель brand. У трофея и пьедестала пиксель - coin.">
+        <ul className="gf-kit-icon-grid">
           {ICON_NAMES.map((name) => (
-            <li key={name} className="flex flex-col items-center gap-2 rounded-md bg-card p-3 shadow-[inset_0_0_0_0.0625rem_var(--line)]">
+            <li key={name} className="gf-kit-icon-tile flex flex-col items-center gap-2 rounded-md bg-card shadow-[inset_0_0_0_0.0625rem_var(--line)]">
               <Icon name={name} />
-              <code className="font-mono text-[0.625rem] text-muted-foreground">{name}</code>
+              <code className="gf-kit-icon-name font-mono text-[0.625rem] text-muted-foreground">{name}</code>
             </li>
           ))}
         </ul>
       </Section>
 
-      <Section title="Тулбар игры" note="Над игрой на её странице: рекорд, полный экран, архив. Число прыгает при новом рекорде.">
+      <Section id="kit-toolbar" title="Тулбар игры" note="Рекорд и полноэкранное управление хаба. Число прыгает при новом рекорде.">
         <Replay>
           <div className="gf-toolbar pr-28">
             <span className="gf-record gf-record--bump">
@@ -174,7 +197,7 @@ export default async function KitPage() {
         </Scene>
       </Section>
 
-      <Section title="Тосты">
+      <Section id="kit-toasts" title="Тосты">
         <Replay>
           <Scene className="flex flex-col items-start gap-2 p-4 pr-28">
             <span className="gf-toast">Полёт: вкл</span>
@@ -187,7 +210,7 @@ export default async function KitPage() {
         </Replay>
       </Section>
 
-      <Section title="HUD игр" note="Счётчики - сверху экрана, панель блоков - снизу. Выбери ячейку.">
+      <Section id="kit-hud" title="HUD игр" note="Счётчики - сверху экрана, панель блоков - снизу. Выбери ячейку.">
         <Scene className="h-72">
           <div className="gf-hud-top absolute left-3 top-3">
             <span className="gf-hud-stat">
@@ -214,7 +237,7 @@ export default async function KitPage() {
         </Scene>
       </Section>
 
-      <Section title="Меню игры">
+      <Section id="kit-menu" title="Меню игры">
         <Replay>
           <div className="grid place-items-center rounded-md p-6" style={{ background: 'var(--scrim)' }}>
             <div className="gf-panel" role="dialog" aria-label="Меню игры">
@@ -246,6 +269,7 @@ export default async function KitPage() {
       </Section>
 
       <Section
+        id="kit-rogue-destiny"
         title="Rogue Destiny - Souls-like Roguelite"
         note="Специализированные компоненты хардкорного сурвайвала: интерактивная шкала Эфирного Перегрева мага с красной чертой риска (80-95%), механика серого здоровья (неизлечимой травмы плоти) и Нити Судьбы."
       >
