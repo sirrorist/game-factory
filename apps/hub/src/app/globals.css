@@ -8,9 +8,8 @@
 html { font-size: max(100%, min(0.8333333333vw, 1.4814814815dvh)); }
 
 /* Одна дорожка для страниц и вложенных списков; цвета следуют теме сайта.
+   Дорожка занимает место только при переполнении, без пустого резерва справа.
    Прокрутка остаётся нативной — колесо, клавиатура и жесты работают штатно. */
-html { scrollbar-gutter: stable; }
-html:has(:fullscreen) { scrollbar-gutter: auto; }
 * { scrollbar-width: thin; scrollbar-color: var(--line-strong) var(--bg-000); }
 @supports selector(::-webkit-scrollbar) {
   /* Chromium иначе отдаёт приоритет стандартным свойствам и теряет hover. */

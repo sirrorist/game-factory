@@ -130,6 +130,103 @@
 .gf-card__actions { display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-4) var(--space-4); }
 .gf-card__size { margin-left: auto; font: 500 0.8125rem/1 var(--font-body); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 
+/* ---------- Каталог: плотность первого экрана, независимо от длины описаний ---------- */
+main:has(> .gf-catalog) { padding-block: 1.5rem 1rem; }
+.gf-catalog {
+  --catalog-visible-rows: 1.66666667;
+  --catalog-short-landscape: 0;
+  --catalog-title-peek: 1;
+  display: flex; flex-direction: column; gap: 1rem;
+}
+.gf-catalog__grid {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem;
+}
+.gf-catalog__grid > li { min-width: 0; }
+.gf-catalog .gf-card {
+  display: grid; grid-template-rows: minmax(5rem, 1fr) auto auto;
+  width: 100%; height: max(20rem, var(--catalog-card-height, 27rem));
+}
+.gf-catalog .gf-card__cover { aspect-ratio: auto; min-height: 0; }
+.gf-catalog .gf-card__body { flex: none; gap: 0.375rem; padding: 0.75rem; }
+.gf-catalog .gf-card__title, .gf-catalog .gf-card__desc {
+  display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden;
+}
+.gf-catalog .gf-card__title { -webkit-line-clamp: 2; line-clamp: 2; height: 2.75rem; }
+.gf-catalog .gf-card__desc { -webkit-line-clamp: 3; line-clamp: 3; height: 3.75rem; }
+.gf-catalog .gf-card__actions {
+  --catalog-action-height: 2rem;
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.65fr);
+  grid-auto-rows: var(--catalog-action-height); align-items: start;
+  padding: 0 0.75rem 0.75rem;
+}
+.gf-catalog .gf-card__actions > :only-child { grid-column: 1 / -1; }
+/* Учитываем внешнюю тень в общей высоте, сохраняя штатное проваливание клавиши. */
+.gf-catalog .gf-card__actions > .gf-btn--primary {
+  height: calc(var(--catalog-action-height) - 0.1875rem); min-height: 0;
+}
+@media (pointer: coarse) {
+  .gf-catalog .gf-card__actions { --catalog-action-height: 3rem; }
+}
+.gf-catalog__version.gf-badge {
+  position: absolute; right: 0.5rem; bottom: 0.5rem; z-index: 3;
+  max-width: calc(100% - 1rem); height: 1.5rem; overflow: hidden;
+  color: var(--hud-ink); background: var(--hud-strong);
+  box-shadow: inset 0 0 0 0.0625rem var(--hud-line); backdrop-filter: blur(0.5rem);
+  white-space: nowrap; pointer-events: none;
+}
+.gf-game-tags {
+  position: relative; display: flex; align-items: center; gap: 0.25rem;
+  min-width: 0; height: 1.375rem; overflow: hidden;
+}
+.gf-game-tags > .gf-badge { flex: none; white-space: nowrap; }
+.gf-game-tags__more {
+  display: inline-flex; flex: none; align-items: center; justify-content: center;
+  width: 2rem; height: 1.375rem; border-radius: var(--radius-xs);
+  color: var(--ink); background: var(--bg-300); cursor: pointer;
+  font: 600 0.75rem/1 var(--font-body);
+}
+.gf-game-tags__more:hover { background: var(--line); }
+.gf-game-tags__more:focus-visible { outline: 0.125rem solid var(--focus); outline-offset: -0.125rem; }
+.gf-game-tags__probe {
+  position: absolute; display: flex; align-items: center; gap: inherit; width: max-content;
+  visibility: hidden; pointer-events: none;
+}
+.gf-tags-dialog {
+  position: fixed; margin: auto; width: min(30rem, calc(100% - 2rem));
+  max-height: calc(100dvh - 2rem); padding: 1rem; overflow: auto;
+  color: var(--ink); background: var(--bg-100); border: 0.0625rem solid var(--line-strong);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-panel);
+}
+.gf-tags-dialog::backdrop { background: var(--scrim); backdrop-filter: blur(0.25rem); }
+.gf-tags-dialog[open] { animation: gf-tags-appear 180ms var(--ease-out) both; }
+.gf-tags-dialog[open]::backdrop { animation: gf-tags-backdrop 180ms var(--ease-out) both; }
+@keyframes gf-tags-appear {
+  from { opacity: 0; transform: translateY(0.375rem) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes gf-tags-backdrop { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .gf-tags-dialog[open], .gf-tags-dialog[open]::backdrop { animation: none; }
+}
+.gf-tags-dialog__header { display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1rem; }
+.gf-tags-dialog__header h2 { flex: 1; font: 600 1rem/1.5 var(--font-display); }
+.gf-tags-dialog__header button { flex: none; }
+.gf-tags-dialog__list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.gf-tags-dialog__list .gf-badge { height: auto; min-height: 1.75rem; padding-block: 0.25rem; line-height: 1.25; }
+@media (min-width: 640px) {
+  .gf-catalog { --catalog-visible-rows: 2; --catalog-title-peek: 0; }
+  .gf-catalog__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+}
+@media (min-width: 960px) and (max-width: 1199px) and (orientation: landscape) {
+  .gf-catalog { --catalog-visible-rows: 1.25; }
+}
+@media (min-width: 1200px) {
+  .gf-catalog__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 1023px) and (max-height: 480px) and (orientation: landscape) {
+  .gf-catalog { --catalog-short-landscape: 1; }
+  .gf-catalog__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 /* ---------- Шапка сайта ---------- */
 .gf-header {
   display: flex; align-items: center; gap: var(--space-5);
@@ -169,6 +266,157 @@
 .gf-user { display: inline-flex; align-items: center; gap: var(--space-2); font: 600 0.875rem/1 var(--font-body); color: var(--ink); text-decoration: none; }
 .gf-user svg { width: 1.25rem; height: 1.25rem; }
 
+/* Короткие страницы центрируются в свободной области, форма остаётся естественной высоты. */
+main:has(> .gf-first-screen) { padding-block: 1.5rem; }
+.gf-first-screen {
+  display: flex; flex-direction: column; justify-content: center;
+  min-height: var(--first-screen-space, calc(100dvh - 12rem));
+}
+.gf-first-screen--anchored { justify-content: flex-start; padding-top: var(--first-screen-offset, 0px); }
+.gf-empty-state {
+  display: flex; flex-direction: column; align-items: center; gap: 1rem;
+  width: 100%; max-width: 32rem; margin-inline: auto; text-align: center;
+}
+.gf-empty-state-icon { width: 3rem; height: 3rem; color: var(--brand); }
+.gf-empty-state .gf-btn { max-width: 100%; }
+
+/* Витрина: первый законченный пример, затем разделы обычной длинной страницы. */
+main:has(> .gf-kit-page) { padding-block: 1.5rem; }
+html:has(.gf-kit-page) { scroll-behavior: smooth; }
+.gf-kit-page { display: flex; flex-direction: column; gap: 3rem; }
+.gf-kit-page > .gf-first-screen, .gf-kit-page > .gf-kit-section { border-bottom: 0.0625rem solid var(--line); }
+.gf-kit-page > .gf-kit-section { padding-bottom: 1.5rem; }
+.gf-kit-overview { display: grid; width: 100%; gap: 1.5rem; }
+.gf-kit-heading { grid-area: auto; }
+.gf-kit-select { display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.875rem; color: var(--ink-muted); }
+.gf-kit-select-field { display: block; position: relative; }
+.gf-kit-select select { width: 100%; padding-right: 3rem; -webkit-appearance: none; appearance: none; }
+.gf-kit-select-field::after {
+  content: ""; position: absolute; right: 1rem; top: calc(50% - 0.375rem);
+  width: 0.5rem; height: 0.5rem; border-right: 0.125rem solid currentColor;
+  border-bottom: 0.125rem solid currentColor; transform: rotate(45deg); pointer-events: none;
+}
+.gf-kit-links { display: none; flex-wrap: wrap; gap: 0.5rem; }
+.gf-kit-links a {
+  display: inline-flex; align-items: center; min-height: 2.5rem; padding: 0.5rem 0.75rem;
+  border: 0.0625rem solid var(--line); border-radius: var(--radius-sm);
+  color: var(--ink-muted); background: var(--bg-100); font-size: 0.875rem;
+}
+.gf-kit-links a:hover, .gf-kit-links a[aria-current="location"] { color: var(--brand); border-color: var(--brand); }
+.gf-kit-links a:focus-visible, .gf-kit-back:focus-visible { outline: 0.125rem solid var(--focus); outline-offset: 0.1875rem; }
+.gf-kit-logo-demo {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; padding: 1rem;
+  background: var(--bg-100); border: 0.0625rem solid var(--line); border-radius: var(--radius-md);
+}
+.gf-kit-logo-demo > svg, .gf-kit-logo-demo > .gf-logo { flex: none; max-width: 100%; }
+.gf-kit-section, .gf-kit-navigation { min-width: 0; }
+.gf-kit-section { scroll-margin-top: 1.5rem; }
+.gf-kit-navigation { scroll-margin-top: 1.5rem; }
+.gf-kit-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.gf-kit-section-heading h2 { flex: 1; min-width: 0; }
+.gf-kit-back { flex: none; display: inline-flex; align-items: center; min-height: 2.5rem; font-size: 0.8125rem; color: var(--ink-muted); }
+.gf-kit-back:hover { color: var(--brand); }
+.gf-kit-icon-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+.gf-kit-icon-tile { padding: 0.75rem 0.5rem; }
+.gf-kit-icon-name { white-space: nowrap; }
+@media (min-width: 360px) { .gf-kit-icon-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 640px) { .gf-kit-icon-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 960px) {
+  .gf-kit-select { display: none; }
+  .gf-kit-links { display: flex; }
+  .gf-kit-icon-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+}
+@media (min-width: 640px) and (max-height: 540px) and (orientation: landscape) {
+  main:has(> .gf-kit-page) { padding-block: 1rem; }
+  .gf-kit-overview {
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    grid-template-areas: 'intro example' 'navigation example'; align-items: stretch; gap: 1rem 2rem;
+  }
+  .gf-kit-heading { grid-area: intro; }
+  .gf-kit-navigation { grid-area: navigation; }
+  .gf-kit-overview > .gf-kit-section { grid-area: example; }
+  .gf-kit-overview .gf-kit-logo-demo { flex: 1; align-content: center; }
+  .gf-kit-select { display: flex; }
+  .gf-kit-links { display: none; }
+}
+@media (pointer: coarse) { .gf-kit-back { min-height: 3rem; } }
+@media (prefers-reduced-motion: reduce) { html:has(.gf-kit-page) { scroll-behavior: auto; } }
+
+.gf-login-page { display: grid; width: 100%; max-width: 24rem; margin-inline: auto; gap: 1.5rem; }
+.gf-login-heading { display: flex; flex-direction: column; gap: 0.5rem; }
+.gf-login-note { margin-top: 0.5rem; font-size: 0.875rem; line-height: 1.375rem; }
+.gf-login-controls, .gf-login-unavailable { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+.gf-login-form .gf-field { min-width: 0; }
+.gf-login-form .gf-input { width: 100%; min-width: 0; }
+@media (min-width: 640px) and (max-height: 540px) and (orientation: landscape) {
+  main:has(> .gf-first-screen) { padding-block: 1rem; }
+  .gf-login-page { max-width: 52rem; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.3fr); align-items: center; gap: 2rem; }
+  .gf-login-controls { gap: 0.75rem; }
+  .gf-login-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gf-login-message, .gf-login-form > button { grid-column: 1 / -1; }
+}
+
+/* Профиль и управление ключами: действие добавления перед длинным списком. */
+.gf-account-page { display: grid; width: 100%; max-width: 32rem; margin-inline: auto; gap: 2rem; align-items: start; }
+.gf-account-profile { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; grid-area: profile; }
+.gf-account-profile h1, .gf-account-profile p { overflow-wrap: anywhere; }
+.gf-account-page { grid-template-areas: 'profile' 'keys' 'help'; }
+.gf-account-help { grid-area: help; font-size: 0.875rem; line-height: 1.375rem; color: var(--ink-muted); }
+.gf-account-help-toggle {
+  display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer;
+  color: inherit; font: inherit; border-radius: var(--radius-xs);
+}
+.gf-account-help-toggle::before {
+  content: ""; width: 0; height: 0;
+  border-top: 0.25rem solid transparent; border-bottom: 0.25rem solid transparent;
+  border-left: 0.375rem solid currentColor;
+  transition: transform 180ms var(--ease-out);
+}
+.gf-account-help-toggle:focus-visible { outline: 0.125rem solid var(--focus); outline-offset: 0.1875rem; }
+.gf-account-help-content {
+  display: grid; grid-template-rows: 0fr; opacity: 0; visibility: hidden; pointer-events: none;
+  transition: grid-template-rows 180ms var(--ease-out), opacity 180ms var(--ease-out), visibility 0s linear 180ms;
+}
+.gf-account-help-inner { min-height: 0; overflow: hidden; }
+.gf-account-help-body { padding-top: 0.75rem; }
+.gf-account-help[data-open="true"] .gf-account-help-toggle::before { transform: rotate(90deg); }
+.gf-account-help[data-open="true"] .gf-account-help-content {
+  opacity: 1; visibility: visible; pointer-events: auto;
+  grid-template-rows: 1fr; transition-delay: 0s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gf-account-help-toggle::before, .gf-account-help-content { transition: none; }
+}
+.gf-passkey-panel {
+  grid-area: keys;
+  display: flex; flex-direction: column; gap: 1rem; min-width: 0; padding: 1rem;
+  background: var(--bg-100); border: 0.0625rem solid var(--line); border-radius: var(--radius-md);
+}
+.gf-passkey-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; padding-bottom: 0.1875rem; }
+.gf-passkey-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.gf-passkey-item {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.75rem;
+  padding: 0.5rem 0.75rem; background: var(--bg-200); border-radius: var(--radius-sm);
+}
+.gf-passkey-name { min-width: 0; overflow-wrap: anywhere; font-size: 0.875rem; line-height: 1.25rem; }
+.gf-passkey-notice {
+  position: fixed; z-index: 50; left: 50%; bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%); width: min(36rem, calc(100% - 2rem));
+  display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem;
+  background: var(--bg-100); border: 0.0625rem solid var(--danger); color: var(--danger);
+  border-radius: var(--radius-sm); box-shadow: var(--shadow-panel); font-size: 0.875rem; line-height: 1.25rem;
+}
+.gf-passkey-notice p { flex: 1; min-width: 0; }
+.gf-passkey-notice-close { flex: none; display: grid; place-items: center; width: 3rem; height: 3rem; cursor: pointer; border-radius: var(--radius-xs); }
+.gf-passkey-notice-close:hover { background: var(--bg-200); }
+.gf-passkey-notice-close:focus-visible { outline: 0.125rem solid var(--focus); }
+@media (min-width: 960px), (min-width: 640px) and (max-height: 540px) and (orientation: landscape) {
+  .gf-account-page {
+    max-width: 56rem; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    grid-template-areas: 'profile keys' 'help keys'; grid-template-rows: min-content 1fr; row-gap: 1rem;
+  }
+}
+
 /* ---------- Тулбар игры и плашка выхода из полного экрана ---------- */
 .gf-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .gf-record {
@@ -185,6 +433,66 @@
   background: #000; box-shadow: inset 0 0 0 0.0625rem var(--line); overflow: hidden;
 }
 .gf-game-viewport { height: min(75dvh, 42.5rem); min-height: min(26.25rem, 75dvh); }
+
+/* Страница игры: отдельная первая область и сведения ниже обычной прокруткой. */
+main:has(> .gf-game-page) { padding-block: 2rem; }
+.gf-game-page { display: flex; flex-direction: column; gap: 1.5rem; min-width: 0; }
+.gf-game-primary {
+  --game-screen-inset: max(1rem, env(safe-area-inset-bottom, 0px));
+  --game-summary-in-first-screen: 1;
+  display: flex; flex-direction: column; gap: 1rem;
+  height: calc(var(--game-primary-height, calc(100dvh - 10rem)) - var(--game-screen-inset));
+  min-height: 14rem;
+}
+.gf-game-heading {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center; gap: 0.75rem; flex: none;
+}
+.gf-game-heading h1 {
+  min-width: 0; font: 700 2.25rem/1.25 var(--font-display); letter-spacing: -0.02em; text-align: center;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  overflow: hidden;
+}
+.gf-game-heading .gf-btn { height: 3rem; padding-inline: 0.75rem; }
+.gf-game-surface { position: relative; flex: 1; min-height: 0; width: 100%; }
+.gf-game-page .gf-game-viewport { display: block; height: 100%; min-height: 0; }
+.gf-game-loading {
+  position: absolute; left: 0.75rem; bottom: 0.75rem; padding: 0.375rem 0.625rem;
+  font-size: 0.8125rem; color: var(--hud-ink); background: var(--hud-strong);
+  border-radius: var(--radius-sm); pointer-events: none;
+}
+.gf-game-details, .gf-game-info { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+.gf-game-details > .gf-game-info { order: 2; }
+.gf-game-summary { display: flex; align-items: center; justify-content: space-between; gap: 1rem; order: 0; min-width: 0; }
+.gf-game-summary > .gf-record { flex: none; }
+.gf-game-full-title {
+  order: 1; width: 100%; min-width: 0; font: 700 1.5rem/1.4 var(--font-display);
+  margin-top: 0.5rem; padding-top: 1.5rem; border-top: 0.0625rem solid var(--line);
+  overflow-wrap: anywhere;
+}
+.gf-game-metadata { display: flex; flex: 1; min-width: 0; align-items: center; justify-content: flex-end; gap: 0.5rem; }
+.gf-game-metadata > .gf-badge {
+  flex: none; max-width: 100%; height: auto; min-height: 1.375rem; padding-block: 0.25rem;
+  white-space: normal; overflow-wrap: anywhere;
+}
+.gf-game-metadata > .gf-game-tags { flex: 1; justify-content: flex-end; }
+@media (max-width: 639px), (max-width: 1023px) and (max-height: 480px) and (orientation: landscape) {
+  .gf-game-primary {
+    --game-screen-inset: max(0.5rem, env(safe-area-inset-bottom, 0px));
+    --game-summary-in-first-screen: 0;
+    height: calc(var(--game-primary-height, calc(100dvh - 8rem)) - var(--game-screen-inset));
+  }
+  .gf-game-heading { grid-template-columns: 3rem minmax(0, 1fr) 3rem; gap: 0.5rem; }
+  .gf-game-heading h1 { font-size: 1.875rem; line-height: 2.25rem; }
+  .gf-game-heading .gf-btn { width: 3rem; padding-inline: 0; }
+  .gf-game-control-label { display: none; }
+  .gf-game-full-title { order: 0; margin-top: 0; }
+  .gf-game-summary { order: 1; flex-direction: column; align-items: stretch; gap: 0.75rem; }
+  .gf-game-summary > .gf-record { align-self: flex-start; }
+  .gf-game-metadata { flex-wrap: wrap; justify-content: flex-start; }
+  .gf-game-metadata > .gf-game-tags { flex-basis: 100%; order: 1; justify-content: flex-start; }
+}
+
 /* Кнопка выхода - ниже выреза камеры (env() даёт viewport-fit=cover в layout.tsx; без выреза он 0).
    Саму игру полями не сжимаем: k8s-at-home узнаёт полный экран хаба по размеру окна (П-047). */
 .gf-exit-pill {

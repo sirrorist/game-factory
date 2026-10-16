@@ -6,6 +6,21 @@
   <title>Game Factory · UI — до / после</title>
   <style>
     *{box-sizing:border-box}[hidden]{display:none!important}body{margin:0;background:#151923;color:#edf0f6;font:14px system-ui,sans-serif}
+    *{scrollbar-width:thin;scrollbar-color:#5d6c92 #151923}
+    @supports selector(::-webkit-scrollbar){
+      *{scrollbar-width:auto;scrollbar-color:auto}
+      ::-webkit-scrollbar{width:12px;height:12px}
+      ::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:#151923}
+      ::-webkit-scrollbar-thumb{background:#5d6c92;border:3px solid #151923;border-radius:999px;min-width:32px;min-height:32px}
+      ::-webkit-scrollbar-thumb:hover{background:#58a6ff}
+      ::-webkit-scrollbar-thumb:active{background:#79b8ff}
+    }
+    @media(forced-colors:active){
+      *{scrollbar-width:auto;scrollbar-color:auto}
+      ::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:Canvas}
+      ::-webkit-scrollbar-thumb{background:ButtonText;border-color:Canvas}
+      ::-webkit-scrollbar-thumb:hover,::-webkit-scrollbar-thumb:active{background:Highlight}
+    }
     header{padding:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;border-bottom:1px solid #3c4355}
     h1{font-size:18px;margin:0 8px 0 0}label{display:flex;gap:7px;align-items:center}
     select,button{font:inherit;color:inherit;background:#282f40;border:1px solid #505b73;border-radius:6px;min-height:40px;padding:6px 10px}
