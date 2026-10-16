@@ -32,10 +32,43 @@ test('раздаётся только каталог артефактов, бе�
   const out = mkdtempSync(join(tmpdir(), 'gf-ui-path-')), root = join(out, 'site');
   mkdirSync(root); writeFileSync(join(root, 'index.html'), 'UI'); writeFileSync(join(out, 'outside.txt'), 'outside');
   writeFileSync(join(root, '.private'), 'hidden'); symlinkSync(join(out, 'outside.txt'), join(root, 'linked.txt'));
+  symlinkSync(join(root, '.private'), join(root, 'alias.txt'));
+  mkdirSync(join(root, '.hidden')); writeFileSync(join(root, '.hidden', 'visible.txt'), 'hidden directory');
+  symlinkSync(join(root, '.hidden'), join(root, 'alias-directory'), 'dir');
+  symlinkSync(join(root, 'index.html'), join(root, 'visible-link.html'));
   try {
     assert.equal(servedFile(root, '/'), join(root, 'index.html'));
-    for (const path of ['/../outside.txt', '/%2e%2e/outside.txt', '/%2eprivate', '/linked.txt', '/%00', '/%ff', '/a%5cb']) assert.equal(servedFile(root, path), null);
+    assert.equal(servedFile(root, '/visible-link.html'), join(root, 'index.html'));
+    for (const path of ['/../outside.txt', '/%2e%2e/outside.txt', '/%2eprivate', '/linked.txt', '/alias.txt', '/alias-directory/visible.txt', '/%00', '/%ff', '/a%5cb']) assert.equal(servedFile(root, path), null);
   } finally { rmSync(out, { recursive: true }); }
+});
+
+test('работающий сервер перечитывает отчёт и метаданные после замены after', async () => {
+  const out = mkdtempSync(join(tmpdir(), 'gf-ui-refresh-')), content = join(out, 'content');
+  mkdirSync(content); writeFileSync(join(content, 'index.html'), '<!doctype html><body>первая');
+  publishSnapshot(out, 'before', content, { ref: 'base', version: '1' });
+  publishSnapshot(out, 'after', content, { ref: 'old', version: '2' });
+  const evidence = snapshotEvidence(out);
+  writeFileSync(join(out, 'report.json'), JSON.stringify({ status: 'finished', complete: true, failed: 0, snapshots: evidence }));
+  const server = await startComparison({ id: 'sample', title: 'sample', out, profiles: [], scenes: [],
+    validateReport: report => JSON.stringify((report as { snapshots: unknown }).snapshots) === JSON.stringify(snapshotEvidence(out)) });
+  try {
+    const get = async () => (await (await fetch(server.url + '/config.json')).json()) as { report: { status: string; complete: boolean } | null; snapshots: { after: { version: string; ref: string } } };
+    assert.equal((await get()).report?.status, 'finished');
+    writeFileSync(join(content, 'index.html'), '<!doctype html><body>следующая');
+    publishSnapshot(out, 'after', content, { ref: 'new', version: '3' });
+    assert.equal((await get()).report, null);
+    assert.equal((await get()).snapshots.after.version, '3');
+    for (const path of ['/', '/index.html']) {
+      const html = await (await fetch(server.url + path)).text();
+      assert.match(html, /"ref":"new","version":"3"/);
+      assert.match(html, /"report":null/);
+    }
+    writeFileSync(join(out, 'report.json'), JSON.stringify({ status: 'finished', complete: true, failed: 0, snapshots: evidence }));
+    assert.equal((await get()).report?.status, 'stale');
+    writeFileSync(join(out, 'report.json'), '{');
+    assert.equal((await get()).report, null);
+  } finally { await server.close(); rmSync(out, { recursive: true }); }
 });
 
 test('повторная сборка удаляет старые ресурсы, сохраняет историю и не меняет базу', () => {

@@ -50,7 +50,8 @@ if (!command || command === 'help' || command === '--help') {
       process.once('exit', code => { if (!done) markInterrupted(join(out, name), code); });
       const run = command === 'check' ? adapter.check : adapter.live;
       if (!run) throw new Error('Для этой цели нет сценария ' + command + '; добавь его в адаптер');
-      process.exitCode = await run();
+      try { process.exitCode = await run(); }
+      catch (error) { markInterrupted(join(out, name), 1, error); throw error; }
       done = true;
     } else if (command === 'verify') {
       if (adapter.verify) await adapter.verify();

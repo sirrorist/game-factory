@@ -1,8 +1,9 @@
 // Проверка компоновки реальных компонентов с примерами данных, не тест авторизации.
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
+import { trackCheck } from '../../core/report.ts';
 import { OUT, startHubComparison, hubEvidence } from './preview.ts';
 import { PROFILES } from '../../core/profiles.ts';
 import { HUB_SCENES } from './config.ts';
@@ -18,14 +19,13 @@ const initialToolHash = toolHash();
 const artifacts = () => ({ before: treeHash(join(OUT, 'before')), after: treeHash(join(OUT, 'after')) });
 const initialArtifacts = artifacts();
 const runs: { side: string; profile: string; theme: string; scene: string; errors: string[]; screenshot: string; geometry: unknown }[] = [];
-let complete = false;
-let fatal: string | null = null;
-const report = () => ({ status: fatal ? 'interrupted-or-failed' : complete ? 'finished' : 'running', fatal, complete, snapshots, runnerHash, toolHash: initialToolHash, artifacts: initialArtifacts, runs,
+const report = () => ({ complete: true, snapshots, runnerHash, toolHash: initialToolHash, artifacts: initialArtifacts, runs,
   failed: runs.filter(r => r.side === 'after').reduce((n, r) => n + r.errors.length, 0),
   limitations: ['Реальные UI-компоненты с отдельными образцами данных; auth/API этим прогоном не проверяются', 'Chromium и эмуляция, не физический телефон'] });
-writeFileSync(join(OUT, 'report.json'), JSON.stringify(report(), null, 2));
-const browser = await chromium.launch({ args: ['--enable-unsafe-swiftshader'] });
+const progress = trackCheck(join(OUT, 'report.json'), report);
+let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
 try {
+  browser = await chromium.launch({ args: ['--enable-unsafe-swiftshader'] });
   for (const profile of PROFILES) for (const theme of ['dark', 'light'] as const) for (const side of ['before', 'after']) {
     const context = await browser.newContext({ viewport: { width: profile.width, height: profile.height },
       hasTouch: profile.touch, isMobile: profile.touch, deviceScaleFactor: 1, colorScheme: theme });
@@ -126,20 +126,21 @@ try {
         }
         errors.push(...runtime.filter(e => !errors.includes(e)));
         runs.push({ side, profile: profile.id, theme, scene: scene.id, errors, screenshot, geometry });
+        progress.checkpoint();
       }
     } finally { await context.close(); }
     console.log(`hub ${side}/${profile.id}/${theme}: ${runs.filter(r => r.side === side && r.profile === profile.id && r.theme === theme).flatMap(r => r.errors).length} нарушений`);
-    writeFileSync(join(OUT, 'report.json'), JSON.stringify(report(), null, 2));
+    progress.checkpoint();
   }
   const current = JSON.parse(readFileSync(join(OUT, 'after', 'snapshot.json'), 'utf8'));
   if (current.hash !== snapshots.after!.hash) throw new Error('Сборка сменилась во время прогона');
   if (toolHash() !== initialToolHash || JSON.stringify(artifacts()) !== JSON.stringify(initialArtifacts)) throw new Error('Инструмент или файлы сборки сменились во время прогона');
-  complete = true;
+  progress.finish();
 } catch (error) {
-  fatal = String(error); throw error;
+  progress.fail(error); throw error;
 } finally {
-  await browser.close(); await servers.close();
-  writeFileSync(join(OUT, 'report.json'), JSON.stringify(report(), null, 2));
+  progress.close();
+  try { await browser?.close(); } finally { await servers.close(); }
 }
 console.log(`Хаб: ${runs.length} состояний, ошибок after ${report().failed}`);
 process.exitCode = report().failed ? 1 : 0;

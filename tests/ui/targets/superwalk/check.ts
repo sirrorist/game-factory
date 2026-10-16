@@ -1,5 +1,5 @@
 import { pixelDifference } from '../../core/diff.ts';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 import type { Page } from 'playwright';
@@ -8,6 +8,7 @@ import { PROFILES, SCENES } from './config.ts';
 import { startComparison } from './server.ts';
 import { gameEvidence } from './evidence.ts';
 import { inspectWalletLayout } from './wallet-layout.ts';
+import { trackCheck } from '../../core/report.ts';
 
 interface Result { side: string; profile: string; scene: string; errors: string[]; controls: string[]; screenshot: string; uiScreenshot: string }
 
@@ -151,16 +152,21 @@ async function flowChecks(page: Page, url: string, touch: boolean): Promise<stri
 
 export async function runChecks(): Promise<number> {
   const evidence = gameEvidence('check.ts');
-  const servers = await startComparison();
+  let servers: Awaited<ReturnType<typeof startComparison>> | undefined;
   let browser;
   const results: Result[] = [];
   const differences: { profile: string; scene: string; changedPercent: number; image: string }[] = [];
   const flows: Record<string, string[]> = {};
+  const selected = (process.env.GF_UI_PROFILES ?? process.env.SW_UI_PROFILES)?.split(',');
+  const profiles = selected ? PROFILES.filter(p => selected.includes(p.id)) : PROFILES;
+  const failed = () => results.filter(r => r.side === 'after' && r.errors.length).length + Object.entries(flows).filter(([key, errors]) => key.startsWith('after/') && errors.length).length;
+  const report = trackCheck(join(OUT, 'report.json'), () => ({ generatedAt: new Date().toISOString(), complete: profiles.length === PROFILES.length,
+    ...evidence, profiles, scenes: SCENES, results, flows, differences, failed: failed(),
+    limitations: ['Chromium с эмуляцией касаний, не физическое устройство', 'Пиксельные отличия информируют о смене вида; оценка намеренных изменений — владельцем и проверяющим агентом', 'Состояния через временную инструментализацию; штатные действия дополнительно проверены сценариями flows'] }));
   try {
-    browser = await chromium.launch({ args: ['--enable-unsafe-swiftshader'], executablePath: process.env.GF_CHROMIUM_PATH || undefined });
-    const selected = (process.env.GF_UI_PROFILES ?? process.env.SW_UI_PROFILES)?.split(',');
-    const profiles = selected ? PROFILES.filter(p => selected.includes(p.id)) : PROFILES;
     if (!profiles.length) throw new Error('SW_UI_PROFILES не содержит известных профилей');
+    servers = await startComparison();
+    browser = await chromium.launch({ args: ['--enable-unsafe-swiftshader'], executablePath: process.env.GF_CHROMIUM_PATH || undefined });
     for (const profile of profiles) {
       for (const side of ['before', 'after'] as const) {
         const context = await browser.newContext({ viewport: { width: profile.width, height: profile.height }, hasTouch: profile.touch, isMobile: profile.touch, deviceScaleFactor: 1, reducedMotion: 'reduce' });
@@ -169,15 +175,20 @@ export async function runChecks(): Promise<number> {
         page.setDefaultTimeout(6000);
         page.on('dialog', dialog => void dialog.accept());
         let runtime: string[] = [];
-        page.on('pageerror', error => runtime.push(error.message));
-        page.on('console', message => { if (message.type() === 'error') runtime.push(message.text()); });
+        let active: Result | undefined;
+        const runtimeError = (message: string) => { runtime.push(message); active?.errors.push(message); };
+        page.on('pageerror', error => runtimeError(error.message));
+        page.on('console', message => { if (message.type() === 'error') runtimeError(message.text()); });
         const directory = join(OUT, 'shots', side, profile.id);
         mkdirSync(directory, { recursive: true });
         for (const scene of SCENES) {
           runtime = [];
+          const errors: string[] = [];
+          const result: Result = { side, profile: profile.id, scene: scene.id, errors, controls: [], screenshot: '', uiScreenshot: '' };
+          active = result;
+          results.push(result); report.checkpoint();
           // Каждая сцена с исходным состоянием, без сохранений предыдущего сценария.
           await page.goto(`${servers[side]}/?scene=${scene.id}&touch=${Number(profile.touch)}`);
-          const errors: string[] = [];
           await page.waitForSelector(`html[data-ui-ready="${scene.id}"]`, { timeout: 15000 }).catch(() => errors.push('Сценарий не готов'));
           // Геометрию снимаем после CSS-анимаций: scale(0.96) давал ложные размеры кнопок.
           await page.evaluate(() => { for (const a of document.getAnimations()) { if (a.effect?.getComputedTiming().iterations === Infinity) a.cancel(); else a.finish(); } });
@@ -186,6 +197,7 @@ export async function runChecks(): Promise<number> {
           if (coarse !== profile.touch) errors.push('Режим ввода не совпал с профилем');
           if (await page.locator('html').getAttribute('data-ui-touch') !== String(profile.touch)) errors.push('Штатный контроллер не определил режим ввода');
           const geometry = await layout(page, scene.root, profile.touch);
+          result.controls = geometry.controls;
           errors.push(...geometry.errors);
           if (scene.root === '.gf-wallet-panel') errors.push(...(await page.evaluate(inspectWalletLayout)).errors);
           const expected: Record<string, string> = { 'wallet-result': '#case-result-display', 'wallet-receipt': '#withdraw-receipt-card' };
@@ -193,15 +205,19 @@ export async function runChecks(): Promise<number> {
           const screenshot = `shots/${side}/${profile.id}/${scene.id}.png`;
           const uiScreenshot = `shots/${side}/${profile.id}/${scene.id}-ui.png`;
           await page.screenshot({ path: join(OUT, screenshot), animations: 'disabled' });
+          result.screenshot = screenshot; report.checkpoint();
           const style = await page.addStyleTag({ content: 'canvas { visibility:hidden!important } *,*::before,*::after { animation:none!important;transition:none!important;caret-color:transparent!important }' });
           await page.screenshot({ path: join(OUT, uiScreenshot), animations: 'disabled' });
+          result.uiScreenshot = uiScreenshot; report.checkpoint();
           await style.evaluate(e => e.parentNode?.removeChild(e));
           errors.push(...await reachable(page, scene.root), ...runtime);
-          results.push({ side, profile: profile.id, scene: scene.id, errors: [...new Set(errors)], controls: geometry.controls, screenshot, uiScreenshot });
+          result.errors = [...new Set(errors)]; report.checkpoint();
         }
         if (profile.id === 'phone-portrait' || profile.id === 'fullhd') {
+          active = undefined;
           runtime = [];
           flows[`${side}/${profile.id}`] = [...await flowChecks(page, servers[side], profile.touch), ...runtime];
+          report.checkpoint();
         }
         await context.close();
         const group = results.filter(r => r.side === side && r.profile === profile.id);
@@ -216,16 +232,16 @@ export async function runChecks(): Promise<number> {
       mkdirSync(join(OUT, 'diff', profile.id), { recursive: true });
       writeFileSync(join(OUT, image), Buffer.from(diff.png, 'base64'));
       differences.push({ profile: profile.id, scene: scene.id, changedPercent: Number(diff.changedPercent.toFixed(3)), image });
+      report.checkpoint();
     }
-    const failed = results.filter(r => r.side === 'after' && r.errors.length).length + Object.entries(flows).filter(([key, errors]) => key.startsWith('after/') && errors.length).length;
     if (JSON.stringify(evidence) !== JSON.stringify(gameEvidence('check.ts'))) throw new Error('Сборка или инструмент поменялись во время проверки');
-    const report = { status: 'finished', generatedAt: new Date().toISOString(), complete: profiles.length === PROFILES.length, ...evidence, profiles, scenes: SCENES, results, flows, differences, failed,
-      limitations: ['Chromium с эмуляцией касаний, не физическое устройство', 'Пиксельные отличия информируют о смене вида; оценка намеренных изменений — владельцем и проверяющим агентом', 'Состояния через временную инструментализацию; штатные действия дополнительно проверены сценариями flows'] };
-    writeFileSync(join(OUT, 'report.json'), JSON.stringify(report, null, 2));
-    console.log(`UI ${profiles.length === PROFILES.length ? 'полный' : 'ЧАСТИЧНЫЙ'}: ${failed ? 'НЕ ПРОШЛО' : 'ПРОШЛО'} · ${results.length} снимков · ${OUT}/report.json`);
-    return failed ? 1 : 0;
+    report.finish();
+    console.log(`UI ${profiles.length === PROFILES.length ? 'полный' : 'ЧАСТИЧНЫЙ'}: ${failed() ? 'НЕ ПРОШЛО' : 'ПРОШЛО'} · ${results.length} снимков · ${OUT}/report.json`);
+    return failed() ? 1 : 0;
+  } catch (error) {
+    report.fail(error); throw error;
   } finally {
-    await browser?.close();
-    await servers.close();
+    report.close();
+    try { await browser?.close(); } finally { await servers?.close(); }
   }
 }

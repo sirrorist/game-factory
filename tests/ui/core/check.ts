@@ -4,22 +4,30 @@ import { chromium } from 'playwright';
 import { gameComparison, gameEvidence } from './game.ts';
 import { startComparison } from './server.ts';
 import { pixelDifference } from './diff.ts';
+import { trackCheck } from './report.ts';
 
 // Универсальная проверка стартового экрана. Редкие игровые состояния — в адаптерах.
 export async function checkGame(id: string): Promise<number> {
   const target = gameComparison(id), evidence = gameEvidence(id);
   const selected = process.env.GF_UI_PROFILES?.split(',');
   const profiles = selected ? target.profiles.filter(p => selected.includes(p.id)) : target.profiles;
-  if (!profiles.length) throw new Error('Неизвестные GF_UI_PROFILES');
-  const servers = await startComparison(target);
-  const browser = await chromium.launch({ args: ['--enable-unsafe-swiftshader'], executablePath: process.env.GF_CHROMIUM_PATH || undefined });
   const results: { side: string; profile: string; scene: string; errors: string[]; screenshot: string; uiScreenshot: string }[] = [];
   const differences: { profile: string; scene: string; changedPercent: number; image: string }[] = [];
-  let finished = false;
+  const failed = () => results.filter(r => r.side === 'after' && r.errors.length).length;
+  const report = trackCheck(join(target.out, 'report.json'), () => ({ ...evidence, complete: profiles.length === target.profiles.length,
+    profiles, scenes: target.scenes, results, differences, failed: failed(),
+    limitations: ['Только стартовый экран штатной сборки, без сценариев прохождения', 'Chromium с эмуляцией; пиксельные отличия не являются автоматическим одобрением вида'] }));
+  let servers: Awaited<ReturnType<typeof startComparison>> | undefined;
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
   try {
+    if (!profiles.length) throw new Error('Неизвестные GF_UI_PROFILES');
+    servers = await startComparison(target);
+    browser = await chromium.launch({ args: ['--enable-unsafe-swiftshader'], executablePath: process.env.GF_CHROMIUM_PATH || undefined });
     for (const p of profiles) for (const side of ['before', 'after'] as const) {
       const context = await browser.newContext({ viewport: { width: p.width, height: p.height }, hasTouch: p.touch, isMobile: p.touch, deviceScaleFactor: 1 });
       const page = await context.newPage(), errors: string[] = [];
+      const result = { side, profile: p.id, scene: 'start', errors, screenshot: '', uiScreenshot: '' };
+      results.push(result); report.checkpoint();
       page.on('pageerror', e => errors.push(e.message));
       page.on('console', e => { if (e.type() === 'error') errors.push(e.text()); });
       try {
@@ -30,11 +38,12 @@ export async function checkGame(id: string): Promise<number> {
         const directory = join(target.out, 'shots', side, p.id); mkdirSync(directory, { recursive: true });
         const screenshot = `shots/${side}/${p.id}/start.png`, uiScreenshot = `shots/${side}/${p.id}/start-ui.png`;
         await page.screenshot({ path: join(target.out, screenshot) });
+        result.screenshot = screenshot; report.checkpoint();
         await page.addStyleTag({ content: 'canvas{visibility:hidden!important}*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}' });
         await page.screenshot({ path: join(target.out, uiScreenshot) });
-        results.push({ side, profile: p.id, scene: 'start', errors, screenshot, uiScreenshot });
-      } catch (error) { results.push({ side, profile: p.id, scene: 'start', errors: [...errors, String(error)], screenshot: '', uiScreenshot: '' }); }
-      finally { await context.close(); }
+        result.uiScreenshot = uiScreenshot;
+      } catch (error) { errors.push(String(error)); }
+      finally { report.checkpoint(); await context.close(); }
     }
     const diffPage = await browser.newPage(); await diffPage.goto(servers.url);
     for (const p of profiles) {
@@ -44,16 +53,16 @@ export async function checkGame(id: string): Promise<number> {
       const image = `diff/${p.id}/start.png`;
       writeFileSync(join(target.out, image), Buffer.from(diff.png, 'base64'));
       differences.push({ profile: p.id, scene: 'start', changedPercent: diff.changedPercent, image });
+      report.checkpoint();
     }
     if (JSON.stringify(evidence) !== JSON.stringify(gameEvidence(id))) throw new Error('Сборка/инструмент изменились во время проверки');
-    const failed = results.filter(r => r.side === 'after' && r.errors.length).length;
-    writeFileSync(join(target.out, 'report.json'), JSON.stringify({ status: 'finished', complete: profiles.length === target.profiles.length, ...evidence, profiles, scenes: target.scenes, results, differences, failed,
-      limitations: ['Только стартовый экран штатной сборки, без сценариев прохождения', 'Chromium с эмуляцией; пиксельные отличия не являются автоматическим одобрением вида'] }, null, 2));
-    finished = true;
-    console.log(`${id}: ${results.length} состояний, ${failed} ошибок after`);
-    return failed ? 1 : 0;
+    report.finish();
+    console.log(`${id}: ${results.length} состояний, ${failed()} ошибок after`);
+    return failed() ? 1 : 0;
+  } catch (error) {
+    report.fail(error); throw error;
   } finally {
-    await browser.close(); await servers.close();
-    if (!finished) writeFileSync(join(target.out, 'report.json'), JSON.stringify({ status: 'interrupted-or-failed', complete: false, failed: 1 }));
+    report.close();
+    try { await browser?.close(); } finally { await servers?.close(); }
   }
 }

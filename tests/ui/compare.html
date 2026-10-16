@@ -39,7 +39,7 @@
     <p>Масштаб меняет только размер предпросмотра: внутри iframe сохраняется выбранное разрешение. Сценарии телефона показывают тач-раскладку. Режим «Играть» использует ввод этого устройства. Снимки показывают результат Chromium с эмуляцией касаний; размер iframe на компьютере не эмулирует устройство.</p>
   </footer>
   <script>
-    const config=/*CONFIG*/null;
+    let config=/*CONFIG*/null;
     const $=id=>document.getElementById(id);
     document.title=config.title+' — до / после';
     document.querySelector('h1').textContent=config.title+' · до / после';
@@ -48,15 +48,22 @@
     $('content').querySelector('[value="live"]').textContent=config.liveLabel;
     if(config.themes?.length){$('theme-label').hidden=false;for(const theme of config.themes)$('theme').add(new Option(theme==='dark'?'Тёмная':'Светлая',theme));}
     let mode='both';
-    const currentReport=config.report?.status==='finished' && config.report.snapshots?.after.hash===config.snapshots.after.hash;
+    const currentReport=()=>config.report?.status==='finished' && config.report.snapshots?.after.hash===config.snapshots.after.hash;
     const reference=()=>config.references.find(r=>r.id===$('reference').value);
     for(const scene of config.scenes)$('scene').add(new Option(scene.label,scene.id));
     for(const profile of config.profiles)$('profile').add(new Option(`${profile.label} · ${profile.width}×${profile.height}`,profile.id));
     for(const ref of config.references)$('reference').add(new Option(ref.label,ref.id));
     if(config.references.some(r=>r.id==='revision'))$('reference').value='revision';
-    $('content').querySelector('[value="shots"]').disabled=!currentReport;
+    $('content').querySelector('[value="shots"]').disabled=!currentReport();
     $('version-after').textContent=config.snapshots.after.version;
     $('ref-after').textContent=config.snapshots.after.ref;
+    const loadedKeys={};
+    const loading=new Set();
+    const artifactKey=(side,cfg=config)=>{
+      const ref=cfg.references.find(r=>r.id===$('reference').value);
+      const snapshot=side==='before'?ref.snapshot:cfg.snapshots.after;
+      return JSON.stringify([side==='before'?ref.id:'after',snapshot.artifactHash??snapshot.hash]);
+    };
 
     function resize(){
       const p=config.profiles.find(p=>p.id===$('profile').value);
@@ -72,12 +79,15 @@
       }
     }
 
-    function load(){
+    function load(sides=['before','after']){
       const p=config.profiles.find(p=>p.id===$('profile').value), scene=$('scene').value, ref=reference();
       $('version-before').textContent=ref.label;
       $('ref-before').textContent=ref.snapshot.ref;
-      for(const side of ['before','after']){
+      for(const side of sides){
         const frame=$(side).querySelector('iframe');
+        loadedKeys[side]=artifactKey(side);
+        loading.add(side);frame.style.visibility='hidden';
+        frame.onload=()=>{loading.delete(side);frame.style.visibility='';showReport();};
         frame.style.colorScheme=$('theme').value||'normal';
         if($('content').value==='shots'){
           const path=ref.id==='revision'&&side==='before'?`${ref.shots}/${p.id}/${scene}.png`:config.shotPath.replaceAll('{side}',side).replaceAll('{profile}',p.id).replaceAll('{scene}',scene).replaceAll('{theme}',$('theme').value||'dark');
@@ -89,13 +99,42 @@
         }
       }
       $('dimensions').textContent=`${p.width}×${p.height} CSS px`;
-      $('diff-link').hidden=!currentReport||ref.id!=='before'||!config.hasDiff;
+      showReport();
+      resize();
+    }
+    function showReport(){
+      const p=config.profiles.find(p=>p.id===$('profile').value),scene=$('scene').value,ref=reference();
+      const current=currentReport();
+      $('content').querySelector('[value="shots"]').disabled=!current;
+      // При замене сборки уже открытые снимки тоже перестают быть её доказательством.
+      if(!current&&$('content').value==='shots'){$('content').value='scene';load();return;}
+      $('diff-link').hidden=!current||ref.id!=='before'||!config.hasDiff;
       $('diff-link').href=`diff/${p.id}/${scene}.png`;
-      if(currentReport){
+      if(loading.size){
+        $('verdict').textContent='Загружается выбранная сборка…';
+      }else if(current){
         const report=config.report, current=(report.results||report.runs||[]).find(r=>r.side==='after'&&r.profile===p.id&&r.scene===scene);
         $('verdict').textContent=`${report.complete?'Полный':'Частичный'} прогон: ${report.failed===0?'после — проверки пройдены':'после — есть ошибки'}. На этом экране после: ${current?.errors.length??'нет данных'} нарушений. Оценка намеренных отличий выполняется отдельно.`;
       }else $('verdict').textContent='Предпросмотр для приёмки владельцем. Актуального полного прогона этой сборки и инструмента нет.';
-      resize();
+    }
+    let refreshId=0;
+    async function refreshConfig(reloadFrames=false){
+      const id=++refreshId;
+      try{
+        const response=await fetch('/config.json',{cache:'no-store'});
+        if(!response.ok)throw new Error('Сборка обновляется');
+        const next=await response.json();if(id!==refreshId)return;
+        const changed=['before','after'].filter(side=>loadedKeys[side]!==artifactKey(side,next));
+        config=next;
+        $('version-after').textContent=config.snapshots.after.version;
+        $('ref-after').textContent=config.snapshots.after.ref;
+        for(const option of $('reference').options){const ref=config.references.find(r=>r.id===option.value);if(ref)option.textContent=ref.label;}
+        $('version-before').textContent=reference().label;$('ref-before').textContent=reference().snapshot.ref;
+        if(reloadFrames)load();else if(changed.length)load(changed);else showReport();
+      }catch{
+        if(id!==refreshId)return;
+        config.report=null;showReport();
+      }
     }
     for(const button of document.querySelectorAll('[data-mode]'))button.onclick=()=>{
       mode=button.dataset.mode;
@@ -103,8 +142,11 @@
       for(const b of document.querySelectorAll('[data-mode]'))b.setAttribute('aria-pressed',String(b.dataset.mode===mode));
       resize();
     };
-    for(const id of ['scene','profile','content','reference','theme'])$(id).onchange=load;
-    $('actual').onchange=resize;$('reload').onclick=load;window.onresize=resize;load();
+    for(const id of ['scene','profile','content','reference','theme'])$(id).onchange=()=>load();
+    $('actual').onchange=resize;$('reload').onclick=()=>refreshConfig(true);window.onresize=resize;load();
+    setInterval(()=>refreshConfig(),2000);
+    window.addEventListener('focus',()=>refreshConfig());
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshConfig();});
   </script>
 </body>
 </html>

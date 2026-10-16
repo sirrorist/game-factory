@@ -32,6 +32,7 @@
     "ui:acceptance": "node tests/ui/cli.ts acceptance",
     "ui:typecheck": "tsc -p tests/ui/tsconfig.json",
     "ui:test": "node --test tests/ui/*.test.ts",
+    "ui:regression": "node --test tests/ui/check-failures.browser.ts",
     "ui:smoke": "node tests/ui/browser-smoke.ts"
   },
   "devDependencies": {
