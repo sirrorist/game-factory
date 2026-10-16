@@ -80,8 +80,8 @@ export default async function KitPage() {
       <Section title="Цвета" note="Компоненты берут цвет только из токенов: тема меняет значения, разметка та же.">
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {COLORS.map(([name, role]) => (
-            <li key={name} className="flex items-center gap-3 rounded-md bg-card p-2 shadow-[inset_0_0_0_1px_var(--line)]">
-              <span className="size-10 shrink-0 rounded-sm shadow-[inset_0_0_0_1px_var(--line)]" style={{ background: `var(--${name})` }} />
+            <li key={name} className="flex items-center gap-3 rounded-md bg-card p-2 shadow-[inset_0_0_0_0.0625rem_var(--line)]">
+              <span className="size-10 shrink-0 rounded-sm shadow-[inset_0_0_0_0.0625rem_var(--line)]" style={{ background: `var(--${name})` }} />
               <span className="flex min-w-0 flex-col">
                 <code className="font-mono text-xs">{name}</code>
                 <span className="text-xs text-muted-foreground">{role}</span>
@@ -97,7 +97,7 @@ export default async function KitPage() {
           <p className="font-display text-xl font-semibold">Новые игры</p>
           <p>Играй прямо здесь или скачай архив и играй без интернета.</p>
           <p className="font-mono text-sm text-muted-foreground">v1.0.1 · 157 КБ · k8s-at-home</p>
-          <p style={{ font: '400 10px/14px var(--font-pixel)' }}>РЕКОРД 1284</p>
+          <p style={{ font: '400 0.625rem/0.875rem var(--font-pixel)' }}>РЕКОРД 1284</p>
         </div>
       </Section>
 
@@ -148,9 +148,9 @@ export default async function KitPage() {
       <Section title="Иконки" note="Сетка 24, обводка 2px, в каждой - пиксель brand. У трофея и пьедестала пиксель - coin.">
         <ul className="grid grid-cols-4 gap-3 sm:grid-cols-8">
           {ICON_NAMES.map((name) => (
-            <li key={name} className="flex flex-col items-center gap-2 rounded-md bg-card p-3 shadow-[inset_0_0_0_1px_var(--line)]">
+            <li key={name} className="flex flex-col items-center gap-2 rounded-md bg-card p-3 shadow-[inset_0_0_0_0.0625rem_var(--line)]">
               <Icon name={name} />
-              <code className="font-mono text-[10px] text-muted-foreground">{name}</code>
+              <code className="font-mono text-[0.625rem] text-muted-foreground">{name}</code>
             </li>
           ))}
         </ul>
@@ -208,7 +208,7 @@ export default async function KitPage() {
               <Icon name="menu" />
             </button>
           </div>
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2">
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 w-max max-w-[calc(100%-1.5rem)]">
             <HotbarDemo />
           </div>
         </Scene>
@@ -227,11 +227,11 @@ export default async function KitPage() {
               <div className="gf-panel__row">
                 <span>Дальность</span>
                 <span className="gf-stepper">
-                  <button type="button" className="gf-icon-btn" style={{ width: 32, height: 32 }} aria-label="Меньше">
+                  <button type="button" className="gf-icon-btn" style={{ width: '2rem', height: '2rem' }} aria-label="Меньше">
                     -
                   </button>
                   <b>6</b>
-                  <button type="button" className="gf-icon-btn" style={{ width: 32, height: 32 }} aria-label="Больше">
+                  <button type="button" className="gf-icon-btn" style={{ width: '2rem', height: '2rem' }} aria-label="Больше">
                     +
                   </button>
                 </span>
@@ -249,7 +249,7 @@ export default async function KitPage() {
         title="Rogue Destiny - Souls-like Roguelite"
         note="Специализированные компоненты хардкорного сурвайвала: интерактивная шкала Эфирного Перегрева мага с красной чертой риска (80-95%), механика серого здоровья (неизлечимой травмы плоти) и Нити Судьбы."
       >
-        <Scene className="flex items-center justify-center p-8 min-h-[260px]">
+        <Scene className="flex items-center justify-center p-8 min-h-[16.25rem]">
           <RogueDestinyHudDemo />
         </Scene>
       </Section>

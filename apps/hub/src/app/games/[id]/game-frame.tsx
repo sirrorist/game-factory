@@ -102,7 +102,7 @@ export function GameFrame({ gameId, gameOrigin, title, sandbox, allow, children 
           sandbox={sandbox}
           allow={allow}
           referrerPolicy="no-referrer"
-          className={isFullscreen ? 'h-full w-full bg-black' : 'h-[min(75dvh,680px)] min-h-[420px] w-full rounded-md border bg-black'}
+          className={isFullscreen ? 'h-full w-full bg-black' : 'gf-game-viewport w-full rounded-md border bg-black'}
         />
         {isFullscreen ? (
           <button

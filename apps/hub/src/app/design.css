@@ -6,8 +6,8 @@
 
 .gf-root {
   font-family: var(--font-body);
-  font-size: 15px;
-  line-height: 24px;
+  font-size: 0.9375rem;
+  line-height: 1.5rem;
   color: var(--ink);
   background: var(--bg-000);
   -webkit-font-smoothing: antialiased;
@@ -20,31 +20,31 @@
   --ledge: var(--line-strong);
   position: relative;
   display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
-  height: 40px; padding: 0 var(--space-4);
-  font: 600 15px/1 var(--font-body);
+  height: 2.5rem; padding: 0 var(--space-4);
+  font: 600 0.9375rem/1 var(--font-body);
   color: var(--ink);
   background: var(--bg-300);
   border: 0; border-radius: var(--radius-sm);
-  box-shadow: 0 3px 0 var(--ledge);
+  box-shadow: 0 0.1875rem 0 var(--ledge);
   cursor: pointer; user-select: none; white-space: nowrap; text-decoration: none;
   transform: translateY(0);
   transition: background-color var(--dur-fast) var(--ease-out), transform var(--dur-base) var(--ease-spring),
     box-shadow var(--dur-base) var(--ease-spring);
 }
-.gf-btn:hover { background: var(--bg-200); transform: translateY(-1px); box-shadow: 0 4px 0 var(--ledge); }
-.gf-btn:active { transform: translateY(3px); box-shadow: 0 0 0 var(--ledge); transition-duration: var(--dur-instant); }
-.gf-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.gf-btn:hover { background: var(--bg-200); transform: translateY(-0.0625rem); box-shadow: 0 0.25rem 0 var(--ledge); }
+.gf-btn:active { transform: translateY(0.1875rem); box-shadow: 0 0 0 var(--ledge); transition-duration: var(--dur-instant); }
+.gf-btn:focus-visible { outline: 0.125rem solid var(--focus); outline-offset: 0.1875rem; }
 .gf-btn[disabled] { opacity: 0.45; pointer-events: none; }
-.gf-btn svg { width: 18px; height: 18px; flex: none; }
+.gf-btn svg { width: 1.125rem; height: 1.125rem; flex: none; }
 .gf-btn--primary { --ledge: var(--brand-ledge); background: var(--brand); color: var(--on-brand); }
 .gf-btn--primary:hover { background: var(--brand-strong); }
 .gf-btn--danger { --ledge: var(--danger-ledge); background: var(--danger); color: var(--on-danger); }
 .gf-btn--danger:hover { background: var(--danger); filter: brightness(1.08); }
-.gf-btn--ghost { background: transparent; box-shadow: inset 0 0 0 1px var(--line-strong); }
-.gf-btn--ghost:hover { background: var(--bg-200); box-shadow: inset 0 0 0 1px var(--line-strong); }
-.gf-btn--ghost:active { transform: translateY(1px); box-shadow: inset 0 0 0 1px var(--line-strong); }
-.gf-btn--sm { height: 32px; padding: 0 var(--space-3); font-size: 13px; }
-.gf-btn--lg { height: 48px; padding: 0 var(--space-5); font-size: 17px; }
+.gf-btn--ghost { background: transparent; box-shadow: inset 0 0 0 0.0625rem var(--line-strong); }
+.gf-btn--ghost:hover { background: var(--bg-200); box-shadow: inset 0 0 0 0.0625rem var(--line-strong); }
+.gf-btn--ghost:active { transform: translateY(0.0625rem); box-shadow: inset 0 0 0 0.0625rem var(--line-strong); }
+.gf-btn--sm { height: 2rem; padding: 0 var(--space-3); font-size: 0.8125rem; }
+.gf-btn--lg { height: 3rem; padding: 0 var(--space-5); font-size: 1.0625rem; }
 /* Подпись-число в кнопке ("157 КБ"): тот же шрифт и линия, только тише. */
 .gf-btn__meta { font-weight: 500; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .gf-btn--primary .gf-btn__meta { color: inherit; opacity: 0.75; }
@@ -52,64 +52,64 @@
 /* ---------- Круглая кнопка: углы HUD и тулбары ---------- */
 .gf-icon-btn {
   display: inline-grid; place-items: center;
-  width: 40px; height: 40px; padding: 0;
+  width: 2.5rem; height: 2.5rem; padding: 0;
   color: var(--ink); background: var(--bg-300);
   border: 0; border-radius: var(--radius-pill); cursor: pointer;
   transition: background-color var(--dur-fast) var(--ease-out), transform var(--dur-base) var(--ease-spring);
 }
 .gf-icon-btn:hover { background: var(--bg-200); transform: scale(1.06); }
 .gf-icon-btn:active { transform: scale(0.94); transition-duration: var(--dur-instant); }
-.gf-icon-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.gf-icon-btn svg { width: 20px; height: 20px; }
-.gf-icon-btn--hud { color: var(--hud-ink); background: var(--hud); backdrop-filter: blur(6px); }
+.gf-icon-btn:focus-visible { outline: 0.125rem solid var(--focus); outline-offset: 0.125rem; }
+.gf-icon-btn svg { width: 1.25rem; height: 1.25rem; }
+.gf-icon-btn--hud { color: var(--hud-ink); background: var(--hud); backdrop-filter: blur(0.375rem); }
 .gf-icon-btn--hud:hover { background: var(--hud); }
 .gf-icon-btn--on { color: var(--on-brand); background: var(--brand); }
 
 /* ---------- Иконки: обводка - цвет текста, пиксель - brand ---------- */
-.gf-icon { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.gf-icon { width: 1.5rem; height: 1.5rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .gf-icon .px { fill: var(--brand); stroke: none; }
 .gf-icon--coin .px { fill: var(--coin); }
 
 /* ---------- Бейдж ---------- */
 .gf-badge {
   display: inline-flex; align-items: center; gap: var(--space-1);
-  height: 22px; padding: 0 var(--space-2);
-  font: 600 12px/1 var(--font-body); letter-spacing: 0.02em;
+  height: 1.375rem; padding: 0 var(--space-2);
+  font: 600 0.75rem/1 var(--font-body); letter-spacing: 0.02em;
   color: var(--ink); background: var(--bg-300);
   border-radius: var(--radius-xs);
 }
-.gf-badge--version { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); background: transparent; box-shadow: inset 0 0 0 1px var(--line-strong); }
+.gf-badge--version { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); background: transparent; box-shadow: inset 0 0 0 0.0625rem var(--line-strong); }
 .gf-badge--live { color: var(--ink); }
 .gf-badge--live::before {
-  content: ""; width: 6px; height: 6px; border-radius: 1px; background: var(--oneup);
+  content: ""; width: 0.375rem; height: 0.375rem; border-radius: 0.0625rem; background: var(--oneup);
   animation: gf-blink 1.6s steps(2, jump-none) infinite;
 }
-.gf-badge--new { font: 400 8px/12px var(--font-pixel); color: var(--on-coin); background: var(--coin); letter-spacing: 0; }
+.gf-badge--new { font: 400 0.5rem/0.75rem var(--font-pixel); color: var(--on-coin); background: var(--coin); letter-spacing: 0; }
 
 /* ---------- Карточка игры: картридж - рифлёный верх, обложка-наклейка ---------- */
 .gf-card {
   position: relative; display: flex; flex-direction: column;
-  padding-top: 14px;
+  padding-top: 0.875rem;
   background: var(--bg-100); border-radius: var(--radius-md);
-  box-shadow: var(--shadow-card), inset 0 0 0 1px var(--line);
+  box-shadow: var(--shadow-card), inset 0 0 0 0.0625rem var(--line);
   transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
 }
 /* Рифление сверху - как на корпусе картриджа: семь насечек по центру. */
 .gf-card::before {
-  content: ""; position: absolute; top: 5px; left: 50%; width: 52px; height: 4px; transform: translateX(-50%);
-  background: repeating-linear-gradient(90deg, var(--line-strong) 0 2px, transparent 2px 8px);
-  border-radius: 1px; opacity: 0.8;
+  content: ""; position: absolute; top: 0.3125rem; left: 50%; width: 3.25rem; height: 0.25rem; transform: translateX(-50%);
+  background: repeating-linear-gradient(90deg, var(--line-strong) 0 0.125rem, transparent 0.125rem 0.5rem);
+  border-radius: 0.0625rem; opacity: 0.8;
 }
-.gf-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lift), inset 0 0 0 1px var(--line-strong); }
+.gf-card:hover { transform: translateY(-0.25rem); box-shadow: var(--shadow-lift), inset 0 0 0 0.0625rem var(--line-strong); }
 .gf-card__cover {
   position: relative; margin: 0 var(--space-2); aspect-ratio: 16 / 9;
   background: var(--bg-300); border-radius: var(--radius-sm); overflow: hidden;
   /* Наклейка утоплена в корпус: рамка и внутренняя тень отделяют её от тела карточки. */
-  box-shadow: inset 0 0 0 1px var(--line);
+  box-shadow: inset 0 0 0 0.0625rem var(--line);
 }
 .gf-card__cover::before {
   content: ""; position: absolute; inset: 0; z-index: 1; border-radius: inherit; pointer-events: none;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 -24px 32px -24px rgba(0, 0, 0, 0.45);
+  box-shadow: inset 0 0 0 0.0625rem rgba(255, 255, 255, 0.08), inset 0 -1.5rem 2rem -1.5rem rgba(0, 0, 0, 0.45);
 }
 .gf-card__cover img, .gf-card__cover > svg { display: block; width: 100%; height: 100%; object-fit: cover; }
 /* Ссылка на обложке - на всю наклейку, даже когда картинки нет. */
@@ -124,161 +124,162 @@
 .gf-card:hover .gf-card__cover::after { transform: translateX(120%); }
 .gf-card__flag { position: absolute; left: var(--space-2); top: var(--space-2); z-index: 3; }
 .gf-card__body { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-4); flex: 1; }
-.gf-card__title { margin: 0; font: 600 17px/22px var(--font-display); letter-spacing: -0.01em; }
-.gf-card__desc { margin: 0; font-size: 13px; line-height: 20px; color: var(--ink-muted); }
+.gf-card__title { margin: 0; font: 600 1.0625rem/1.375rem var(--font-display); letter-spacing: -0.01em; }
+.gf-card__desc { margin: 0; font-size: 0.8125rem; line-height: 1.25rem; color: var(--ink-muted); }
 .gf-card__meta { display: flex; flex-wrap: wrap; gap: var(--space-1); }
 .gf-card__actions { display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-4) var(--space-4); }
-.gf-card__size { margin-left: auto; font: 500 13px/1 var(--font-body); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.gf-card__size { margin-left: auto; font: 500 0.8125rem/1 var(--font-body); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 
 /* ---------- Шапка сайта ---------- */
 .gf-header {
   display: flex; align-items: center; gap: var(--space-5);
-  height: 64px; padding: 0 var(--space-5);
-  background: var(--bg-100); box-shadow: inset 0 -1px 0 var(--line);
+  height: 4rem; padding: 0 var(--space-5);
+  background: var(--bg-100); box-shadow: inset 0 -0.0625rem 0 var(--line);
 }
 .gf-logo { display: inline-flex; align-items: center; gap: var(--space-3); color: var(--ink); text-decoration: none; }
-.gf-logo svg { width: 32px; height: 32px; transition: transform var(--dur-base) var(--ease-spring); }
+.gf-logo svg { width: 2rem; height: 2rem; transition: transform var(--dur-base) var(--ease-spring); }
 .gf-logo:hover svg { transform: rotate(-8deg) scale(1.06); }
-.gf-logo__word { font: 700 17px/1 var(--font-display); letter-spacing: -0.01em; }
+.gf-logo__word { font: 700 1.0625rem/1 var(--font-display); letter-spacing: -0.01em; }
 .gf-logo__word b { color: var(--brand); font-weight: 700; }
 .gf-nav { display: flex; gap: var(--space-1); margin-left: var(--space-2); }
 .gf-nav a {
   position: relative; padding: var(--space-2) var(--space-3);
-  font: 500 15px/1 var(--font-body); color: var(--ink-muted); text-decoration: none; border-radius: var(--radius-sm);
+  font: 500 0.9375rem/1 var(--font-body); color: var(--ink-muted); text-decoration: none; border-radius: var(--radius-sm);
   transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
 }
 .gf-nav a:hover { color: var(--ink); background: var(--bg-200); }
 .gf-nav a[aria-current="page"] { color: var(--ink); }
 .gf-nav a[aria-current="page"]::after {
-  content: ""; position: absolute; left: var(--space-3); right: var(--space-3); bottom: -1px; height: 3px;
-  background: var(--brand); border-radius: 2px;
+  content: ""; position: absolute; left: var(--space-3); right: var(--space-3); bottom: -0.0625rem; height: 0.1875rem;
+  background: var(--brand); border-radius: 0.125rem;
 }
 .gf-header__end { margin-left: auto; display: flex; align-items: center; gap: var(--space-2); }
 
 /* ---------- Форма входа (полей в дизайн-системе пока нет - добавить там, D-057) ---------- */
 .gf-form { display: flex; flex-direction: column; gap: var(--space-3); }
-.gf-field { display: flex; flex-direction: column; gap: var(--space-1); font: 600 13px/18px var(--font-body); color: var(--ink-muted); }
+.gf-field { display: flex; flex-direction: column; gap: var(--space-1); font: 600 0.8125rem/1.125rem var(--font-body); color: var(--ink-muted); }
 .gf-input {
-  height: 40px; padding: 0 var(--space-3);
-  font: 400 15px/1 var(--font-body); color: var(--ink);
+  height: 2.5rem; padding: 0 var(--space-3);
+  font: 400 0.9375rem/1 var(--font-body); color: var(--ink);
   background: var(--bg-100); border: 0; border-radius: var(--radius-sm);
-  box-shadow: inset 0 0 0 1px var(--line-strong);
+  box-shadow: inset 0 0 0 0.0625rem var(--line-strong);
 }
-.gf-input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.gf-form__error { margin: 0; font-size: 13px; line-height: 20px; color: var(--danger); }
-.gf-user { display: inline-flex; align-items: center; gap: var(--space-2); font: 600 14px/1 var(--font-body); color: var(--ink); text-decoration: none; }
-.gf-user svg { width: 20px; height: 20px; }
+.gf-input:focus-visible { outline: 0.125rem solid var(--focus); outline-offset: 0.125rem; }
+.gf-form__error { margin: 0; font-size: 0.8125rem; line-height: 1.25rem; color: var(--danger); }
+.gf-user { display: inline-flex; align-items: center; gap: var(--space-2); font: 600 0.875rem/1 var(--font-body); color: var(--ink); text-decoration: none; }
+.gf-user svg { width: 1.25rem; height: 1.25rem; }
 
 /* ---------- Тулбар игры и плашка выхода из полного экрана ---------- */
 .gf-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .gf-record {
   display: inline-flex; align-items: center; gap: var(--space-2);
-  height: 40px; padding: 0 var(--space-3) 0 var(--space-2);
-  background: var(--bg-100); border-radius: var(--radius-sm); box-shadow: inset 0 0 0 1px var(--line);
+  height: 2.5rem; padding: 0 var(--space-3) 0 var(--space-2);
+  background: var(--bg-100); border-radius: var(--radius-sm); box-shadow: inset 0 0 0 0.0625rem var(--line);
 }
-.gf-record__label { font: 600 11px/1 var(--font-body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-muted); }
-.gf-record__value { display: inline-block; font: 600 16px/1 var(--font-display); letter-spacing: 0.01em; font-variant-numeric: tabular-nums; }
-.gf-record--bump .gf-record__value { animation: gf-bump var(--dur-slow) var(--ease-spring); color: var(--coin); }
+.gf-record__label { font: 600 0.6875rem/1 var(--font-body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-muted); }
+.gf-record__value { display: inline-block; font: 600 1rem/1 var(--font-display); letter-spacing: 0.01em; font-variant-numeric: tabular-nums; }
+.gf-record--bump .gf-record__value { animation: gf-bump var(--dur-slow) var(--ease-spring); color: var(--coin-ink); }
 .gf-toolbar__spacer { flex: 1; }
 .gf-frame {
   position: relative; width: 100%; aspect-ratio: 16 / 10; border-radius: var(--radius-md);
-  background: #000; box-shadow: inset 0 0 0 1px var(--line); overflow: hidden;
+  background: #000; box-shadow: inset 0 0 0 0.0625rem var(--line); overflow: hidden;
 }
+.gf-game-viewport { height: min(75dvh, 42.5rem); min-height: min(26.25rem, 75dvh); }
 /* Кнопка выхода - ниже выреза камеры (env() даёт viewport-fit=cover в layout.tsx; без выреза он 0).
    Саму игру полями не сжимаем: k8s-at-home узнаёт полный экран хаба по размеру окна (П-047). */
 .gf-exit-pill {
-  position: absolute; left: 50%; top: calc(env(safe-area-inset-top, 0px) + var(--space-3)); transform: translateX(-50%);
+  position: absolute; left: 50%; top: calc(env(safe-area-inset-top, 0rem) + var(--space-3)); transform: translateX(-50%);
   display: inline-flex; align-items: center; gap: var(--space-2);
-  height: 36px; padding: 0 var(--space-4) 0 var(--space-3);
-  font: 600 13px/1 var(--font-body); color: var(--hud-ink); background: var(--hud-strong);
-  border: 1px solid var(--hud-line); border-radius: var(--radius-pill); backdrop-filter: blur(8px); cursor: pointer;
+  height: 2.25rem; padding: 0 var(--space-4) 0 var(--space-3);
+  font: 600 0.8125rem/1 var(--font-body); color: var(--hud-ink); background: var(--hud-strong);
+  border: 0.0625rem solid var(--hud-line); border-radius: var(--radius-pill); backdrop-filter: blur(0.5rem); cursor: pointer;
   opacity: 0.92; transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-base) var(--ease-spring);
 }
 .gf-exit-pill:hover { opacity: 1; transform: translateX(-50%) scale(1.04); }
-.gf-exit-pill svg { width: 18px; height: 18px; }
+.gf-exit-pill svg { width: 1.125rem; height: 1.125rem; }
 
 /* ---------- Тост ---------- */
 .gf-toast {
   display: inline-flex; align-items: center; gap: var(--space-2);
   padding: var(--space-2) var(--space-4) var(--space-2) var(--space-3);
-  font-size: 13px; line-height: 20px; color: var(--hud-ink); background: var(--hud);
-  border-radius: var(--radius-sm); backdrop-filter: blur(8px);
+  font-size: 0.8125rem; line-height: 1.25rem; color: var(--hud-ink); background: var(--hud);
+  border-radius: var(--radius-sm); backdrop-filter: blur(0.5rem);
   animation: gf-rise var(--dur-base) var(--ease-out) both;
 }
-.gf-toast::before { content: ""; width: 8px; height: 8px; border-radius: 1px; background: var(--brand); flex: none; }
+.gf-toast::before { content: ""; width: 0.5rem; height: 0.5rem; border-radius: 0.0625rem; background: var(--brand); flex: none; }
 .gf-toast--ok::before { background: var(--oneup); }
 .gf-toast--warn::before { background: var(--coin); }
 .gf-toast--err::before { background: var(--danger); }
-.gf-toast code { font: 12px/1 var(--font-mono); }
+.gf-toast code { font: 0.75rem/1 var(--font-mono); }
 
 /* ---------- HUD игры: счётчики сверху, панель блоков снизу ---------- */
 .gf-hud-top {
   display: inline-flex; align-items: center; gap: var(--space-1);
-  padding: var(--space-1); background: var(--hud); border: 1px solid var(--hud-line);
-  border-radius: var(--radius-sm); backdrop-filter: blur(6px); color: var(--hud-ink);
+  padding: var(--space-1); background: var(--hud); border: 0.0625rem solid var(--hud-line);
+  border-radius: var(--radius-sm); backdrop-filter: blur(0.375rem); color: var(--hud-ink);
 }
-.gf-hud-stat { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 var(--space-2); }
-.gf-hud-stat + .gf-hud-stat { box-shadow: inset 1px 0 0 var(--hud-line); }
-.gf-hud-stat svg { width: 16px; height: 16px; }
-.gf-hud-stat b { font: 600 14px/1 var(--font-display); font-variant-numeric: tabular-nums; }
-.gf-hud-stat span { font: 600 10px/1 var(--font-body); letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.7; }
+.gf-hud-stat { display: inline-flex; align-items: center; gap: 0.375rem; height: 1.75rem; padding: 0 var(--space-2); }
+.gf-hud-stat + .gf-hud-stat { box-shadow: inset 0.0625rem 0 0 var(--hud-line); }
+.gf-hud-stat svg { width: 1rem; height: 1rem; }
+.gf-hud-stat b { font: 600 0.875rem/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.gf-hud-stat span { font: 600 0.625rem/1 var(--font-body); letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.7; }
 
 /* Панель блоков - лоток: ячейки утоплены, выбранная выезжает вверх и подсвечена пикселем снизу. */
 .gf-hotbar {
-  position: relative; display: inline-flex; align-items: flex-end; gap: 6px; padding: 8px 10px 10px;
-  background: var(--hud); border: 1px solid var(--hud-line); border-radius: var(--radius-lg);
-  backdrop-filter: blur(8px);
+  position: relative; display: inline-flex; align-items: flex-end; gap: 0.375rem; padding: 0.5rem 0.625rem 0.625rem;
+  background: var(--hud); border: 0.0625rem solid var(--hud-line); border-radius: var(--radius-lg);
+  backdrop-filter: blur(0.5rem);
 }
 .gf-slot {
   position: relative; display: grid; place-items: center;
-  width: 46px; height: 46px; padding: 7px;
+  width: 2.875rem; height: 2.875rem; padding: 0.4375rem;
   background: rgba(0, 0, 0, 0.28); border: 0; border-radius: var(--radius-sm); cursor: pointer;
-  box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0.125rem 0 rgba(0, 0, 0, 0.35), inset 0 0 0 0.0625rem rgba(255, 255, 255, 0.06);
   opacity: 0.78;
   transition: transform var(--dur-base) var(--ease-spring), opacity var(--dur-fast) var(--ease-out),
     background-color var(--dur-fast) var(--ease-out);
 }
 .gf-slot:hover { opacity: 1; }
 .gf-slot[aria-pressed="true"] {
-  opacity: 1; transform: translateY(-6px) scale(1.1);
+  opacity: 1; transform: translateY(-0.375rem) scale(1.1);
   background: rgba(88, 166, 255, 0.2);
-  box-shadow: inset 0 0 0 2px var(--brand), 0 6px 14px rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 0 0 0.125rem var(--brand), 0 0.375rem 0.875rem rgba(0, 0, 0, 0.35);
 }
 .gf-slot[aria-pressed="true"]::after {
-  content: ""; position: absolute; bottom: -9px; left: 50%; width: 6px; height: 4px; margin-left: -3px;
-  background: var(--brand); border-radius: 1px;
+  content: ""; position: absolute; bottom: -0.5625rem; left: 50%; width: 0.375rem; height: 0.25rem; margin-left: -0.1875rem;
+  background: var(--brand); border-radius: 0.0625rem;
 }
-.gf-slot__key { position: absolute; right: 4px; bottom: 3px; font: 600 9px/1 var(--font-mono); color: var(--hud-ink); opacity: 0.55; }
+.gf-slot__key { position: absolute; right: 0.25rem; bottom: 0.1875rem; font: 600 0.5625rem/1 var(--font-mono); color: var(--hud-ink); opacity: 0.55; }
 .gf-slot img, .gf-slot svg { width: 100%; height: 100%; image-rendering: pixelated; }
 .gf-hotbar__name {
   /* По центру без transform: анимация gf-rise свой transform задаёт и сдвиг -50% затёрла бы. */
-  position: absolute; left: 0; right: 0; bottom: calc(100% + 10px); width: max-content; margin: 0 auto;
-  padding: 3px 10px; font: 600 12px/18px var(--font-body); color: var(--hud-ink); white-space: nowrap;
-  background: var(--hud-strong); border: 1px solid var(--hud-line); border-radius: var(--radius-pill);
+  position: absolute; left: 0; right: 0; bottom: calc(100% + 0.625rem); width: max-content; margin: 0 auto;
+  padding: 0.1875rem 0.625rem; font: 600 0.75rem/1.125rem var(--font-body); color: var(--hud-ink); white-space: nowrap;
+  background: var(--hud-strong); border: 0.0625rem solid var(--hud-line); border-radius: var(--radius-pill);
   animation: gf-rise var(--dur-base) var(--ease-out) both;
 }
 
 /* ---------- Панель меню игры ---------- */
 .gf-panel {
-  width: min(420px, 100%); display: flex; flex-direction: column; gap: var(--space-3);
+  width: min(26.25rem, 100%); display: flex; flex-direction: column; gap: var(--space-3);
   padding: var(--space-5); background: var(--bg-100); border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-panel), inset 0 0 0 1px var(--line);
+  box-shadow: var(--shadow-panel), inset 0 0 0 0.0625rem var(--line);
   animation: gf-pop var(--dur-slow) var(--ease-spring) both;
 }
-.gf-panel__title { margin: 0; font: 700 28px/32px var(--font-display); letter-spacing: -0.015em; }
-.gf-panel__sub { margin: -6px 0 var(--space-1); font: 13px/20px var(--font-mono); color: var(--ink-muted); }
+.gf-panel__title { margin: 0; font: 700 1.75rem/2rem var(--font-display); letter-spacing: -0.015em; }
+.gf-panel__sub { margin: -0.375rem 0 var(--space-1); font: 0.8125rem/1.25rem var(--font-mono); color: var(--ink-muted); }
 .gf-panel__row { display: flex; align-items: center; gap: var(--space-2); }
 .gf-panel__row > span { flex: 1; color: var(--ink-muted); }
 .gf-stepper { display: inline-flex; align-items: center; gap: var(--space-1); }
-.gf-stepper b { min-width: 28px; text-align: center; font: 600 15px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
-.gf-panel__note { margin: 0; font-size: 12px; line-height: 16px; color: var(--ink-subtle); }
+.gf-stepper b { min-width: 1.75rem; text-align: center; font: 600 0.9375rem/1 var(--font-mono); font-variant-numeric: tabular-nums; }
+.gf-panel__note { margin: 0; font-size: 0.75rem; line-height: 1rem; color: var(--ink-subtle); }
 
 /* ---------- Кнопка "Ещё раз" в превью: перезапускает анимацию ---------- */
 .gf-replay { position: absolute; right: var(--space-3); top: var(--space-3); z-index: 5; }
 
 /* ---------- Движение ---------- */
-@keyframes gf-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-@keyframes gf-pop { from { opacity: 0; transform: scale(0.96) translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes gf-rise { from { opacity: 0; transform: translateY(0.5rem); } to { opacity: 1; transform: none; } }
+@keyframes gf-pop { from { opacity: 0; transform: scale(0.96) translateY(0.375rem); } to { opacity: 1; transform: none; } }
 @keyframes gf-bump { 0% { transform: scale(1); } 40% { transform: scale(1.25); } 100% { transform: scale(1); } }
 @keyframes gf-blink { 50% { opacity: 0.35; } }
 
@@ -287,4 +288,45 @@
   .gf-hotbar__name { animation: none !important; }
   .gf-toast, .gf-panel, .gf-record--bump .gf-record__value, .gf-badge--live::before { animation: none !important; }
   .gf-card:hover, .gf-btn:hover, .gf-icon-btn:hover { transform: none; }
+}
+
+/* Длинные названия и имена не расширяют колонку страницы. */
+.gf-card__body, .gf-header__end { min-width: 0; }
+.gf-card__actions { flex-wrap: wrap; }
+.gf-user { min-width: 0; max-width: 14rem; }
+.gf-user svg { flex: 0 0 auto; }
+.gf-user__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gf-sign-out__icon { display: none; }
+@media (max-width: 639px) {
+  /* Девять демонстрационных ячеек остаются достижимыми на узкой витрине. */
+  .gf-hotbar--demo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .gf-header { height: auto; min-height: 4rem; }
+  .gf-header__inner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    gap: 0.5rem;
+    padding-block: 0.5rem;
+  }
+  .gf-header__inner > .gf-logo { grid-column: 1; grid-row: 1; gap: 0.5rem; min-width: 0; }
+  .gf-header .gf-logo__word { font-size: 1rem; white-space: nowrap; }
+  .gf-header__end { grid-column: 2; grid-row: 1; margin: 0; flex-wrap: nowrap; gap: 0.5rem; }
+  .gf-header__end .gf-user { width: 3rem; height: 3rem; justify-content: center; border-radius: var(--radius-sm); background: var(--bg-300); }
+  .gf-header__end .gf-user__name { display: none; }
+  .gf-header__end .gf-btn { min-height: 3rem; }
+  .gf-header__inner > .gf-nav { grid-column: 1 / -1; grid-row: 2; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); width: 100%; margin: 0; gap: 0.5rem; }
+  .gf-header .gf-nav a { display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 3rem; padding: 0.5rem; text-align: center; }
+}
+@media (max-width: 379px) {
+  .gf-header .gf-logo__word { display: none; }
+  .gf-sign-out { width: 3rem; padding: 0; }
+  .gf-sign-out__icon { display: block; }
+  .gf-sign-out__text { display: none; }
+}
+
+/* Режим касаний не зависит от ориентации или ширины планшета. */
+@media (pointer: coarse) {
+  .gf-btn, .gf-icon-btn, .gf-input, .gf-nav a, .gf-user, .gf-exit-pill, .gf-back-link, .gf-header .gf-logo { min-height: 3rem; }
+  .gf-icon-btn, .gf-slot, .gf-header .gf-logo { min-width: 3rem; }
+  .gf-slot { min-height: 3rem; }
 }

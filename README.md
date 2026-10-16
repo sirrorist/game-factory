@@ -73,3 +73,14 @@ docs/                 документация
 Правила агента, общие для всех проектов, приезжают из `global-agent-kit`, правила
 этого проекта - в [`CLAUDE.md`](CLAUDE.md). Порядок работы - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md),
 работа с продом руками - [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
+
+## Сравнение UI до/после (только dev)
+
+Общий инструмент для сайта и всех игр — [tests/ui/README.md](tests/ui/README.md).
+
+```bash
+pnpm ui:list
+pnpm ui:baseline hub --ref HEAD --run header
+pnpm ui:preview hub --run header
+# Для игры вместо hub укажите её id; это отдельная команда, не часть запуска прода.
+```

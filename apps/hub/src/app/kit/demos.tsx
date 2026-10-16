@@ -44,7 +44,7 @@ function Cube({ top, left, right }: { top: string; left: string; right: string }
 export function HotbarDemo() {
   const [slot, setSlot] = useState(7);
   return (
-    <div className="gf-hotbar">
+    <div className="gf-hotbar gf-hotbar--demo">
       <span key={slot} className="gf-hotbar__name">
         {BLOCKS[slot]![0]}
       </span>
@@ -78,7 +78,7 @@ export function RogueDestinyHudDemo() {
       <div className="flex flex-col gap-1.5">
         <div className="flex justify-between text-xs font-bold text-slate-300">
           <span>ПЛОТЬ (HP)</span>
-          <span className="font-mono text-slate-200">{hp} / 100 <span className="text-slate-400 text-[10px]">(Травма: {greyHp}%)</span></span>
+          <span className="font-mono text-slate-200">{hp} / 100 <span className="text-slate-400 text-[0.625rem]">(Травма: {greyHp}%)</span></span>
         </div>
         <div className="relative h-3 w-full rounded bg-slate-900 overflow-hidden border border-slate-700">
           {/* Серое HP (травма) */}
@@ -102,7 +102,7 @@ export function RogueDestinyHudDemo() {
           <div
             className={`h-full transition-all duration-200 ${
               inRedline
-                ? 'bg-gradient-to-r from-sky-500 via-amber-400 to-red-500 shadow-[0_0_12px_rgba(245,158,11,0.8)]'
+                ? 'bg-gradient-to-r from-sky-500 via-amber-400 to-red-500 shadow-[0_0_0.75rem_rgba(245,158,11,0.8)]'
                 : 'bg-gradient-to-r from-sky-600 to-sky-400'
             }`}
             style={{ width: `${heat}%` }}
@@ -122,6 +122,7 @@ export function RogueDestinyHudDemo() {
         <button
           type="button"
           className="gf-btn gf-btn--ghost gf-btn--sm flex-1"
+          style={{ color: 'var(--hud-ink)' }}
           onClick={() => setHeat((h) => Math.max(0, h - 20))}
         >
           Удар (-20%)
@@ -140,4 +141,3 @@ export function RogueDestinyHudDemo() {
     </div>
   );
 }
-

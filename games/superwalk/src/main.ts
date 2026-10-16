@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GameFactory, type Session } from '@gf/game-sdk';
 import { fillIcons, setIcon } from './icons.ts';
 import { Input } from './input.ts';
+import { applyUiScale } from './ui-scale.ts';
 import { stepPlayer, getTerrainHeight, getSurfaceHeight, DEFAULT_PLAYER_PARAMS, type PlayerState, type PlayerParams } from './core/movement.ts';
 import { generateWorld, type WorldData } from './core/world.ts';
 import {
@@ -40,8 +41,8 @@ import {
   type UpgradeOption,
 } from './core/upgrades.ts';
 import { calculateScore, isAllowedGameOverKey } from './core/scoring.ts';
-import { MetaWalletManager } from './meta/wallet.ts';
-import { ForestCasino, type SkinItem } from './meta/casino.ts';
+import { MetaWalletManager, type CaseOpening } from './meta/wallet.ts';
+import { ForestCasino, SKINS_COLLECTION, SLOT_SPIN_COST, type SkinItem } from './meta/casino.ts';
 import { playTickSound, playReelStopSound, playWinChime, playRareDropSound } from './meta/sound.ts';
 import './style.css';
 
@@ -294,6 +295,18 @@ class SuperwalkApp {
   private walletManager: MetaWalletManager;
   private walletModalOpen = false;
   private currentWalletTab: 'slots' | 'cases' | 'skins' | 'withdraw' = 'slots';
+  private walletBusy = false;
+  private slotPresentationBalance: number | null = null;
+  private caseSpinning = false;
+  private caseWinningIndex: number | null = null;
+  private caseAnimation: Animation | null = null;
+  private walletOpener: HTMLElement | null = null;
+  private walletFromMenu = false;
+  private walletBackground = new Map<HTMLElement, boolean>();
+  private currentMenuTab: 'items' | 'stats' = 'items';
+  private menuPages = { items: 0, stats: 0 };
+  private gameoverPage = 0;
+  private skinsPage = 0;
 
   private fullscreenExitAt = -Infinity;
   private wasHostFullscreen = false;
@@ -751,7 +764,9 @@ class SuperwalkApp {
         }
       },
       gesture: () => undefined,
-      toggleDebug: () => this.toggleDebug(),
+      toggleDebug: () => {
+        if (!this.walletModalOpen && !this.isGameOver) this.toggleDebug();
+      },
     });
     if (touchDevice) this.input.enableTouch();
     try {
@@ -781,9 +796,18 @@ class SuperwalkApp {
     this.updateWithdrawCalculations();
 
     new ResizeObserver(() => this.resize()).observe($('app'));
+    // Высота HUD меняется от количества предметов, ширины окна и загрузки шрифта.
+    const feedbackLayout = new ResizeObserver(() => this.positionFeedback());
+    feedbackLayout.observe(document.querySelector('.gf-hud-left-group')!);
+    feedbackLayout.observe($('debug'));
+    feedbackLayout.observe($('boss-hud'));
+    feedbackLayout.observe($('btn-jump'));
+    feedbackLayout.observe($('corner'));
+    new MutationObserver(() => this.positionFeedback()).observe($('stick'), { attributes: true, attributeFilter: ['class', 'style'] });
     this.resize();
 
     this.bindUi();
+    this.resumeCaseOpening();
 
     requestAnimationFrame((t) => this.tick(t));
   }
@@ -793,11 +817,26 @@ class SuperwalkApp {
     $('btn-resume').addEventListener('click', () => this.closeMenu());
     $('btn-camera-toggle').addEventListener('click', () => this.toggleAutoCamera());
     $('btn-debug-toggle').addEventListener('click', () => this.toggleDebug());
+    for (const tab of ['items', 'stats'] as const) {
+      $(`menu-tab-${tab}`).addEventListener('click', () => this.switchMenuTab(tab));
+      $(`menu-tab-${tab}`).addEventListener('keydown', event => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const next = event.key === 'Home' ? 'items' : event.key === 'End' ? 'stats' : tab === 'items' ? 'stats' : 'items';
+        this.switchMenuTab(next);
+        $(`menu-tab-${next}`).focus();
+      });
+    }
+    $('menu-page-prev').addEventListener('click', () => { this.menuPages[this.currentMenuTab]--; this.updateMenuPagination(); });
+    $('menu-page-next').addEventListener('click', () => { this.menuPages[this.currentMenuTab]++; this.updateMenuPagination(); });
+    new ResizeObserver(() => this.updateMenuPagination()).observe(document.querySelector('.gf-menu-overview')!);
+    $('gameover-page-prev').addEventListener('click', () => { this.gameoverPage--; this.updateGameoverPagination(); });
+    $('gameover-page-next').addEventListener('click', () => { this.gameoverPage++; this.updateGameoverPagination(); });
+    new ResizeObserver(() => this.updateGameoverPagination()).observe($('gameover-items-list'));
 
     // Gram Wallet ($GFC, Слоты, Кейсы, AMM)
     $('btn-wallet').addEventListener('click', () => this.openWalletModal());
     $('btn-menu-wallet').addEventListener('click', () => {
-      this.closeMenu();
       this.openWalletModal();
     });
     $('btn-wallet-close').addEventListener('click', () => this.closeWalletModal());
@@ -809,13 +848,29 @@ class SuperwalkApp {
 
     $('btn-slot-spin').addEventListener('click', () => this.handleSlotSpin());
     $('btn-open-case').addEventListener('click', () => this.handleCaseOpen());
+    $('skins-page-prev').addEventListener('click', () => { this.skinsPage--; this.updateSkinsPagination(); });
+    $('skins-page-next').addEventListener('click', () => { this.skinsPage++; this.updateSkinsPagination(); });
+    new ResizeObserver(() => this.updateSkinsPagination()).observe($('skins-grid'));
     $('btn-exec-withdraw').addEventListener('click', () => this.handleWithdraw());
-    $('input-withdraw-amount').addEventListener('input', () => this.updateWithdrawCalculations());
+    $('input-withdraw-amount').addEventListener('input', () => {
+      if (!this.walletBusy) $('withdraw-status-box').hidden = true;
+      this.updateWithdrawCalculations();
+    });
     document.getElementById('btn-withdraw-max')?.addEventListener('click', () => {
       const input = document.getElementById('input-withdraw-amount') as HTMLInputElement | null;
       if (input) {
-        input.value = String(Math.max(10, this.walletManager.getBalance()));
+        if (!this.walletBusy) $('withdraw-status-box').hidden = true;
+        input.value = String(Math.max(0, Math.min(Number(input.max), this.slotPresentationBalance ?? this.walletManager.getBalance())));
         this.updateWithdrawCalculations();
+      }
+    });
+    new ResizeObserver(() => {
+      if (this.caseSpinning) this.retargetCaseAnimation();
+      else if (this.caseWinningIndex !== null) this.alignCaseWinner();
+    }).observe($('case-roulette-container'));
+    document.addEventListener('focusin', (event) => {
+      if (this.walletModalOpen && event.target instanceof Node && !$('wallet-modal').contains(event.target)) {
+        $('btn-wallet-close').focus();
       }
     });
 
@@ -857,8 +912,32 @@ class SuperwalkApp {
     }
 
     window.addEventListener('keydown', (e: KeyboardEvent) => {
+      // В кошельке Tab перемещает фокус формы, Esc закрывает только кошелёк.
+      if (this.walletModalOpen) {
+        if (e.code === 'Tab') {
+          e.preventDefault();
+          const controls = [...$('wallet-modal').querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')].filter(el => el.checkVisibility());
+          const index = controls.indexOf(document.activeElement as HTMLElement);
+          const next = index < 0 ? (e.shiftKey ? controls.length - 1 : 0) : (index + (e.shiftKey ? -1 : 1) + controls.length) % controls.length;
+          controls[next]?.focus();
+        } else if (e.code === 'Escape') {
+          e.preventDefault();
+          this.closeWalletModal();
+        }
+        return;
+      }
       if (this.isGameOver) {
+        if (e.code === 'Tab') {
+          e.preventDefault();
+          const controls = [...$('game-over-modal').querySelectorAll<HTMLButtonElement>('button:not([disabled])')].filter(el => el.checkVisibility());
+          const index = controls.indexOf(document.activeElement as HTMLButtonElement);
+          const next = index < 0 ? (e.shiftKey ? controls.length - 1 : 0) : (index + (e.shiftKey ? -1 : 1) + controls.length) % controls.length;
+          controls[next]?.focus();
+          return;
+        }
         if (isAllowedGameOverKey(e.code)) {
+          // Клавиши активируют выбранную кнопку страниц, а не общий рестарт.
+          if (e.target instanceof HTMLElement && e.target.closest('#game-over-modal button')) return;
           e.preventDefault();
           this.restartGame();
         } else if (['Tab', 'Escape', 'KeyB', 'Digit1', 'Digit2', 'Digit3', 'Digit0'].includes(e.code)) {
@@ -892,6 +971,7 @@ class SuperwalkApp {
       }
 
       if (e.code === 'Tab') {
+        if (this.paused) return; // В паузе Tab перемещает фокус; игровой обзор работает при беге.
         e.preventDefault();
         if (!e.repeat && !this.tabModalOpen && !this.upgradeModalOpen) {
           this.openTabModal();
@@ -922,6 +1002,7 @@ class SuperwalkApp {
 
     // Удержание Tab (Hold-to-open): при отпускании клавиши окно автоматически закрывается
     window.addEventListener('keyup', (e) => {
+      if (this.walletModalOpen) return;
       if (this.isGameOver) {
         if (e.code === 'Tab') e.preventDefault();
         return;
@@ -1074,7 +1155,7 @@ class SuperwalkApp {
   }
 
   private toggleTabModal(): void {
-    if (this.upgradeModalOpen || this.isGameOver) return;
+    if (this.upgradeModalOpen || this.isGameOver || this.walletModalOpen) return;
     if (this.tabModalOpen) {
       this.closeTabModal();
     } else {
@@ -1083,7 +1164,7 @@ class SuperwalkApp {
   }
 
   private openTabModal(): void {
-    if (this.upgradeModalOpen || this.isGameOver) return;
+    if (this.upgradeModalOpen || this.isGameOver || this.walletModalOpen) return;
     this.tabModalOpen = true;
     $('tab-modal').hidden = false;
     // Игра НЕ встает на паузу, движение персонажа на WASD остается активным!
@@ -1101,6 +1182,7 @@ class SuperwalkApp {
   }
 
   private renderInventoryItems(container: HTMLElement, isCompact = false): void {
+    const scrollTop = container.scrollTop;
     container.innerHTML = '';
     let hasAny = false;
 
@@ -1111,6 +1193,7 @@ class SuperwalkApp {
       hasAny = true;
       const row = document.createElement('div');
       row.className = 'gf-item-row gf-item-row--weapon';
+      row.title = `${cfg.name}: ${cfg.description}`;
       row.innerHTML = `
         <div class="gf-item-row__head">
           <span class="gf-item-row__name">⚔ ${cfg.name}</span>
@@ -1129,6 +1212,7 @@ class SuperwalkApp {
       hasAny = true;
       const row = document.createElement('div');
       row.className = 'gf-item-row gf-item-row--tome';
+      row.title = `${cfg.name}: ${cfg.description}`;
       row.innerHTML = `
         <div class="gf-item-row__head">
           <span class="gf-item-row__name">📖 ${cfg.name}</span>
@@ -1146,6 +1230,7 @@ class SuperwalkApp {
       hasAny = true;
       const row = document.createElement('div');
       row.className = `gf-item-row gf-item-row--${cfg.rarity}`;
+      row.title = `${cfg.name}: ${cfg.description}`;
       row.innerHTML = `
         <div class="gf-item-row__head">
           <span class="gf-item-row__name">${cfg.icon} ${cfg.name}</span>
@@ -1162,9 +1247,11 @@ class SuperwalkApp {
       empty.textContent = 'Снаряжение пока не собрано. Ищите золотые сундуки на холмах!';
       container.appendChild(empty);
     }
+    container.scrollTop = scrollTop;
   }
 
   private renderHeroStats(container: HTMLElement, isCompact = false): void {
+    const scrollTop = container.scrollTop;
     container.innerHTML = '';
     const cs = this.combatState;
     const itemBonuses = getItemStatBonuses(this.ownedItems, cs.heroMaxHp, cs.heroHp);
@@ -1209,6 +1296,7 @@ class SuperwalkApp {
     for (const st of stats) {
       const card = document.createElement('div');
       card.className = 'gf-stat-card';
+      card.title = `${st.label}: ${st.val}. ${st.sub}`;
       card.innerHTML = `
         <span class="gf-stat-card__label">${st.label}</span>
         <span class="gf-stat-card__val">${st.val}</span>
@@ -1216,6 +1304,7 @@ class SuperwalkApp {
       `;
       container.appendChild(card);
     }
+    container.scrollTop = scrollTop;
   }
 
   private updateDashboard(): void {
@@ -1229,18 +1318,57 @@ class SuperwalkApp {
       const foxMarker = document.getElementById('map-fox-marker');
       if (foxMarker) {
         const arenaR = 60.0;
-        const radarR = 70.0;
+        const radarR = 70.0 / 16;
         const normX = Math.max(-1, Math.min(1, this.playerState.x / arenaR));
         const normZ = Math.max(-1, Math.min(1, this.playerState.z / arenaR));
-        foxMarker.style.transform = `translate(${normX * radarR}px, ${normZ * radarR}px)`;
+        foxMarker.style.transform = `translate(${normX * radarR}rem, ${normZ * radarR}rem)`;
       }
     }
     if (this.paused && !$('menu').hidden) {
       const itemsContainer = document.getElementById('menu-items-list');
       const statsContainer = document.getElementById('menu-stats-grid');
-      if (itemsContainer) this.renderInventoryItems(itemsContainer, true);
+      if (itemsContainer) this.renderInventoryItems(itemsContainer);
       if (statsContainer) this.renderHeroStats(statsContainer, true);
+      this.updateMenuPagination();
     }
+  }
+
+  private switchMenuTab(tab: 'items' | 'stats'): void {
+    this.currentMenuTab = tab;
+    for (const item of ['items', 'stats'] as const) {
+      const active = item === tab;
+      $(`menu-pane-${item}`).hidden = !active;
+      $(`menu-tab-${item}`).setAttribute('aria-selected', String(active));
+      $(`menu-tab-${item}`).tabIndex = active ? 0 : -1;
+    }
+    this.updateMenuPagination();
+  }
+
+  private updateMenuPagination(): void {
+    if ($('menu').hidden) return;
+    const tab = this.currentMenuTab;
+    const list = tab === 'items' ? $('menu-items-list') : $('menu-stats-grid');
+    const cards = [...list.querySelectorAll<HTMLElement>('.gf-item-row,.gf-stat-card')];
+    if (!cards.length) {
+      $('menu-page-label').textContent = '1 / 1';
+      $('menu-page-prev').toggleAttribute('disabled', true);
+      $('menu-page-next').toggleAttribute('disabled', true);
+      return;
+    }
+    const layout = getComputedStyle(list);
+    const columns = Math.max(1, layout.gridTemplateColumns.trim().split(/\s+/).length);
+    const gap = parseFloat(layout.rowGap) || 0;
+    const height = parseFloat(getComputedStyle(cards[0]!).height);
+    const rows = Math.max(1, Math.floor((list.clientHeight + gap) / (height + gap)));
+    const perPage = columns * rows;
+    const pages = Math.max(1, Math.ceil(cards.length / perPage));
+    const page = Math.max(0, Math.min(pages - 1, this.menuPages[tab]));
+    this.menuPages[tab] = page;
+    cards.forEach((card, index) => { card.hidden = index < page * perPage || index >= (page + 1) * perPage; });
+    $('menu-page-label').textContent = `${page + 1} / ${pages}`;
+    $('menu-page-prev').toggleAttribute('disabled', page === 0);
+    $('menu-page-next').toggleAttribute('disabled', page === pages - 1);
+    list.scrollTop = 0;
   }
 
   private updateSlashGeometry(level: number): void {
@@ -1304,13 +1432,13 @@ class SuperwalkApp {
   }
 
   private toggleMenu(): void {
-    if (this.upgradeModalOpen || this.isGameOver) return;
+    if (this.upgradeModalOpen || this.isGameOver || this.walletModalOpen) return;
     if (this.paused) this.closeMenu();
     else this.openMenu();
   }
 
   private openMenu(): void {
-    if (this.upgradeModalOpen || this.isGameOver) return;
+    if (this.upgradeModalOpen || this.isGameOver || this.walletModalOpen) return;
     this.paused = true;
     if (this.tabModalOpen) {
       this.closeTabModal(false);
@@ -1352,26 +1480,51 @@ class SuperwalkApp {
 
   private updateGfcHud(): void {
     const el = document.getElementById('hud-gfc-val');
-    if (el) el.textContent = String(this.walletManager.getBalance());
+    if (el) el.textContent = String(this.slotPresentationBalance ?? this.walletManager.getBalance());
   }
 
   private openWalletModal(): void {
+    if (this.upgradeModalOpen || this.isGameOver || this.walletModalOpen) return;
+    this.walletOpener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : $('btn-wallet');
+    this.walletFromMenu = !$('menu').hidden;
+    $('menu').hidden = true;
+    if (this.tabModalOpen) this.closeTabModal(false);
     this.paused = true;
     this.walletModalOpen = true;
+    this.input.active = false;
     this.input.unlock();
     $('wallet-modal').hidden = false;
+    for (const child of $('app').children) {
+      if (child instanceof HTMLElement && child.id !== 'wallet-modal') {
+        this.walletBackground.set(child, child.inert);
+        child.inert = true;
+      }
+    }
+    const track = $('case-roulette-track');
+    if (!track.children.length) this.renderCaseTrack([...SKINS_COLLECTION, ...SKINS_COLLECTION]);
     this.renderWalletMarketInfo();
     this.renderSkinsGrid();
     this.updateWithdrawCalculations();
+    $('btn-wallet-close').focus({ preventScroll: true });
+    this.resumeCaseOpening();
+    if (!this.caseSpinning && this.caseWinningIndex !== null) this.alignCaseWinner();
   }
 
   private closeWalletModal(): void {
     $('wallet-modal').hidden = true;
     this.walletModalOpen = false;
+    for (const [child, inert] of this.walletBackground) child.inert = inert;
+    this.walletBackground.clear();
+    if (this.walletFromMenu) this.openMenu();
     if (!this.upgradeModalOpen && !this.tabModalOpen && $('menu').hidden) {
       this.paused = false;
+      this.input.active = true;
       this.input.lock();
     }
+    const opener = this.walletOpener?.checkVisibility() ? this.walletOpener : $('btn-wallet');
+    opener.focus({ preventScroll: true });
+    this.walletOpener = null;
+    this.walletFromMenu = false;
   }
 
   private switchWalletTab(tab: 'slots' | 'cases' | 'skins' | 'withdraw'): void {
@@ -1390,18 +1543,63 @@ class SuperwalkApp {
     }
     if (tab === 'skins') this.renderSkinsGrid();
     if (tab === 'withdraw') this.updateWithdrawCalculations();
+    if (tab === 'cases' && !this.caseSpinning && this.caseWinningIndex !== null) this.alignCaseWinner();
+  }
+
+  private setWalletBusy(busy: boolean): void {
+    this.walletBusy = busy;
+    for (const id of ['btn-slot-spin', 'btn-open-case', 'btn-exec-withdraw']) $(id).toggleAttribute('disabled', busy);
+    for (const id of ['input-withdraw-amount', 'btn-withdraw-max']) $(id).toggleAttribute('disabled', busy);
+    if (!busy && $('input-withdraw-amount').getAttribute('aria-invalid') === 'true') $('btn-exec-withdraw').toggleAttribute('disabled', true);
+  }
+
+  private renderCaseTrack(cards: readonly SkinItem[]): void {
+    $('case-roulette-track').innerHTML = cards.map(c => `
+      <div class="gf-roulette-card" style="border-bottom-color: ${c.rarityColor}">
+        <div class="gf-roulette-card-dot" style="background: #${c.tintColor.toString(16).padStart(6, '0')}">🦊</div>
+        <div class="gf-roulette-card-name">${c.name}</div>
+        <div class="gf-roulette-card-rarity" style="color: ${c.rarityColor}">${c.rarityTitle}</div>
+      </div>`).join('');
+  }
+
+  private caseTargetOffset(): number {
+    const winner = $('case-roulette-track').children[this.caseWinningIndex ?? 32] as HTMLElement | undefined;
+    return $('case-roulette-container').clientWidth / 2 - ((winner?.offsetLeft ?? 0) + (winner?.offsetWidth ?? 96) / 2);
+  }
+
+  private alignCaseWinner(): void {
+    if (!$('case-roulette-container').checkVisibility()) return;
+    const track = $('case-roulette-track');
+    track.style.transition = 'none';
+    track.style.transform = `translateX(${this.caseTargetOffset()}px)`;
+  }
+
+  private retargetCaseAnimation(): void {
+    if (!this.caseAnimation || !$('case-roulette-container').checkVisibility()) return;
+    const target = `translateX(${this.caseTargetOffset()}px)`;
+    $('case-roulette-track').style.transform = target;
+    // Меняется геометрия, но сохраняется время уже запущенной операции.
+    (this.caseAnimation.effect as KeyframeEffect).setKeyframes([
+      { transform: 'translateX(0px)' }, { transform: target },
+    ]);
   }
 
   private handleSlotSpin(): void {
+    if (this.walletBusy) return;
+    const balanceBefore = this.walletManager.getBalance();
     const btn = document.getElementById('btn-slot-spin') as HTMLButtonElement | null;
     if (btn) btn.disabled = true;
 
     const res = this.walletManager.playSlots();
     if (!res.success) {
-      toast(res.error ?? 'Недостаточно $GFC', 2000, 'err');
+      $('slot-status').textContent = res.error ?? 'Недостаточно $GFC';
+      $('slot-status').style.color = '#ff9f9f';
       if (btn) btn.disabled = false;
       return;
     }
+    this.setWalletBusy(true);
+    // Операция уже проведена локально, но выигрыш раскрываем только после остановки.
+    this.slotPresentationBalance = balanceBefore - SLOT_SPIN_COST;
     this.updateGfcHud();
     this.renderWalletMarketInfo();
 
@@ -1421,9 +1619,6 @@ class SuperwalkApp {
       { win: $('reel-win-3'), strip: $('reel-strip-3'), symbols: strips[2], stopTime: 1900 },
     ];
 
-    const SYMBOL_HEIGHT = 68;
-    const targetOffset = -(24 - 1) * SYMBOL_HEIGHT;
-
     reelWindows.forEach((rw) => {
       rw.strip.innerHTML = rw.symbols.map((s) => `<div class="gf-reel-symbol">${s}</div>`).join('');
       rw.strip.classList.add('gf-reel-strip--blur');
@@ -1434,19 +1629,26 @@ class SuperwalkApp {
     void reelWindows[0]?.strip.offsetHeight;
 
     reelWindows.forEach((rw) => {
-      rw.strip.style.transition = `transform ${rw.stopTime}ms cubic-bezier(0.18, 0.9, 0.32, 1.25)`;
-      rw.strip.style.transform = `translateY(${targetOffset}px)`;
+      // Доля длины ленты сохраняет конечный символ при resize и изменении rem.
+      const targetTransform = `translateY(${-100 * (1 - 1 / rw.symbols.length)}%)`;
+      rw.strip.style.transform = targetTransform;
+      // Web Animation продолжает своё время, даже когда закрытый кошелёк скрыт.
+      const animation = rw.strip.animate([{ transform: 'translateY(0px)' }, { transform: targetTransform }], {
+        duration: rw.stopTime, easing: 'cubic-bezier(0.18, 0.9, 0.32, 1)',
+      });
 
       setTimeout(() => {
+        animation.cancel();
         rw.strip.classList.remove('gf-reel-strip--blur');
         playReelStopSound();
       }, rw.stopTime);
     });
 
     setTimeout(() => {
+      this.slotPresentationBalance = null;
       if (spin.isWin) {
         if (reelsBox) reelsBox.classList.add('gf-slots-reels--win');
-        status.textContent = `ВЫИГРЫШ: +${spin.payout} $GFC! (множитель x${spin.multiplier})`;
+        status.textContent = `ВЫИГРЫШ: +${spin.payout} $GFC (×${spin.multiplier})`;
         status.style.color = '#ffc107';
         playWinChime();
         toast(`Слоты 777: +${spin.payout} $GFC!`, 2500, 'ok');
@@ -1458,63 +1660,99 @@ class SuperwalkApp {
       if (seedEl) seedEl.textContent = spin.revealedHash.slice(0, 16) + '...';
       this.updateGfcHud();
       this.renderWalletMarketInfo();
-      if (btn) btn.disabled = false;
+      this.setWalletBusy(false);
+      if (this.currentWalletTab === 'withdraw') this.updateWithdrawCalculations();
     }, 2000);
   }
 
   private handleCaseOpen(): void {
+    if (this.walletBusy) return;
     const btn = document.getElementById('btn-open-case') as HTMLButtonElement | null;
     if (btn) btn.disabled = true;
 
     const res = this.walletManager.openSkinCase();
     if (!res.success) {
-      toast(res.error ?? 'Недостаточно $GFC', 2000, 'err');
+      $('case-status').textContent = res.error ?? 'Недостаточно $GFC';
+      $('case-status').hidden = false;
+      $('case-result-display').hidden = true;
       if (btn) btn.disabled = false;
       return;
     }
+    this.startCasePresentation(res.opening!);
+  }
+
+  private resumeCaseOpening(): void {
+    if (this.caseSpinning) return;
+    const opening = this.walletManager.getCaseOpening();
+    if (!opening) return;
+    if (!opening.revealed) {
+      this.startCasePresentation(opening);
+    } else {
+      if (this.caseWinningIndex === null) {
+        const cards = ForestCasino.generateCsRouletteTrack(opening.skin.id, 8, 2);
+        this.caseWinningIndex = 2;
+        this.renderCaseTrack(cards);
+      }
+      this.showCaseResult(opening);
+      this.alignCaseWinner();
+    }
+  }
+
+  private showCaseResult(opening: CaseOpening): void {
+    const skin = opening.skin;
+    $('case-result-display').hidden = false;
+    $('case-status').hidden = true;
+    $('case-win-badge').textContent = `${skin.rarityTitle} • ${opening.isNew ? 'Новый' : `Повтор +${opening.compensationGfc} $GFC`}`;
+    $('case-win-badge').style.background = skin.rarityColor;
+    $('case-win-badge').style.color = skin.rarity === 'consumer' ? '#000' : '#fff';
+    $('case-win-title').textContent = skin.name;
+    $('btn-case-equip').onclick = () => {
+      if (!this.walletManager.equipSkin(skin.id)) return;
+      this.applySkin(skin);
+      $('btn-case-equip').textContent = 'Надето';
+      this.renderSkinsGrid();
+    };
+    $('btn-case-equip').textContent = this.walletManager.getEquippedSkin()?.id === skin.id ? 'Надето' : 'Надеть скин';
+  }
+
+  private startCasePresentation(opening: CaseOpening): void {
+    this.setWalletBusy(true);
+    this.caseSpinning = true;
     this.updateGfcHud();
     this.renderWalletMarketInfo();
 
-    const skin = res.skin!;
+    const skin = opening.skin;
+    const duration = Math.max(0, opening.readyAt - Date.now());
     const track = document.getElementById('case-roulette-track');
     const container = document.getElementById('case-roulette-container');
     const display = $('case-result-display');
-    const badge = $('case-win-badge');
-    const title = $('case-win-title');
-    const equipBtn = $('btn-case-equip');
-
     if (display) display.hidden = true;
+    $('case-status').hidden = false;
+    $('case-status').textContent = 'Кейс открывается…';
 
     if (track && container) {
       const cards = ForestCasino.generateCsRouletteTrack(skin.id, 42, 32);
-      track.innerHTML = cards
-        .map(
-          (c) => `
-        <div class="gf-roulette-card" style="border-bottom-color: ${c.rarityColor}">
-          <div class="gf-roulette-card-dot" style="background: #${c.tintColor.toString(16).padStart(6, '0')}"></div>
-          <div class="gf-roulette-card-name">${c.name}</div>
-          <div class="gf-roulette-card-rarity" style="color: ${c.rarityColor}">${c.rarityTitle}</div>
-        </div>
-      `,
-        )
-        .join('');
+      this.caseWinningIndex = 32;
+      this.renderCaseTrack(cards);
 
       track.style.transition = 'none';
       track.style.transform = 'translateX(0px)';
       void track.offsetHeight;
 
-      const containerWidth = container.clientWidth || 300;
-      const targetOffset = ForestCasino.calculateRouletteOffset(containerWidth, 96, 10, 32);
+      const targetOffset = this.caseTargetOffset();
 
-      track.style.transition = 'transform 4.0s cubic-bezier(0.12, 0.8, 0.2, 1)';
       track.style.transform = `translateX(${targetOffset}px)`;
+      const animation = track.animate([{ transform: 'translateX(0px)' }, { transform: `translateX(${targetOffset}px)` }], {
+        duration, easing: 'cubic-bezier(0.12, 0.8, 0.2, 1)',
+      });
+      this.caseAnimation = animation;
 
       // Синтез звуковых щелчков тикера при скролле
       const startT = performance.now();
       let clickIndex = 0;
       const totalClicks = 32;
       const tickInterval = setInterval(() => {
-        const elapsed = (performance.now() - startT) / 4000;
+        const elapsed = (performance.now() - startT) / Math.max(1, duration);
         if (elapsed >= 1.0 || clickIndex >= totalClicks) {
           clearInterval(tickInterval);
           return;
@@ -1525,27 +1763,24 @@ class SuperwalkApp {
 
       setTimeout(() => {
         clearInterval(tickInterval);
+        animation.cancel();
+        this.caseAnimation = null;
+        this.caseSpinning = false;
+        this.alignCaseWinner();
         playRareDropSound();
 
-        if (display && badge && title && equipBtn) {
-          display.hidden = false;
-          badge.textContent = skin.rarityTitle;
-          badge.style.background = skin.rarityColor;
-          badge.style.color = skin.rarity === 'consumer' ? '#000' : '#fff';
-          title.textContent = skin.name;
-          equipBtn.onclick = () => {
-            this.walletManager.equipSkin(skin.id);
-            this.applySkin(skin);
-            toast(`Экипирован скин: ${skin.name}`, 2000, 'ok');
-            this.renderSkinsGrid();
-          };
-        }
-        toast(`Кейс открыт: ${skin.name}!`, 2500, 'ok');
+        const result = this.walletManager.finishSkinCase(opening.id);
+        if (result.success && result.opening) this.showCaseResult(result.opening);
+        else $('case-status').textContent = result.error ?? 'Не удалось завершить открытие. Открой кошелёк ещё раз.';
+        this.updateGfcHud();
+        this.renderWalletMarketInfo();
         this.renderSkinsGrid();
-        if (btn) btn.disabled = false;
-      }, 4050);
+        this.setWalletBusy(false);
+        if (this.currentWalletTab === 'withdraw') this.updateWithdrawCalculations();
+      }, duration + 50);
     } else {
-      if (btn) btn.disabled = false;
+      this.caseSpinning = false;
+      this.setWalletBusy(false);
     }
   }
 
@@ -1572,7 +1807,7 @@ class SuperwalkApp {
 
       const rarity = document.createElement('div');
       rarity.className = 'gf-skin-rarity';
-      rarity.textContent = skin.rarityTitle;
+      rarity.textContent = `${skin.rarityTitle} · Повтор: ${skin.duplicatePayoutGfc} $GFC`;
       rarity.style.color = skin.rarityColor;
 
       const btn = document.createElement('button');
@@ -1601,6 +1836,28 @@ class SuperwalkApp {
       card.appendChild(btn);
       grid.appendChild(card);
     }
+    if (!unlocked.length) {
+      grid.innerHTML = '<p class="gf-skins-empty">Скины появятся после открытия кейса.</p>';
+    }
+    this.updateSkinsPagination();
+  }
+
+  private updateSkinsPagination(): void {
+    if ($('wallet-modal').hidden || $('wtab-skins').hidden) return;
+    const grid = $('skins-grid');
+    const cards = [...grid.querySelectorAll<HTMLElement>('.gf-skin-card')];
+    const layout = getComputedStyle(grid);
+    const columns = Math.max(1, layout.gridTemplateColumns.trim().split(/\s+/).length);
+    const gap = parseFloat(layout.rowGap) || 0;
+    const height = cards.length ? parseFloat(getComputedStyle(cards[0]!).height) : 1;
+    const rows = Math.max(1, Math.floor((grid.clientHeight + gap) / (height + gap)));
+    const perPage = columns * rows;
+    const pages = Math.max(1, Math.ceil(cards.length / perPage));
+    this.skinsPage = Math.max(0, Math.min(pages - 1, this.skinsPage));
+    cards.forEach((card, index) => { card.hidden = index < this.skinsPage * perPage || index >= (this.skinsPage + 1) * perPage; });
+    $('skins-page-label').textContent = `${this.skinsPage + 1} / ${pages}`;
+    $('skins-page-prev').toggleAttribute('disabled', this.skinsPage === 0);
+    $('skins-page-next').toggleAttribute('disabled', this.skinsPage === pages - 1);
   }
 
   public applySkin(skin: SkinItem | null): void {
@@ -1613,7 +1870,21 @@ class SuperwalkApp {
   private updateWithdrawCalculations(): void {
     const input = document.getElementById('input-withdraw-amount') as HTMLInputElement | null;
     if (!input) return;
-    const amount = Math.max(1, parseInt(input.value, 10) || 50);
+    const amount = Number(input.value);
+    const balance = this.slotPresentationBalance ?? this.walletManager.getBalance();
+    const valid = input.validity.valid && Number.isSafeInteger(amount) && amount > 0 && amount <= balance;
+    input.setAttribute('aria-invalid', String(!valid));
+    const error = $('withdraw-input-error');
+    error.hidden = valid || this.walletBusy;
+    error.textContent = amount > balance && amount <= Number(input.max)
+      ? `Недостаточно $GFC. Доступно: ${balance}`
+      : `Укажи целую сумму от ${input.min} до ${input.max} $GFC.`;
+    if (!valid && !this.walletBusy) $('withdraw-status-box').hidden = true;
+    $('btn-exec-withdraw').toggleAttribute('disabled', !valid || this.walletBusy);
+    if (!valid) {
+      for (const id of ['w-calc-rate', 'w-calc-slip', 'w-calc-usd']) $(id).textContent = '—';
+      return;
+    }
     const tradeCalc = this.walletManager.getMarket().simulateSellGfc(amount);
 
     const rateEl = document.getElementById('w-calc-rate');
@@ -1626,8 +1897,14 @@ class SuperwalkApp {
   }
 
   private handleWithdraw(): void {
+    if (this.walletBusy) return;
     const input = document.getElementById('input-withdraw-amount') as HTMLInputElement | null;
-    const amount = input ? parseInt(input.value, 10) || 50 : 50;
+    this.updateWithdrawCalculations();
+    if (!input || input.getAttribute('aria-invalid') === 'true') {
+      input?.focus();
+      return;
+    }
+    const amount = Number(input.value);
 
     if (amount > this.walletManager.getBalance()) {
       toast(`Недостаточно $GFC на балансе (${this.walletManager.getBalance()})`, 2500, 'err');
@@ -1635,7 +1912,7 @@ class SuperwalkApp {
     }
 
     const btn = document.getElementById('btn-exec-withdraw') as HTMLButtonElement | null;
-    if (btn) btn.disabled = true;
+    this.setWalletBusy(true);
 
     const box = document.getElementById('withdraw-status-box');
     const progress = document.getElementById('withdraw-progress') as HTMLElement | null;
@@ -1692,17 +1969,20 @@ class SuperwalkApp {
                   btnNew.onclick = () => {
                     receiptCard.hidden = true;
                     if (formCard) formCard.hidden = false;
+                    $('withdraw-status-box').hidden = true;
                     if (btn) btn.disabled = false;
                     this.updateWithdrawCalculations();
                   };
                 }
               }
               toast('Перевод $GFC успешно отправлен в Gram!', 3000, 'ok');
+              this.setWalletBusy(false);
+              if (this.walletModalOpen && this.currentWalletTab === 'withdraw') $('btn-receipt-new').focus({ preventScroll: true });
             }, 400);
           } else {
-            text.textContent = `❌ Ошибка: ${execRes.error ?? 'Сбой'}`;
-            toast(execRes.error ?? 'Сбой вывода', 3000, 'err');
-            if (btn) btn.disabled = false;
+            this.setWalletBusy(false);
+            progress.style.width = '0%';
+            text.textContent = `Не удалось выполнить вывод: ${execRes.error ?? 'попробуй ещё раз'}`;
           }
         }, 700);
       }, 600);
@@ -1710,7 +1990,7 @@ class SuperwalkApp {
   }
 
   private renderWalletMarketInfo(): void {
-    const balance = this.walletManager.getBalance();
+    const balance = this.slotPresentationBalance ?? this.walletManager.getBalance();
     const market = this.walletManager.getMarket();
     const spotPrice = market.getSpotPrice();
     const fiatVal = balance * spotPrice;
@@ -1742,6 +2022,7 @@ class SuperwalkApp {
     const el = $('app');
     const w = Math.max(1, el.clientWidth);
     const h = Math.max(1, el.clientHeight);
+    applyUiScale(w, h);
     this.renderer.setSize(w, h, false);
 
     const host = this.isHostFullscreen();
@@ -1750,6 +2031,7 @@ class SuperwalkApp {
 
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    this.positionFeedback();
   }
 
   private tick(time: number): void {
@@ -2313,6 +2595,7 @@ class SuperwalkApp {
       $('hp-bar-text').textContent = `${Math.ceil(this.combatState.heroHp)} / ${this.combatState.heroMaxHp}`;
 
       const reqExp = getRequiredExp(this.combatState.heroLevel);
+      $('hud-exp').textContent = `${this.combatState.heroExp} / ${reqExp}`;
       const expPct = Math.max(0, Math.min(100, (this.combatState.heroExp / reqExp) * 100));
       $('exp-bar-fill').style.width = `${expPct}%`;
 
@@ -2459,10 +2742,10 @@ class SuperwalkApp {
     }
 
     this.recalculateHeroStats();
-    this.showItemCardPopup(item, count);
     const gfcAward = this.walletManager.awardGfc('chest');
+    this.showItemCardPopup(item, count);
     this.updateGfcHud();
-    toast(`Найден предмет: ${item.icon} ${item.name} (+${gfcAward.amount} $GFC)!`, 2500, 'ok');
+    toast(this.input.touchMode ? `+${gfcAward.amount} $GFC за сундук` : `Найден предмет: ${item.icon} ${item.name} (+${gfcAward.amount} $GFC)!`, 2500, 'ok');
     this.updateInventoryHud();
     if (this.tabModalOpen) {
       this.updateDashboard();
@@ -2490,7 +2773,7 @@ class SuperwalkApp {
         <div class="gf-item-card__header">
           <span class="gf-item-card__icon">${item.icon}</span>
           <span class="gf-item-card__rarity">${rarityLabels[item.rarity] ?? item.rarity}</span>
-          ${count > 1 ? `<span class="gf-item-card__count">×${count}</span>` : ''}
+          <span class="gf-item-card__count">×${count}</span>
         </div>
         <div class="gf-item-card__name">${item.name}</div>
         <p class="gf-item-card__desc">${item.description}</p>
@@ -2548,8 +2831,10 @@ class SuperwalkApp {
       const cfg = WEAPON_CONFIGS[wId];
       const badge = document.createElement('span');
       badge.className = 'gf-inv-badge gf-inv-badge--weapon';
-      badge.innerHTML = `⚔ ${cfg.name} <b>Ур.${lvl}</b>`;
+      badge.innerHTML = `<span class="gf-inv-icon" aria-hidden="true">${wId === 'tail_blade' ? '⚔️' : '🔥'}</span><b>ур. ${lvl}</b>`;
       badge.title = `${cfg.name} (Ур.${lvl}): ${cfg.description}`;
+      badge.setAttribute('role', 'img');
+      badge.setAttribute('aria-label', badge.title);
       container.appendChild(badge);
     }
 
@@ -2557,20 +2842,72 @@ class SuperwalkApp {
       const cfg = TOME_CONFIGS[tId];
       const badge = document.createElement('span');
       badge.className = 'gf-inv-badge gf-inv-badge--tome';
-      badge.innerHTML = `📖 ${cfg.name} <b>Ур.${lvl}</b>`;
+      badge.innerHTML = `<span class="gf-inv-icon" aria-hidden="true">${tId === 'tome_haste' ? '📘' : '📕'}</span><b>ур. ${lvl}</b>`;
       badge.title = `${cfg.name} (Ур.${lvl}): ${cfg.description}`;
+      badge.setAttribute('role', 'img');
+      badge.setAttribute('aria-label', badge.title);
       container.appendChild(badge);
     }
 
     for (const [itemId, count] of this.ownedItems.entries()) {
       const cfg = ITEM_CONFIGS[itemId];
-      if (!cfg) continue;
+      if (!cfg || count <= 0) continue;
       const badge = document.createElement('span');
       badge.className = `gf-inv-badge gf-inv-badge--item gf-inv-badge--${cfg.rarity}`;
-      badge.innerHTML = `${cfg.icon} ${cfg.name}${count > 1 ? ` <b>×${count}</b>` : ''}`;
-      badge.title = `${cfg.name} (${cfg.rarity}): ${cfg.description}`;
+      badge.innerHTML = `<span class="gf-inv-icon" aria-hidden="true">${cfg.icon}</span><b>×${count}</b>`;
+      badge.title = `${cfg.name} ×${count} (${cfg.rarity}): ${cfg.description}`;
+      badge.setAttribute('role', 'img');
+      badge.setAttribute('aria-label', badge.title);
       container.appendChild(badge);
     }
+    this.positionFeedback();
+  }
+
+  private positionFeedback(): void {
+    const app = $('app');
+    const bounds = app.getBoundingClientRect();
+    const hud = document.querySelector('.gf-hud-left-group')!;
+    app.style.setProperty('--hud-bottom', `${hud.getBoundingClientRect().bottom - bounds.top}px`);
+    const gap = parseFloat(getComputedStyle(document.documentElement).fontSize) / 2;
+    const mobile = this.input.touchMode || matchMedia('(pointer: coarse)').matches;
+    app.dataset.feedbackPlacement = mobile ? 'bottom' : 'top';
+    const feedback = $('feedback').getBoundingClientRect();
+    const overlaps = (rect: DOMRect) => rect.right > feedback.left - gap && rect.left < feedback.right + gap;
+    if (mobile) {
+      let bottom = gap * 2;
+      for (const el of [$('boss-hud'), $('btn-jump'), $('stick')]) {
+        if (!el.checkVisibility()) continue;
+        const rect = el.getBoundingClientRect();
+        // Прыжок задаёт безопасную нижнюю зону даже при узком уведомлении.
+        if (el.id === 'btn-jump' || overlaps(rect)) bottom = Math.max(bottom, bounds.bottom - rect.top + gap);
+      }
+      app.style.setProperty('--feedback-bottom', `${bottom}px`);
+    } else {
+      let top = gap * 2;
+      for (const el of [hud, $('debug'), $('corner')]) {
+        if (!el.checkVisibility()) continue;
+        const rect = el.getBoundingClientRect();
+        if (overlaps(rect)) top = Math.max(top, rect.bottom - bounds.top + gap);
+      }
+      app.style.setProperty('--feedback-top', `${top}px`);
+    }
+  }
+
+  private updateGameoverPagination(): void {
+    if ($('game-over-modal').hidden) return;
+    const list = $('gameover-items-list');
+    const cards = [...list.querySelectorAll<HTMLElement>('.gf-item-row')];
+    const layout = getComputedStyle(list);
+    const gap = parseFloat(layout.rowGap) || 0;
+    const height = cards.length ? parseFloat(getComputedStyle(cards[0]!).height) : 1;
+    const perPage = Math.max(1, Math.floor((list.clientHeight + gap) / (height + gap)));
+    const pages = Math.max(1, Math.ceil(cards.length / perPage));
+    this.gameoverPage = Math.max(0, Math.min(pages - 1, this.gameoverPage));
+    cards.forEach((card, index) => { card.hidden = index < this.gameoverPage * perPage || index >= (this.gameoverPage + 1) * perPage; });
+    $('gameover-page-label').textContent = `${this.gameoverPage + 1} / ${pages}`;
+    $('gameover-page-prev').toggleAttribute('disabled', this.gameoverPage === 0);
+    $('gameover-page-next').toggleAttribute('disabled', this.gameoverPage === pages - 1);
+    list.scrollTop = 0;
   }
 
   private updateDebug(): void {
@@ -2597,6 +2934,8 @@ class SuperwalkApp {
   private endGame(isVictory: boolean): void {
     if (this.isGameOver) return;
     this.isGameOver = true;
+    // Итоги уже содержат результат и действие; игровые уведомления не закрывают их.
+    $('feedback').hidden = true;
 
     // Скрываем другие окна, если были открыты
     if (this.upgradeModalOpen) {
@@ -2668,20 +3007,22 @@ class SuperwalkApp {
 
     // Отрисовка снаряжения через проверенный хелпер
     if (itemsListEl) {
-      this.renderInventoryItems(itemsListEl, true);
+      this.renderInventoryItems(itemsListEl);
     }
 
     modal.hidden = false;
-    toast(
-      isVictory ? '🏆 Триумф! Босс повержен!' : '💀 Забег окончен. Нажми Пробел или кнопку для нового забега',
-      3500,
-      isVictory ? 'ok' : 'err',
-    );
+    this.gameoverPage = 0;
+    this.updateGameoverPagination();
+    $('btn-restart').querySelector('span')!.textContent = this.input.touchMode ? 'Играть снова' : 'Играть снова [Пробел]';
+    $('btn-restart').focus({ preventScroll: true });
   }
 
   private restartGame(): void {
     $('game-over-modal').hidden = true;
     this.isGameOver = false;
+    $('toast').hidden = true;
+    $('item-card-popup').hidden = true;
+    $('feedback').hidden = false;
 
     // Сброс времени и расписания спавна
     this.runTime = 0;
@@ -2778,6 +3119,7 @@ class SuperwalkApp {
     $('hp-bar-fill').style.width = '100%';
     $('hp-bar-text').textContent = `${HERO_CONFIG.maxHp} / ${HERO_CONFIG.maxHp}`;
     $('exp-bar-fill').style.width = '0%';
+    $('hud-exp').textContent = `0 / ${getRequiredExp(this.combatState.heroLevel)}`;
     const hudScoreEl = document.getElementById('hud-score');
     if (hudScoreEl) hudScoreEl.textContent = '0';
 

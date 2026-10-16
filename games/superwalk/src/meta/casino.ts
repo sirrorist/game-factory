@@ -27,11 +27,13 @@ export interface SkinItem {
   rarityColor: string;
   tintColor: number; // Цвет для Three.js материала шерсти лиса
   description: string;
+  duplicatePayoutGfc: number;
 }
 
 export const SKINS_COLLECTION: readonly SkinItem[] = [
   {
     id: 'skin_sock',
+    duplicatePayoutGfc: 10,
     name: 'Бабушкин вязаный носок',
     rarity: 'consumer',
     rarityTitle: 'Ширпотреб',
@@ -41,6 +43,7 @@ export const SKINS_COLLECTION: readonly SkinItem[] = [
   },
   {
     id: 'skin_forest_camo',
+    duplicatePayoutGfc: 25,
     name: 'Хвойный камуфляж',
     rarity: 'mil_spec',
     rarityTitle: 'Армейское',
@@ -50,6 +53,7 @@ export const SKINS_COLLECTION: readonly SkinItem[] = [
   },
   {
     id: 'skin_neon_fox',
+    duplicatePayoutGfc: 75,
     name: 'Кибер-Лис 2077',
     rarity: 'classified',
     rarityTitle: 'Засекреченное',
@@ -59,6 +63,7 @@ export const SKINS_COLLECTION: readonly SkinItem[] = [
   },
   {
     id: 'skin_fade_tail',
+    duplicatePayoutGfc: 200,
     name: 'Керамбит-Хвост ★ Fade',
     rarity: 'covert',
     rarityTitle: 'Тайное ★',

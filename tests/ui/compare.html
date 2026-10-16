@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>Game Factory · UI — до / после</title>
+  <style>
+    *{box-sizing:border-box}[hidden]{display:none!important}body{margin:0;background:#151923;color:#edf0f6;font:14px system-ui,sans-serif}
+    header{padding:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;border-bottom:1px solid #3c4355}
+    h1{font-size:18px;margin:0 8px 0 0}label{display:flex;gap:7px;align-items:center}
+    select,button{font:inherit;color:inherit;background:#282f40;border:1px solid #505b73;border-radius:6px;min-height:40px;padding:6px 10px}
+    button{cursor:pointer}button[aria-pressed=true]{background:#b94d13;border-color:#ff8a38}
+    main{display:flex;gap:16px;padding:16px;align-items:flex-start}section{min-width:0;flex:1}section[hidden]{display:none}
+    h2{margin:0 0 8px;font-size:16px}p{line-height:1.4}small{color:#b5bfd0}.view{width:100%;overflow:auto;background:#090b10;border:1px solid #3c4355}
+    .stage{position:relative;overflow:hidden;margin:auto}iframe{border:0;display:block;transform-origin:top left;background:#151923}
+    footer{padding:0 16px 16px;color:#b5bfd0}a{color:#ffac74}.meta{overflow-wrap:anywhere;font:12px ui-monospace,monospace}
+    @media(max-width:700px){main{flex-direction:column}section{width:100%}}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Game Factory · UI · до / после</h1>
+    <label>Экран <select id="scene"></select></label>
+    <label>Размер <select id="profile"></select></label>
+    <label id="theme-label" hidden>Тема <select id="theme"></select></label>
+    <label>База «до» <select id="reference"></select></label>
+    <label>Просмотр <select id="content"><option value="scene">Одинаковое состояние</option><option value="shots">Снимки прогона</option><option value="live">Играть</option></select></label>
+    <button data-mode="both" aria-pressed="true">Обе</button><button data-mode="before" aria-pressed="false">До</button><button data-mode="after" aria-pressed="false">После</button>
+    <label><input id="actual" type="checkbox"> 100% размера</label><button id="reload">Перезагрузить</button>
+  </header>
+  <main>
+    <section id="before"><h2>До <small id="version-before"></small></h2><p class="meta" id="scale-before"></p><div class="view"><div class="stage"><iframe title="Game Factory · UI до" allow="fullscreen" allowfullscreen></iframe></div></div><p class="meta" id="ref-before"></p></section>
+    <section id="after"><h2>После <small id="version-after"></small></h2><p class="meta" id="scale-after"></p><div class="view"><div class="stage"><iframe title="Game Factory · UI после" allow="fullscreen" allowfullscreen></iframe></div></div><p class="meta" id="ref-after"></p></section>
+  </main>
+  <footer><span id="dimensions"></span> · <a href="report.json" target="_blank" rel="noopener">Результат автоматических проверок</a>
+    · <a href="live-report.json" target="_blank" rel="noopener">Проверки анимаций и управления</a>
+    · <a id="diff-link" target="_blank" rel="noopener">Показать отличия UI</a>
+    <p id="verdict"></p>
+    <p>Масштаб меняет только размер предпросмотра: внутри iframe сохраняется выбранное разрешение. Сценарии телефона показывают тач-раскладку. Режим «Играть» использует ввод этого устройства. Снимки показывают результат Chromium с эмуляцией касаний; размер iframe на компьютере не эмулирует устройство.</p>
+  </footer>
+  <script>
+    const config=/*CONFIG*/null;
+    const $=id=>document.getElementById(id);
+    document.title=config.title+' — до / после';
+    document.querySelector('h1').textContent=config.title+' · до / после';
+    for(const side of ['before','after'])$(side).querySelector('iframe').title=config.title+' '+(side==='before'?'до':'после');
+    if(config.description)document.querySelector('footer p:last-child').textContent=config.description;
+    $('content').querySelector('[value="live"]').textContent=config.liveLabel;
+    if(config.themes?.length){$('theme-label').hidden=false;for(const theme of config.themes)$('theme').add(new Option(theme==='dark'?'Тёмная':'Светлая',theme));}
+    let mode='both';
+    const currentReport=config.report?.status==='finished' && config.report.snapshots?.after.hash===config.snapshots.after.hash;
+    const reference=()=>config.references.find(r=>r.id===$('reference').value);
+    for(const scene of config.scenes)$('scene').add(new Option(scene.label,scene.id));
+    for(const profile of config.profiles)$('profile').add(new Option(`${profile.label} · ${profile.width}×${profile.height}`,profile.id));
+    for(const ref of config.references)$('reference').add(new Option(ref.label,ref.id));
+    if(config.references.some(r=>r.id==='revision'))$('reference').value='revision';
+    $('content').querySelector('[value="shots"]').disabled=!currentReport;
+    $('version-after').textContent=config.snapshots.after.version;
+    $('ref-after').textContent=config.snapshots.after.ref;
+
+    function resize(){
+      const p=config.profiles.find(p=>p.id===$('profile').value);
+      for(const side of ['before','after']){
+        const section=$(side);
+        if(section.hidden)continue;
+        const scale=$('actual').checked?1:Math.min(1,(section.clientWidth-2)/p.width);
+        const stage=section.querySelector('.stage');
+        stage.style.width=p.width*scale+'px';stage.style.height=p.height*scale+'px';
+        const frame=section.querySelector('iframe');
+        frame.style.width=p.width+'px';frame.style.height=p.height+'px';frame.style.transform=`scale(${scale})`;
+        $('scale-'+side).textContent=`Предпросмотр ${(scale*100).toLocaleString('ru-RU',{maximumFractionDigits:1})}% · viewport ${p.width}×${p.height} · ${$('actual').checked?'без уменьшения':'вписан в колонку'}`;
+      }
+    }
+
+    function load(){
+      const p=config.profiles.find(p=>p.id===$('profile').value), scene=$('scene').value, ref=reference();
+      $('version-before').textContent=ref.label;
+      $('ref-before').textContent=ref.snapshot.ref;
+      for(const side of ['before','after']){
+        const frame=$(side).querySelector('iframe');
+        frame.style.colorScheme=$('theme').value||'normal';
+        if($('content').value==='shots'){
+          const path=ref.id==='revision'&&side==='before'?`${ref.shots}/${p.id}/${scene}.png`:config.shotPath.replaceAll('{side}',side).replaceAll('{profile}',p.id).replaceAll('{scene}',scene).replaceAll('{theme}',$('theme').value||'dark');
+          frame.src='about:blank';
+          frame.srcdoc=`<html style="margin:0"><body style="margin:0"><img alt="${side}: ${scene}" src="${location.origin}/${path}" style="display:block;width:100%"></body></html>`;
+        }else{
+          frame.removeAttribute('srcdoc');
+          frame.src=`${side==='before'?ref.url:config.after}/?scene=${scene}&touch=${Number(p.touch)}${$('content').value==='live'?'&live=1':''}`;
+        }
+      }
+      $('dimensions').textContent=`${p.width}×${p.height} CSS px`;
+      $('diff-link').hidden=!currentReport||ref.id!=='before'||!config.hasDiff;
+      $('diff-link').href=`diff/${p.id}/${scene}.png`;
+      if(currentReport){
+        const report=config.report, current=(report.results||report.runs||[]).find(r=>r.side==='after'&&r.profile===p.id&&r.scene===scene);
+        $('verdict').textContent=`${report.complete?'Полный':'Частичный'} прогон: ${report.failed===0?'после — проверки пройдены':'после — есть ошибки'}. На этом экране после: ${current?.errors.length??'нет данных'} нарушений. Оценка намеренных отличий выполняется отдельно.`;
+      }else $('verdict').textContent='Предпросмотр для приёмки владельцем. Актуального полного прогона этой сборки и инструмента нет.';
+      resize();
+    }
+    for(const button of document.querySelectorAll('[data-mode]'))button.onclick=()=>{
+      mode=button.dataset.mode;
+      for(const side of ['before','after'])$(side).hidden=mode!=='both'&&mode!==side;
+      for(const b of document.querySelectorAll('[data-mode]'))b.setAttribute('aria-pressed',String(b.dataset.mode===mode));
+      resize();
+    };
+    for(const id of ['scene','profile','content','reference','theme'])$(id).onchange=load;
+    $('actual').onchange=resize;$('reload').onclick=load;window.onresize=resize;load();
+  </script>
+</body>
+</html>

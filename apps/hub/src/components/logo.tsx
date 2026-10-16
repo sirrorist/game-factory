@@ -2,7 +2,7 @@
 // крестовина слева, кнопки справа. Встроен в разметку: без лишнего запроса и мигания.
 export function Logo({ size = 32 }: { size?: number }) {
   return (
-    <svg viewBox="0 0 32 32" width={size} height={size} aria-hidden="true">
+    <svg viewBox="0 0 32 32" width={size} height={size} style={{ width: `${size / 16}rem`, height: `${size / 16}rem` }} aria-hidden="true">
       <rect width="32" height="32" rx="7" fill="#0d1117" />
       <path
         d="M10 9.5h12a6 6 0 0 1 6 6.6l-.6 4.6a3 3 0 0 1-5.2 1.6L20 20h-8l-2.2 2.3a3 3 0 0 1-5.2-1.6L4 16.1a6 6 0 0 1 6-6.6z"

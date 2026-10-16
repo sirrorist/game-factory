@@ -234,7 +234,7 @@ const MAX_ALLOWABLE_AMOUNTS: Record<TransactionType, { min: number; max: number 
   slot_spin: { min: -10, max: -10 },
   slot_win: { min: 0, max: 1000 },
   case_open: { min: -50, max: -50 },
-  case_win: { min: 0, max: 0 },
+  case_win: { min: 0, max: 200 },
   withdraw: { min: -1_000_000, max: 0 },
 };
 

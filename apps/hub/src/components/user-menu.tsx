@@ -18,9 +18,9 @@ export async function UserMenu() {
   }
   return (
     <>
-      <Link href="/account" className="gf-user" data-testid="user-name">
+      <Link href="/account" className="gf-user" data-testid="user-name" aria-label={`Учётная запись: ${user.name}`} title={user.name}>
         <Icon name="user" />
-        {user.name}
+        <span className="gf-user__name">{user.name}</span>
       </Link>
       <SignOutButton />
     </>

@@ -1,13 +1,20 @@
 {
   "name": "@gf-game/superwalk",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "node --test test/*.test.ts"
+    "test": "node --test test/*.test.ts",
+    "ui:baseline": "node ../../tests/ui/cli.ts baseline superwalk",
+    "ui:check": "node ../../tests/ui/cli.ts check superwalk",
+    "ui:live": "node ../../tests/ui/cli.ts live superwalk",
+    "ui:compare": "node ../../tests/ui/cli.ts compare superwalk",
+    "ui:preview": "node ../../tests/ui/cli.ts preview superwalk",
+    "ui:typecheck": "tsc -p ../../tests/ui/tsconfig.json",
+    "ui:verify": "node ../../tests/ui/cli.ts verify superwalk"
   },
   "dependencies": {
     "@gf/game-sdk": "workspace:*",

@@ -143,12 +143,17 @@ export class Input {
   }
 
   private onKey(e: KeyboardEvent, down: boolean): void {
-    if (down) this.ev.gesture();
     if (e.code === 'F3' && down) {
       this.ev.toggleDebug();
       e.preventDefault();
       return;
     }
+    // В паузе/кошельке браузер обрабатывает Space, стрелки и выделение поля сам.
+    if (!this.active) {
+      this.keys.delete(e.code);
+      return;
+    }
+    if (down) this.ev.gesture();
     // ERR-10: Перехват системных шорткатов браузера при беге и взаимодействии (Ctrl+W, Ctrl+R и др.)
     if (e.ctrlKey || e.metaKey) {
       if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR', 'KeyT', 'KeyN', 'KeyQ', 'KeyP', 'KeyU', 'Space', 'Tab', 'Escape'].includes(e.code)) {

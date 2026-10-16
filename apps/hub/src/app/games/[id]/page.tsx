@@ -33,7 +33,7 @@ export default async function GamePage({ params }: Props) {
   return (
     <section className="flex flex-col gap-5">
       <div className="flex flex-col gap-3">
-        <Link href="/" className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+        <Link href="/" className="gf-back-link inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
           <Icon name="back" className="size-4" />
           Каталог
         </Link>

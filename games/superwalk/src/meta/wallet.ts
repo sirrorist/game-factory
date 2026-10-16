@@ -26,6 +26,17 @@ const MARKET_STORAGE_KEY = 'gf_superwalk_market_v1';
 const SKINS_STORAGE_KEY = 'gf_superwalk_skins_v1';
 const EQUIPPED_SKIN_KEY = 'gf_superwalk_equipped_skin';
 
+const CASE_REVEAL_DELAY_MS = 4000;
+interface SavedCaseOpening {
+  id: string;
+  skinId: string;
+  readyAt: number;
+  isNew: boolean;
+  revealed: boolean;
+  compensationGfc: number;
+}
+export interface CaseOpening extends Omit<SavedCaseOpening, 'skinId'> { skin: SkinItem }
+
 export interface WithdrawReceipt {
   amountGfc: number;
   usdEquivalent: number;
@@ -62,12 +73,20 @@ export class MetaWalletManager {
   private equippedSkinId: string | null = null;
   private tamperedDetected = false;
   private spinNonce = 0;
+  private caseOpening: SavedCaseOpening | null = null;
 
   constructor() {
     this.wallet = this.loadAndVerifyWallet();
     this.market = this.loadMarket();
     this.unlockedSkinIds = this.loadUnlockedSkins();
     this.equippedSkinId = this.loadEquippedSkin();
+    // Восстановление уже оплаченного результата без нового ролла/списания.
+    if (this.caseOpening?.revealed) {
+      this.unlockedSkinIds.add(this.caseOpening.skinId);
+      this.saveSkins();
+    } else if (this.caseOpening && Date.now() >= this.caseOpening.readyAt) {
+      this.finishSkinCase(this.caseOpening.id);
+    }
   }
 
   public getBalance(): number {
@@ -173,7 +192,11 @@ export class MetaWalletManager {
     skin?: SkinItem;
     isNew: boolean;
     error?: string;
+    opening?: CaseOpening;
   } {
+    if (this.caseOpening && !this.caseOpening.revealed) {
+      return { success: false, isNew: false, error: 'Предыдущий кейс ещё открывается.' };
+    }
     if (this.wallet.balance < CASE_OPEN_COST) {
       return {
         success: false,
@@ -197,15 +220,15 @@ export class MetaWalletManager {
     this.spinNonce++;
     const roll = ForestCasino.openCase(commitment.serverSeed, clientSeed, this.spinNonce);
 
-    // Записываем нулевую транзакцию выигрыша скина для журнала
-    const credit = appendTransaction(this.wallet, 'case_win', 0);
-    if (credit.success) {
-      this.wallet = credit.state;
-    }
-
     const isNew = !this.unlockedSkinIds.has(roll.item.id);
-    this.unlockedSkinIds.add(roll.item.id);
-    this.saveSkins();
+    const debitTx = this.wallet.transactions[this.wallet.transactions.length - 1]!;
+    this.caseOpening = {
+      id: debitTx.hash, skinId: roll.item.id,
+      readyAt: debitTx.timestamp + CASE_REVEAL_DELAY_MS,
+      isNew, revealed: false,
+      compensationGfc: isNew ? 0 : roll.item.duplicatePayoutGfc,
+    };
+    // Результат и списание сохраняются одним JSON; коллекция пока не изменяется.
     this.saveWallet();
     this.saveMarket();
 
@@ -213,7 +236,31 @@ export class MetaWalletManager {
       success: true,
       skin: roll.item,
       isNew,
+      opening: this.getCaseOpening()!,
     };
+  }
+
+  public getCaseOpening(): CaseOpening | null {
+    if (!this.caseOpening) return null;
+    const skin = SKINS_COLLECTION.find(s => s.id === this.caseOpening!.skinId);
+    return skin ? { ...this.caseOpening, skin } : null;
+  }
+
+  public finishSkinCase(id: string): { success: boolean; error?: string; opening?: CaseOpening } {
+    const opening = this.caseOpening;
+    if (!opening || opening.id !== id) return { success: false, error: 'Результат кейса не найден.' };
+    if (opening.revealed) return { success: true, opening: this.getCaseOpening()! };
+    if (Date.now() < opening.readyAt) return { success: false, error: 'Барабан ещё вращается.' };
+    const credit = appendTransaction(this.wallet, 'case_win', opening.compensationGfc);
+    if (!credit.success) return { success: false, error: credit.error };
+    this.wallet = credit.state;
+    opening.revealed = true;
+    this.unlockedSkinIds.add(opening.skinId);
+    // Сначала сохраняем завершённый результат: загрузка восстановит коллекцию,
+    // даже если запись её отдельного ключа прервалась.
+    this.saveWallet();
+    this.saveSkins();
+    return { success: true, opening: this.getCaseOpening()! };
   }
 
   public getUnlockedSkins(): SkinItem[] {
@@ -347,6 +394,20 @@ export class MetaWalletManager {
         const parsed = JSON.parse(raw) as WalletState;
         const audit = verifyWallet(parsed);
         if (audit.valid) {
+          const candidate = (parsed as WalletState & { caseOpening?: SavedCaseOpening }).caseOpening;
+          if (candidate && typeof candidate.id === 'string' && typeof candidate.skinId === 'string'
+            && typeof candidate.isNew === 'boolean' && typeof candidate.revealed === 'boolean'
+            && Number.isFinite(candidate.readyAt) && SKINS_COLLECTION.some(s => s.id === candidate.skinId)) {
+            const debit = parsed.transactions.find(tx => tx.hash === candidate.id && tx.type === 'case_open' && tx.amount === -CASE_OPEN_COST);
+            const skin = SKINS_COLLECTION.find(s => s.id === candidate.skinId)!;
+            // Завершённые кейсы старой версии уже обработаны без компенсации.
+            const compensation = candidate.compensationGfc ?? (candidate.revealed || candidate.isNew ? 0 : skin.duplicatePayoutGfc);
+            const expected = candidate.isNew ? 0 : skin.duplicatePayoutGfc;
+            if (debit && candidate.readyAt === debit.timestamp + CASE_REVEAL_DELAY_MS
+              && (compensation === expected || (candidate.revealed && compensation === 0))) {
+              this.caseOpening = { ...candidate, compensationGfc: compensation };
+            }
+          }
           return parsed;
         } else {
           // Взлом или повреждение!
@@ -399,7 +460,7 @@ export class MetaWalletManager {
   }
 
   private saveWallet(): void {
-    this.saveStateToStorage(WALLET_STORAGE_KEY, this.wallet);
+    this.saveStateToStorage(WALLET_STORAGE_KEY, { ...this.wallet, caseOpening: this.caseOpening });
   }
 
   private saveMarket(): void {

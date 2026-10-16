@@ -23,7 +23,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <body className="min-h-dvh">
         {/* Фон шапки - во всю ширину, содержимое - в той же колонке, что и страница. */}
         <header className="gf-header" style={{ padding: 0 }}>
-          <div className="mx-auto flex w-full max-w-5xl items-center gap-4 px-4 sm:gap-6">
+          <div className="gf-header__inner mx-auto flex w-full max-w-5xl items-center gap-4 px-4 sm:gap-6">
             <Link href="/" className="gf-logo">
               <Logo />
               <span className="gf-logo__word">

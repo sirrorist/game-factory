@@ -1,7 +1,8 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { MetaWalletManager } from '../src/meta/wallet.ts';
-import { verifyWallet } from '../src/meta/security.ts';
+import { verifyWallet, appendTransaction } from '../src/meta/security.ts';
+import { ForestCasino, SKINS_COLLECTION } from '../src/meta/casino.ts';
 
 // Mock localStorage in Node.js environment
 const store = new Map<string, string>();
@@ -50,7 +51,11 @@ describe('Менеджер кошелька $GFC (src/meta/wallet.ts)', () => {
     assert.equal(mgr.getBalance(), expected);
   });
 
-  it('открытие кейса за 50 $GFC разблокирует скин в инвентаре', () => {
+  it('кейс списывает ставку один раз и выдаёт скин только после остановки', t => {
+    let now = 1_000_000;
+    t.mock.method(Date, 'now', () => now);
+    const skin = SKINS_COLLECTION[1]!;
+    t.mock.method(ForestCasino, 'openCase', () => ({ item: skin, rollValue: 0.3, revealedHash: 'case-test' }));
     const mgr = new MetaWalletManager();
     const startBal = mgr.getBalance();
     const res = mgr.openSkinCase();
@@ -59,8 +64,107 @@ describe('Менеджер кошелька $GFC (src/meta/wallet.ts)', () => {
     assert.ok(res.skin);
     assert.equal(mgr.getBalance(), startBal - 50);
 
-    const unlocked = mgr.getUnlockedSkins();
-    assert.ok(unlocked.some((s) => s.id === res.skin!.id));
+    assert.equal(mgr.getUnlockedSkins().some(s => s.id === skin.id), false);
+    assert.equal(mgr.equipSkin(skin.id), false);
+    assert.equal(mgr.finishSkinCase(res.opening!.id).success, false);
+    assert.equal(mgr.openSkinCase().success, false);
+    assert.equal(mgr.getBalance(), startBal - 50);
+    assert.equal(mgr.getWalletState().transactions.filter(tx => tx.type === 'case_win').length, 0);
+    now = res.opening!.readyAt;
+    assert.equal(mgr.finishSkinCase(res.opening!.id).success, true);
+    assert.ok(mgr.getUnlockedSkins().some(s => s.id === skin.id));
+    assert.equal(mgr.finishSkinCase(res.opening!.id).success, true);
+    assert.equal(mgr.getWalletState().transactions.filter(tx => tx.type === 'case_win').length, 1);
+    assert.equal(mgr.getBalance(), startBal - 50);
+    assert.equal(verifyWallet(mgr.getWalletState()).valid, true);
+  });
+
+  it('перезагрузка продолжает оплаченный кейс и сохраняет его при других начислениях', t => {
+    let now = 2_000_000;
+    t.mock.method(Date, 'now', () => now);
+    const skin = SKINS_COLLECTION[2]!;
+    t.mock.method(ForestCasino, 'openCase', () => ({ item: skin, rollValue: 0.1, revealedHash: 'case-test' }));
+    const mgr = new MetaWalletManager();
+    const opening = mgr.openSkinCase().opening!;
+    mgr.awardGfc('chest', 10);
+    now += 1000;
+    const resumed = new MetaWalletManager();
+    assert.equal(resumed.getCaseOpening()?.id, opening.id);
+    assert.equal(resumed.getCaseOpening()?.readyAt, opening.readyAt);
+    assert.equal(resumed.getBalance(), 60);
+    assert.equal(resumed.getUnlockedSkins().some(s => s.id === skin.id), false);
+    assert.equal(resumed.openSkinCase().success, false);
+    now = opening.readyAt + 100;
+    const completed = new MetaWalletManager();
+    assert.equal(completed.getCaseOpening()?.revealed, true);
+    assert.equal(completed.getBalance(), 60);
+    assert.ok(completed.getUnlockedSkins().some(s => s.id === skin.id));
+    assert.equal(completed.getWalletState().transactions.filter(tx => tx.type === 'case_open').length, 1);
+    assert.equal(completed.getWalletState().transactions.filter(tx => tx.type === 'case_win').length, 1);
+  });
+
+  it('сохранённый результат восстанавливает коллекцию без повторной выдачи', t => {
+    let now = 3_000_000;
+    t.mock.method(Date, 'now', () => now);
+    const skin = SKINS_COLLECTION[3]!;
+    t.mock.method(ForestCasino, 'openCase', () => ({ item: skin, rollValue: 0.01, revealedHash: 'case-test' }));
+    const mgr = new MetaWalletManager();
+    const opening = mgr.openSkinCase().opening!;
+    now = opening.readyAt;
+    mgr.finishSkinCase(opening.id);
+    store.delete('gf_superwalk_skins_v1');
+    const restored = new MetaWalletManager();
+    assert.ok(restored.getUnlockedSkins().some(s => s.id === skin.id));
+    assert.equal(restored.getCaseOpening()?.skin.id, skin.id);
+    const count = restored.getWalletState().transactions.length;
+    assert.equal(restored.finishSkinCase(opening.id).success, true);
+    assert.equal(restored.finishSkinCase('другой-кейс').success, false);
+    assert.equal(restored.getWalletState().transactions.length, count);
+  });
+
+  for (const skin of SKINS_COLLECTION) {
+    it(`дубликат «${skin.name}» начисляет ${skin.duplicatePayoutGfc} $GFC один раз после остановки`, t => {
+      let now = 4_000_000;
+      t.mock.method(Date, 'now', () => now);
+      t.mock.method(ForestCasino, 'openCase', () => ({ item: skin, rollValue: 0, revealedHash: 'case-test' }));
+      store.set('gf_superwalk_skins_v1', JSON.stringify(['skin_sock', skin.id]));
+      const mgr = new MetaWalletManager();
+      const opening = mgr.openSkinCase().opening!;
+      assert.equal(opening.isNew, false);
+      assert.equal(opening.compensationGfc, skin.duplicatePayoutGfc);
+      assert.equal(mgr.getBalance(), 50);
+      assert.equal(mgr.finishSkinCase(opening.id).success, false);
+      now = opening.readyAt;
+      const resumed = new MetaWalletManager();
+      assert.equal(resumed.getBalance(), 50 + skin.duplicatePayoutGfc);
+      assert.equal(resumed.getCaseOpening()?.compensationGfc, skin.duplicatePayoutGfc);
+      assert.equal(resumed.getWalletState().transactions.filter(tx => tx.type === 'case_win').length, 1);
+      assert.equal(resumed.getWalletState().transactions.at(-1)?.amount, skin.duplicatePayoutGfc);
+      assert.equal(resumed.finishSkinCase(opening.id).success, true);
+      assert.equal(new MetaWalletManager().getBalance(), 50 + skin.duplicatePayoutGfc);
+      assert.equal(verifyWallet(resumed.getWalletState()).valid, true);
+    });
+  }
+
+  it('не начисляет новую компенсацию за уже завершённый кейс предыдущего формата', t => {
+    let now = 5_000_000;
+    t.mock.method(Date, 'now', () => now);
+    const skin = SKINS_COLLECTION[0]!;
+    t.mock.method(ForestCasino, 'openCase', () => ({ item: skin, rollValue: 0.8, revealedHash: 'case-test' }));
+    const mgr = new MetaWalletManager();
+    const opening = mgr.openSkinCase().opening!;
+    now = opening.readyAt;
+    const raw = JSON.parse(store.get('gf_superwalk_wallet_v1')!);
+    const oldCredit = appendTransaction(mgr.getWalletState(), 'case_win', 0);
+    assert.equal(oldCredit.success, true);
+    raw.caseOpening.revealed = true;
+    delete raw.caseOpening.compensationGfc;
+    store.set('gf_superwalk_wallet_v1', JSON.stringify({ ...oldCredit.state, caseOpening: raw.caseOpening }));
+    const restored = new MetaWalletManager();
+    assert.equal(restored.getCaseOpening()?.compensationGfc, 0);
+    assert.equal(restored.getBalance(), 50);
+    assert.equal(restored.finishSkinCase(opening.id).success, true);
+    assert.equal(restored.getBalance(), 50);
   });
 
   it('экипировка и смена скина', () => {
