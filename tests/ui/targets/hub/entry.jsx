@@ -8,6 +8,14 @@ import Login from '@/app/login/page.tsx';
 import Account from '@/app/account/page.tsx';
 import Kit from '@/app/kit/page.tsx';
 import NotFound from '@/app/not-found.tsx';
+import './catalog-prototypes.css';
+import { CatalogMenuPrototypeLayout } from './catalog-menu-prototype.jsx';
+import './catalog-menu-prototype.css';
+
+// Только dev-варианты каталога. Обычные сцены и приложение не включают эти стили.
+const prototype = new URLSearchParams(location.search).get('prototype');
+if (['a', 'b', 'c'].includes(prototype)) document.documentElement.dataset.catalogPrototype = prototype;
+if (prototype && new URLSearchParams(location.search).get('lines') === '3') document.documentElement.dataset.descriptionLines = '3';
 
 const scene = new URLSearchParams(location.search).get('scene')
   ?? (location.pathname.startsWith('/games/') ? 'game'
@@ -31,7 +39,7 @@ async function main() {
       : scene.startsWith('login') ? await Login()
         : scene.startsWith('account') ? await Account()
           : scene === 'kit' ? await Kit() : NotFound();
-  const html = await resolveServerTree(await Layout({ children: page }));
+  const html = await resolveServerTree(await (prototype === 'c' ? CatalogMenuPrototypeLayout : Layout)({ children: page }));
   const body = html.props.children;
   document.body.className = body.props.className;
   createRoot(document.getElementById('root')).render(body.props.children);

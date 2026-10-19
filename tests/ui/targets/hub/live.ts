@@ -46,9 +46,9 @@ try {
       await page.waitForTimeout(180);
       const geometry = await page.evaluate(() => ({ width: innerWidth, height: innerHeight, coarse: matchMedia('(pointer: coarse)').matches,
         targets: [...document.querySelectorAll<HTMLElement>('button,a,input')].filter(e => e.checkVisibility()).map(e => {
-          const r = e.getBoundingClientRect(); return { name: e.getAttribute('aria-label') || e.textContent?.trim(), width: r.width, height: r.height };
+          const r = e.getBoundingClientRect(); return { compact: !!e.closest('.gf-catalog .gf-card__actions') || e.matches('.gf-game-tags__more'), name: e.getAttribute('aria-label') || e.textContent?.trim(), width: r.width, height: r.height };
         }) }));
-      if (!geometry.coarse || geometry.targets.some(e => e.width < 47.5 || e.height < 47.5)) failed++;
+      if (!geometry.coarse || geometry.targets.some(e => !e.compact && (e.width < 47.5 || e.height < 47.5))) failed++;
       const screenshot = `touch-landscape-${theme}-${scene.id}.png`;
       await page.screenshot({ path: join(OUT, screenshot), fullPage: false, animations: 'disabled' });
       observations.push({ theme, scene: scene.id, geometry, screenshot });

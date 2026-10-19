@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button.tsx';
 export function Replay({ children }: { children: ReactNode }) {
   const [round, setRound] = useState(0);
   return (
-    <div className="relative">
+    <div className="gf-replay-demo relative">
       <Button variant="outline" size="sm" className="gf-replay" onClick={() => setRound((r) => r + 1)}>
         Ещё раз
       </Button>
@@ -68,7 +68,7 @@ export function RogueDestinyHudDemo() {
   const isOverloaded = heat >= 100;
 
   return (
-    <div className="flex flex-col gap-4 rounded-lg bg-[rgba(8,11,18,0.85)] p-5 border border-[rgba(255,255,255,0.18)] backdrop-blur-md max-w-md w-full shadow-2xl text-slate-100">
+    <div className="gf-kit-rogue-hud flex flex-col gap-4 rounded-lg bg-[rgba(8,11,18,0.85)] p-5 border border-[rgba(255,255,255,0.18)] backdrop-blur-md max-w-md w-full shadow-2xl text-slate-100">
       <div className="flex items-center justify-between border-b border-[rgba(255,255,255,0.1)] pb-2">
         <span className="font-display text-sm font-bold tracking-wider text-sky-400">ROGUE DESTINY HUD</span>
         <span className="font-mono text-xs text-amber-400 font-semibold tracking-widest">НИТИ: ✦ ✦ ✧</span>

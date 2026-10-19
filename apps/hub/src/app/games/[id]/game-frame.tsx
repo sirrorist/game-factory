@@ -82,13 +82,13 @@ export function GameFrame({ gameId, gameOrigin, title, sandbox, allow, metadata,
       if (!primary) return;
       // Считаем от начала документа: прокрутка к сведениям не растягивает игру.
       const top = primary.getBoundingClientRect().top + window.scrollY;
-      const viewport = window.visualViewport?.height ?? window.innerHeight;
       const summaryInFirstScreen = getComputedStyle(primary).getPropertyValue('--game-summary-in-first-screen').trim() === '1';
       const page = primary.parentElement!;
       const summary = summaryRef.current;
       const reserved = summaryInFirstScreen && summary
         ? summary.getBoundingClientRect().height + parseFloat(getComputedStyle(page).rowGap) : 0;
-      primary.style.setProperty('--game-primary-height', `${Math.max(0, viewport - top - reserved)}px`);
+      primary.style.setProperty('--game-primary-top', `${top}px`);
+      primary.style.setProperty('--game-primary-reserved', `${reserved}px`);
     }
     const observer = new ResizeObserver(measure);
     observer.observe(heading);
@@ -96,7 +96,6 @@ export function GameFrame({ gameId, gameOrigin, title, sandbox, allow, metadata,
     const header = document.querySelector('.gf-header');
     if (header) observer.observe(header);
     window.addEventListener('resize', measure);
-    window.visualViewport?.addEventListener('resize', measure);
     let active = true;
     void document.fonts.ready.then(() => { if (active) measure(); });
     measure();
@@ -104,7 +103,6 @@ export function GameFrame({ gameId, gameOrigin, title, sandbox, allow, metadata,
       active = false;
       observer.disconnect();
       window.removeEventListener('resize', measure);
-      window.visualViewport?.removeEventListener('resize', measure);
     };
   }, []);
 

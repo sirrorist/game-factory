@@ -3,11 +3,12 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
+import { Popup } from '@/components/ui/popup.tsx';
 
 export function GameTags({ tags, title }: { tags: string[]; title: string }) {
   const row = useRef<HTMLDivElement>(null);
   const probe = useRef<HTMLDivElement>(null);
-  const dialog = useRef<HTMLDialogElement>(null);
+  const [open, setOpen] = useState(false);
   const [visible, setVisible] = useState(tags.length);
   const id = useId();
 
@@ -50,7 +51,7 @@ export function GameTags({ tags, title }: { tags: string[]; title: string }) {
         {tags.slice(0, visible).map(tag => <Badge key={tag}>{tag}</Badge>)}
         {visible < tags.length ? (
           <button type="button" className="gf-game-tags__more" aria-label={`Все теги игры «${title}»`}
-            aria-haspopup="dialog" aria-controls={id} onClick={() => dialog.current?.showModal()}>…</button>
+            aria-haspopup="dialog" aria-expanded={open} aria-controls={id} onClick={() => setOpen(true)}>…</button>
         ) : null}
         {/* Измеряем целые плашки отдельно: скрытые теги не оставляют обрезанных фрагментов. */}
         <div ref={probe} className="gf-game-tags__probe" aria-hidden="true" inert>
@@ -58,20 +59,13 @@ export function GameTags({ tags, title }: { tags: string[]; title: string }) {
           <button type="button" className="gf-game-tags__more" tabIndex={-1}>…</button>
         </div>
       </div>
-      <dialog ref={dialog} id={id} className="gf-tags-dialog" aria-labelledby={`${id}-title`}
-        onClick={event => {
-          if (event.target !== event.currentTarget) return;
-          const rect = event.currentTarget.getBoundingClientRect();
-          if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) {
-            event.currentTarget.close();
-          }
-        }}>
+      <Popup id={id} open={open} onClose={() => setOpen(false)} className="gf-tags-dialog" titleId={`${id}-title`}>
         <div className="gf-tags-dialog__header">
           <h2 id={`${id}-title`}>Теги игры «{title}»</h2>
-          <Button variant="outline" size="sm" autoFocus onClick={() => dialog.current?.close()}>Закрыть</Button>
+          <Button variant="outline" size="sm" autoFocus onClick={() => setOpen(false)}>Закрыть</Button>
         </div>
         <div className="gf-tags-dialog__list">{tags.map(tag => <Badge key={tag}>{tag}</Badge>)}</div>
-      </dialog>
+      </Popup>
     </>
   );
 }

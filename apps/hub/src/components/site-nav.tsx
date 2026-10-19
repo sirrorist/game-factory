@@ -8,13 +8,13 @@ const LINKS = [
   { href: '/kit', label: 'Web kit', match: (p: string) => p.startsWith('/kit'), owner: true },
 ];
 
-/** Навигация шапки: текущий раздел - полоска brand под пунктом (aria-current). Web kit - только владельцу. */
+/** Навигация шапки: текущий раздел — is-active и aria-current; оформление зависит от шапки/панели. Web kit - только владельцу. */
 export function SiteNav({ owner }: { owner: boolean }) {
   const path = usePathname() ?? '/';
   return (
     <nav className="gf-nav" aria-label="Разделы">
       {LINKS.filter((l) => owner || !l.owner).map((l) => (
-        <Link key={l.href} href={l.href} aria-current={l.match(path) ? 'page' : undefined}>
+        <Link key={l.href} href={l.href} className={l.match(path) ? 'is-active' : undefined} aria-current={l.match(path) ? 'page' : undefined}>
           {l.label}
         </Link>
       ))}

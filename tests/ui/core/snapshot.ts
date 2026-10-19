@@ -15,7 +15,7 @@ export function archiveAfter(out: string): void {
   if (!existsSync(join(out, 'after'))) return;
   const history = join(out, 'history'); mkdirSync(history, { recursive: true });
   const archive = mkdtempSync(join(history, new Date().toISOString().replaceAll(':', '-') + '-'));
-  for (const name of ['after', 'report.json', 'live-report.json', 'tool-smoke.json', 'viewer-report.json', 'shots', 'diff', 'live', 'viewer', 'acceptance', 'boundary', 'wallet-review']) {
+  for (const name of ['after', 'report.json', 'live-report.json', 'tool-smoke.json', 'viewer-report.json', 'shots', 'diff', 'live', 'viewer', 'acceptance', 'boundary', 'wallet-review', 'regressions', 'next']) {
     if (existsSync(join(out, name))) renameSync(join(out, name), join(archive, name));
   }
 }

@@ -1,0 +1,60 @@
+/* Прототипы пункта 1. Импортируются только из dev-entry, не из Next. */
+html[data-catalog-prototype] { font-size: max(100%, 0.8333333333vw); }
+[data-catalog-prototype] main:has(> .gf-catalog) { padding-block: 1rem; }
+[data-catalog-prototype] .gf-catalog { gap: 1rem; }
+[data-catalog-prototype] .gf-catalog .gf-card { display: flex; height: auto; }
+[data-catalog-prototype] .gf-catalog .gf-card__cover { aspect-ratio: 16 / 9; flex: none; }
+[data-catalog-prototype] .gf-card__cover img { object-fit: contain; }
+[data-catalog-prototype] .gf-catalog .gf-card__body { flex: 1; gap: 0.375rem; }
+[data-catalog-prototype] .gf-catalog .gf-card__title { height: auto; display: block; overflow: visible; }
+[data-catalog-prototype] .gf-catalog .gf-card__desc { height: auto; font-size: 0.875rem; line-height: 1.25rem; }
+[data-catalog-prototype] .gf-card__desc:empty { display: none; }
+[data-catalog-prototype] .gf-catalog .gf-card__actions {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr));
+  grid-auto-rows: auto; padding-bottom: 0.9375rem;
+}
+[data-catalog-prototype] .gf-catalog .gf-card__actions > .gf-btn {
+  height: auto; min-height: max(48px, 3rem); min-width: 48px;
+  padding: 0.5rem; white-space: normal; flex-wrap: wrap; line-height: 1.25;
+}
+[data-catalog-prototype] .gf-game-tags { height: auto; min-height: 3rem; }
+[data-catalog-prototype] .gf-game-tags__more { width: max(48px, 3rem); height: max(48px, 3rem); }
+[data-catalog-prototype] .gf-tags-dialog button { min-width: 48px; min-height: 48px; }
+[data-catalog-prototype] .gf-header .gf-logo,
+[data-catalog-prototype] .gf-header .gf-nav a,
+[data-catalog-prototype] .gf-header .gf-user,
+[data-catalog-prototype] .gf-header .gf-btn { min-width: 48px; min-height: 48px; }
+[data-catalog-prototype] .gf-header .gf-nav a { display: flex; align-items: center; justify-content: center; }
+
+/* А: экономия на шапке, вступлении и строке описания. */
+[data-catalog-prototype="a"] main:has(> .gf-catalog) { padding-top: 0.75rem; }
+[data-catalog-prototype="a"] .gf-catalog { gap: 0.75rem; }
+[data-catalog-prototype="a"] .gf-catalog__heading { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 0.75rem; align-items: baseline; }
+[data-catalog-prototype="a"] .gf-catalog__heading h1 { font-size: 1.5rem; line-height: 2rem; }
+[data-catalog-prototype="a"] .gf-catalog__heading > p:last-child { grid-column: 1 / -1; font-size: 0.9375rem; line-height: 1.375rem; }
+[data-catalog-prototype="a"] .gf-catalog .gf-card__desc { -webkit-line-clamp: 2; line-clamp: 2; }
+[data-catalog-prototype="a"] .gf-catalog .gf-card__body { padding: 0.5rem 0.75rem 0; }
+[data-catalog-prototype="a"] .gf-catalog .gf-card__actions { padding-top: 0.375rem; }
+
+/* Б: привычная шапка и три строки; первый экран уступает месту содержимому. */
+[data-catalog-prototype="b"] .gf-catalog__heading { gap: 0.375rem; }
+[data-catalog-prototype="b"] .gf-catalog .gf-card__desc { -webkit-line-clamp: 3; line-clamp: 3; }
+[data-catalog-prototype][data-description-lines="3"] .gf-catalog .gf-card__desc { -webkit-line-clamp: 3; line-clamp: 3; }
+
+@media (max-width: 639px) {
+  [data-catalog-prototype="a"] .gf-header__inner { display: flex; flex-wrap: wrap; gap: 0.5rem; padding-block: 0.25rem; }
+  [data-catalog-prototype="a"] .gf-header .gf-logo__word { display: none; }
+  [data-catalog-prototype="a"] .gf-header__inner > .gf-nav { display: flex; flex-wrap: wrap; width: auto; gap: 0.25rem; margin: 0; }
+  [data-catalog-prototype="a"] .gf-header__end { margin-left: auto; flex-wrap: wrap; }
+  [data-catalog-prototype="a"] .gf-sign-out { width: 3rem; padding: 0; }
+  [data-catalog-prototype="a"] .gf-sign-out__icon { display: block; }
+  [data-catalog-prototype="a"] .gf-sign-out__text { display: none; }
+  [data-catalog-prototype="b"] .gf-header .gf-logo__word { white-space: normal; line-height: 1.25; }
+  [data-catalog-prototype="b"] .gf-header .gf-logo { container-type: inline-size; container-name: prototype-logo; }
+  [data-catalog-prototype="b"] .gf-header .gf-logo svg { flex: none; }
+  [data-catalog-prototype="b"] .gf-header__end { flex-wrap: wrap; }
+}
+@container prototype-logo (width < 12rem) {
+  [data-catalog-prototype="b"] .gf-header .gf-logo__word { display: none; }
+}
+@media (pointer: coarse) { [data-catalog-prototype] .gf-card:hover { transform: none; } }

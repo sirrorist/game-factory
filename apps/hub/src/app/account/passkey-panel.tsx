@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button.tsx';
 import { authClient } from '@/lib/auth-client.ts';
-import { Icon } from '@/components/icons.tsx';
+import { PopupNotice } from '@/components/ui/popup.tsx';
 
 interface Passkey {
   id: string;
@@ -49,13 +49,9 @@ export function PasskeyPanel() {
         <h2 className="font-display text-xl font-semibold">Passkey</h2>
         <Button size="sm" onClick={() => void add()}>Добавить passkey</Button>
       </div>
-      {error && !noticeDismissed ? (
-        <div className="gf-passkey-notice" role="alert">
-          <p>{error}</p>
-          <button type="button" className="gf-passkey-notice-close" aria-label="Закрыть сообщение"
-            onClick={() => setNoticeDismissed(true)}><Icon name="close" /></button>
-        </div>
-      ) : null}
+      <PopupNotice open={!!error && !noticeDismissed} onClose={() => setNoticeDismissed(true)} className="gf-passkey-notice">
+        <p>{error}</p>
+      </PopupNotice>
       {keys === null ? (
         <p className="text-muted-foreground" role="status">{error ? 'Список ключей недоступен.' : 'Загрузка…'}</p>
       ) : null}

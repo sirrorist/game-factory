@@ -100,7 +100,7 @@ export async function startHub(opts: { port: number; dataDir: string; playPort: 
   if (!existsSync(join(dir, '.next/BUILD_ID'))) throw new Error('хаб не собран: сначала pnpm hub:build');
   const child: ChildProcess = spawn(
     process.execPath,
-    [join(dir, 'node_modules/next/dist/bin/next'), 'start', '--port', String(opts.port)],
+    [join(dir, 'node_modules/next/dist/bin/next'), 'start', '--hostname', '127.0.0.1', '--port', String(opts.port)],
     {
       cwd: dir,
       env: {

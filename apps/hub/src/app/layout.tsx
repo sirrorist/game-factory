@@ -1,8 +1,6 @@
 import type { Metadata, Viewport } from 'next';
-import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { Logo } from '@/components/logo.tsx';
-import { SiteNav } from '@/components/site-nav.tsx';
+import { SiteHeader } from '@/components/site-header.tsx';
 import { UserMenu } from '@/components/user-menu.tsx';
 import { currentOwner } from '@/lib/session.ts';
 import './globals.css';
@@ -22,20 +20,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     <html lang="ru">
       <body className="min-h-dvh">
         {/* Фон шапки - во всю ширину, содержимое - в той же колонке, что и страница. */}
-        <header className="gf-header" style={{ padding: 0 }}>
-          <div className="gf-header__inner mx-auto flex w-full max-w-5xl items-center gap-4 px-4 sm:gap-6">
-            <Link href="/" className="gf-logo">
-              <Logo />
-              <span className="gf-logo__word">
-                Game <b>Factory</b>
-              </span>
-            </Link>
-            <SiteNav owner={owner} />
-            <div className="gf-header__end">
-              <UserMenu />
-            </div>
-          </div>
-        </header>
+        <SiteHeader owner={owner}><UserMenu /></SiteHeader>
         <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
       </body>
     </html>

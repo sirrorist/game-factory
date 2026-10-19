@@ -30,3 +30,39 @@ auth/БД/bridge и содержимое iframe проверяются друг�
 в test-results/ui/hub; исходный каталог сохранён. В новой metadata hash — SHA HTML,
 sourceHash сохраняет прежний хеш UI-исходников, artifactHash проверяет весь результат.
 Старый зелёный отчёт не выдаётся за проверку перенесённого инструмента.
+
+## Регрессии каталога и общих попапов
+
+После `ui:check`:
+
+```bash
+node tests/ui/targets/hub/regressions.ts <имя-прохода>
+```
+
+Проверки границ адаптива (включая 439/440/441), text200, сохранения геометрии
+при синтетическом visualViewport/прокрутке, полного исходника разных пропорций,
+текста в кнопках, тегов, входа/выхода popup, фокуса и reduced motion.
+Мутации crop, transform картинки, clip тегов и зависимости от visualViewport
+должны обнаруживаться. Это Chromium/образцы, не физический toolbar/pinch zoom.
+Повтор адресного прогона сохраняет прежний каталог в history и сначала пишет
+неполный статус; hash runner включает общий helper из `tests/e2e/hub-ui.ts`.
+
+`check` сохраняет `*-viewport.png` с неизменным viewport отдельно от полной страницы.
+Длинные touch-страницы собираются из обычных кадров без resize: Chromium fullPage
+в этой конфигурации меняет композицию во время capture. Дополнительный viewport
+кадр — источник первого экрана. Уведомления с fixed-позиционированием могут повторяться
+в собранной длинной странице; отдельный viewport показывает фактическое положение.
+
+CI: UI smoke входит в `tests/e2e/hub.test.ts` и проверяет настоящий Next на телефоне,
+landscape и ПК, а не Vite-образец. Правило единой popup-основы проверяется unit-тестом.
+
+Настоящий стенд при готовой сборке Next и тестовых данных:
+
+```bash
+node tests/ui/targets/hub/device-stand.ts --data <каталог-тестовых-игр> --hub-port 3012 --play-port 3013
+adb reverse tcp:3012 tcp:3012
+adb reverse tcp:3013 tcp:3013
+```
+
+Открыть top-level `http://localhost:3012/`, игру `http://localhost:3012/games/snake`.
+Хаб и сервер игр слушают loopback. Auth/production конфигурация не подменяется.

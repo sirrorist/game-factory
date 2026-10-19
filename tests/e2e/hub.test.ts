@@ -12,6 +12,8 @@ import { pathToFileURL } from 'node:url';
 import type { Browser, Frame, Page } from 'playwright';
 import { buildData, close, freePort, gameVersion, launchBrowser, startHub, startPlay, type Hub } from './helpers.ts';
 
+import { hubUiSmoke } from './hub-ui.ts';
+
 const GAMES = ['k8s-at-home', 'phaser-2d', 'snake', 'superwalk', 'three-3d'] as const;
 /** Игры до 1.0.0: гостю хаб их не показывает (D-060). Владельцу - auth.test.ts. */
 const PRERELEASE = ['rogue-destiny'] as const;
@@ -264,3 +266,8 @@ for (const id of GAMES) {
     await context.close();
   });
 }
+
+// Входит в pnpm test:e2e в CI; запускается и отдельно по имени теста.
+test('UI-регрессии хаба: плотность, обложки, стабильность и меню', async () => {
+  await hubUiSmoke(browser, hub.origin);
+});

@@ -58,6 +58,14 @@ export async function buildSnapshot(side: 'before' | 'after', ref?: string): Pro
   }
   if (!existsSync(join(stage, 'node_modules'))) symlinkSync(join(HUB, 'node_modules'), join(stage, 'node_modules'), 'dir');
   cpSync(join(HERE, 'entry.jsx'), join(stage, 'entry.jsx'));
+  cpSync(join(HERE, 'catalog-prototypes.css'), join(stage, 'catalog-prototypes.css'));
+  for (const file of ['catalog-menu-prototype.jsx', 'catalog-menu-prototype.css']) cpSync(join(HERE, file), join(stage, file));
+  const prototypeGames = ['superwalk', 'k8s-at-home', 'rogue-destiny'].map(id => {
+    const manifest = JSON.parse(readFileSync(join(ROOT, 'games', id, 'game.json'), 'utf8'));
+    const cover = readFileSync(join(ROOT, 'games', id, 'public', manifest.cover), 'utf8');
+    return { manifest, coverUrl: 'data:image/svg+xml,' + encodeURIComponent(cover) };
+  });
+  writeFileSync(join(stage, 'prototype-games.json'), JSON.stringify(prototypeGames));
   writeFileSync(join(stage, 'index.html'), '<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Game Factory — UI-пример</title></head><body><div id="root"></div><script type="module" src="/entry.jsx"></script></body></html>');
   const mocks = join(stage, 'mocks.jsx');
   cpSync(join(HERE, 'mocks.jsx'), mocks);
@@ -95,7 +103,7 @@ export async function buildSnapshot(side: 'before' | 'after', ref?: string): Pro
 }
 
 export function hubEvidence(runner: string) {
-  return { snapshots: snapshotEvidence(OUT), toolHash: hashTool([runner, 'adapter.ts', 'config.ts', 'entry.jsx', 'mocks.jsx', 'preview.ts'].map(f => join(HERE, f))) };
+  return { snapshots: snapshotEvidence(OUT), toolHash: hashTool([runner, 'capture.ts', 'adapter.ts', 'config.ts', 'entry.jsx', 'mocks.jsx', 'preview.ts', 'catalog-prototypes.css', 'catalog-menu-prototype.jsx', 'catalog-menu-prototype.css'].map(f => join(HERE, f))) };
 }
 
 export function hubComparison() {

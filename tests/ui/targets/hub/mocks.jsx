@@ -1,8 +1,10 @@
 // Примеры для локального просмотра. Этот модуль не импортируется хабом и не меняет его авторизацию.
 import React from 'react';
+import prototypeGames from './prototype-games.json';
 const scene = () => globalThis.__HUB_UI_SCENE__ ?? 'catalog';
 export const user = { id: 'ui-example', name: 'Игрок Superwalk', email: 'player@example.test' };
-export const currentUser = async () => /^(account|kit)/.test(scene()) ? user : null;
+export const currentUser = async () => /^(account|kit)/.test(scene())
+  || (document.documentElement.dataset.catalogPrototype && new URLSearchParams(location.search).get('owner') === '1') ? user : null;
 export const currentOwner = currentUser;
 export const hubAuth = () => scene() === 'login-unavailable' ? null : {};
 
@@ -41,7 +43,15 @@ const catalogGames = () => catalogSamples.map((sample, index) => {
   item.coverUrl = sample.colors ? cover(...sample.colors) : null;
   return item;
 });
-export const listGames = () => scene() === 'catalog-empty' ? [] : catalogGames();
+export const listGames = () => {
+  if (scene() === 'catalog-empty') return [];
+  if (!document.documentElement.dataset.catalogPrototype) return catalogGames();
+  // Первые три — реальные manifest/cover; URL архива и его размер остаются образцами.
+  return [...prototypeGames.map(({ manifest, coverUrl }) => ({
+    ...game(manifest.id, manifest.title), entry: { id: manifest.id, version: manifest.version, manifest }, coverUrl,
+    prerelease: manifest.version.startsWith('0.'),
+  })), ...catalogGames().slice(2)];
+};
 export const findGame = () => game('superwalk', 'Superwalk');
 export const frameAttributes = () => ({ sandbox: 'allow-scripts allow-same-origin', allow: 'fullscreen' });
 export function connectGame({ onEvent }) {

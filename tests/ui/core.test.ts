@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, symlinkSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, symlinkSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { safeName, ROOT } from './core/paths.ts';
@@ -79,6 +79,8 @@ test('повторная сборка удаляет старые ресурсы
     publishSnapshot(out, 'after', content, { ref: 'sample', version: '2' });
     writeFileSync(join(out, 'after', 'old.js'), 'старый ресурс');
     writeFileSync(join(out, 'report.json'), '{"complete":true}');
+    mkdirSync(join(out, 'regressions')); writeFileSync(join(out, 'regressions/report.json'), '{"complete":true,"failed":0}');
+    mkdirSync(join(out, 'next')); writeFileSync(join(out, 'next/report.json'), '{"complete":true}');
     writeFileSync(join(content, 'index.html'), 'вторая версия');
     const after = publishSnapshot(out, 'after', content, { ref: 'sample', version: '3' });
     assert.notEqual(before.hash, after.hash);
@@ -87,6 +89,9 @@ test('повторная сборка удаляет старые ресурсы
     const history = join(out, 'history', readdirSync(join(out, 'history'))[0]!);
     assert.equal(readFileSync(join(history, 'after/index.html'), 'utf8'), 'первая версия');
     assert.equal(readFileSync(join(history, 'after/old.js'), 'utf8'), 'старый ресурс');
+    assert.equal(readFileSync(join(history, 'regressions/report.json'), 'utf8'), '{"complete":true,"failed":0}');
+    assert.equal(readFileSync(join(history, 'next/report.json'), 'utf8'), '{"complete":true}');
+    assert.equal(existsSync(join(out, 'regressions')), false);
     assert.deepEqual(JSON.parse(readFileSync(join(history, 'report.json'), 'utf8')), { complete: true });
     assert.throws(() => publishSnapshot(out, 'before', content, { ref: 'other', version: '4' }), /База уже существует/);
     const { before: preserved } = snapshotEvidence(out);

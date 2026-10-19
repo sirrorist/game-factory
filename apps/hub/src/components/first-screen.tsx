@@ -15,9 +15,8 @@ export function FirstScreen({ children, anchor = false }: { children: ReactNode;
       if (!section || !main) return;
       const top = section.getBoundingClientRect().top + window.scrollY;
       const bottom = parseFloat(getComputedStyle(main).paddingBottom);
-      const viewport = window.visualViewport?.height ?? window.innerHeight;
-      const available = Math.max(0, viewport - top - bottom);
-      section.style.setProperty('--first-screen-space', `${available}px`);
+      section.style.setProperty('--first-screen-top', `${top}px`);
+      section.style.setProperty('--first-screen-bottom', `${bottom}px`);
       if (anchor) {
         // Дополнительные сообщения и раскрывающиеся блоки растут вниз,
         // не меняя исходное положение основных элементов страницы.
@@ -25,7 +24,7 @@ export function FirstScreen({ children, anchor = false }: { children: ReactNode;
           .map(block => block.getBoundingClientRect());
         if (blocks.length) {
           const height = Math.max(...blocks.map(block => block.bottom)) - Math.min(...blocks.map(block => block.top));
-          section.style.setProperty('--first-screen-offset', `${Math.max(0, (available - height) / 2)}px`);
+          section.style.setProperty('--first-screen-anchor-height', `${height}px`);
         }
       }
     }
@@ -34,7 +33,6 @@ export function FirstScreen({ children, anchor = false }: { children: ReactNode;
     if (header) observer.observe(header);
     if (anchor) section.querySelectorAll('[data-first-screen-anchor]').forEach(block => observer.observe(block));
     window.addEventListener('resize', measure);
-    window.visualViewport?.addEventListener('resize', measure);
     let active = true;
     void document.fonts.ready.then(() => { if (active) measure(); });
     measure();
@@ -42,7 +40,6 @@ export function FirstScreen({ children, anchor = false }: { children: ReactNode;
       active = false;
       observer.disconnect();
       window.removeEventListener('resize', measure);
-      window.visualViewport?.removeEventListener('resize', measure);
     };
   }, [anchor]);
 

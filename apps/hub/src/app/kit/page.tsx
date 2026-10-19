@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button.tsx';
 import { FirstScreen } from '@/components/first-screen.tsx';
 import { currentOwner } from '@/lib/session.ts';
 import { HotbarDemo, Replay, RogueDestinyHudDemo } from './demos.tsx';
+import { PopupDemo } from './popup-demo.tsx';
 import { KitNavigation } from './kit-navigation.tsx';
 
 export const metadata: Metadata = { title: 'Web kit' };
@@ -197,7 +198,8 @@ export default async function KitPage() {
         </Scene>
       </Section>
 
-      <Section id="kit-toasts" title="Тосты">
+      <Section id="kit-toasts" title="Тосты" note="Ниже — статические образцы оформления. Кнопки открывают настоящие поверхности с общим жизненным циклом.">
+        <PopupDemo />
         <Replay>
           <Scene className="flex flex-col items-start gap-2 p-4 pr-28">
             <span className="gf-toast">Полёт: вкл</span>
@@ -211,7 +213,7 @@ export default async function KitPage() {
       </Section>
 
       <Section id="kit-hud" title="HUD игр" note="Счётчики - сверху экрана, панель блоков - снизу. Выбери ячейку.">
-        <Scene className="h-72">
+        <Scene className="gf-kit-hud-preview h-72">
           <div className="gf-hud-top absolute left-3 top-3">
             <span className="gf-hud-stat">
               <Icon name="blocks" />
@@ -239,8 +241,8 @@ export default async function KitPage() {
 
       <Section id="kit-menu" title="Меню игры">
         <Replay>
-          <div className="grid place-items-center rounded-md p-6" style={{ background: 'var(--scrim)' }}>
-            <div className="gf-panel" role="dialog" aria-label="Меню игры">
+          <div className="gf-kit-menu-preview grid place-items-center rounded-md p-6" style={{ background: 'var(--scrim)' }}>
+            <div className="gf-panel" aria-label="Образец меню игры">
               <h3 className="gf-panel__title">k8s at home</h3>
               <p className="gf-panel__sub">кластер развёрнут: 1/1 нода готова</p>
               <Button size="lg">
@@ -273,7 +275,7 @@ export default async function KitPage() {
         title="Rogue Destiny - Souls-like Roguelite"
         note="Специализированные компоненты хардкорного сурвайвала: интерактивная шкала Эфирного Перегрева мага с красной чертой риска (80-95%), механика серого здоровья (неизлечимой травмы плоти) и Нити Судьбы."
       >
-        <Scene className="flex items-center justify-center p-8 min-h-[16.25rem]">
+        <Scene className="gf-kit-rogue-preview flex items-center justify-center p-8 min-h-[16.25rem]">
           <RogueDestinyHudDemo />
         </Scene>
       </Section>

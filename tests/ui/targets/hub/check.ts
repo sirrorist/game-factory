@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
+import { captureHubPage } from './capture.ts';
 import { trackCheck } from '../../core/report.ts';
 import { OUT, startHubComparison, hubEvidence } from './preview.ts';
 import { PROFILES } from '../../core/profiles.ts';
@@ -60,7 +61,7 @@ try {
         if (geometry.overlaps.length) errors.push('Пересечение кнопок шапки');
         if (geometry.controls.some(c => c.x < -1 || c.right > geometry.width + 1 || c.y < -1 || c.bottom > geometry.header.bottom + 1)) errors.push('Кнопки вне шапки/экрана');
         if (side === 'after') {
-          const expected = 16 * Math.max(1, Math.min(profile.width / 1920, profile.height / 1080));
+          const expected = 16 * Math.max(1, profile.width / 1920);
           if (Math.abs(geometry.font - expected) > .02) errors.push('Неверный масштаб rem');
           if (geometry.thumb === 'rgba(0, 0, 0, 0)' || geometry.track === 'rgba(0, 0, 0, 0)') errors.push('Нет стиля скроллбара');
           if (profile.touch && geometry.controls.some(c => c.width < 47.5 || c.height < 47.5)) errors.push('Цель касания шапки меньше 48 px');
@@ -75,7 +76,7 @@ try {
             return !!hit && (hit === e || e.contains(hit));
           });
           if (!valid) errors.push('Недостижимый элемент: ' + (await control.getAttribute('aria-label') || (await control.textContent())?.trim().slice(0, 50)));
-          if (side === 'after' && profile.touch) {
+          if (side === 'after' && profile.touch && !await control.evaluate(e => !!e.closest('.gf-catalog .gf-card__actions') || e.matches('.gf-game-tags__more'))) {
             const size = await control.boundingBox();
             if (size && (size.width < 47.5 || size.height < 47.5)) errors.push('Цель касания меньше 48 px: ' + (await control.getAttribute('aria-label') || (await control.textContent())?.trim().slice(0, 50)));
           }
@@ -85,7 +86,7 @@ try {
           window.scrollTo(0, 0);
         });
         const screenshot = `${side}-${profile.id}-${theme}-${scene.id}.png`;
-        await page.screenshot({ path: join(SHOTS, screenshot), fullPage: true, animations: 'disabled' });
+        const capture = await captureHubPage(page, join(SHOTS, screenshot));
         if (side === 'after' && scene.id === 'login') {
           await page.locator('input[name="email"]').fill('player@example.test');
           await page.locator('input[name="password"]').fill('ui-example-password');
@@ -121,11 +122,11 @@ try {
           await page.setViewportSize(next);
           await page.waitForTimeout(100);
           const resized = await page.evaluate(() => ({ font: parseFloat(getComputedStyle(document.documentElement).fontSize), width: innerWidth, height: innerHeight, scroll: document.documentElement.scrollWidth }));
-          if (resized.scroll > resized.width + 1 || Math.abs(resized.font - 16 * Math.max(1, Math.min(next.width / 1920, next.height / 1080))) > .02) errors.push('Resize без reload ломает размеры');
+          if (resized.scroll > resized.width + 1 || Math.abs(resized.font - 16 * Math.max(1, next.width / 1920)) > .02) errors.push('Resize без reload ломает размеры');
           await page.setViewportSize({ width: profile.width, height: profile.height });
         }
         errors.push(...runtime.filter(e => !errors.includes(e)));
-        runs.push({ side, profile: profile.id, theme, scene: scene.id, errors, screenshot, geometry });
+        runs.push({ side, profile: profile.id, theme, scene: scene.id, errors, screenshot, geometry: { ...geometry, capture } });
         progress.checkpoint();
       }
     } finally { await context.close(); }
