@@ -30,8 +30,13 @@ export function catalogGeometry() {
       }
     }
     const actions = card.querySelector('.gf-card__actions')!, tags = card.querySelector('.gf-game-tags');
+    const description = card.querySelector<HTMLElement>('.gf-card__desc')!;
+    const descriptionStyle = getComputedStyle(description);
+    if (Math.abs(rect(description).height - Number(descriptionStyle.webkitLineClamp) * parseFloat(descriptionStyle.lineHeight)) > 1) issues.push('Высота описания не соответствует числу строк');
     if (tags) {
       const row = rect(tags);
+      const gap = parseFloat(getComputedStyle(document.documentElement).fontSize) * .625;
+      if (Math.abs(row.y - rect(description).bottom - gap) > 1) issues.push('Неверный отступ между описанием и тегами');
       if (!inside(row, box) || overlap(row, rect(actions))) issues.push('Строка тегов вне карточки/пересекает действия');
       for (const chip of [...tags.children].filter(c => !c.matches('.gf-game-tags__probe'))) {
         const r = rect(chip);
@@ -65,10 +70,10 @@ export async function hubUiSmoke(browser: Browser, origin: string) {
       const geometry = await page.evaluate(catalogGeometry);
       assert.deepEqual(geometry.issues, []); assert.ok(geometry.cards.length >= 4);
       assert.deepEqual(await page.locator('.gf-catalog .gf-card__desc').evaluateAll(nodes => nodes.map(e => getComputedStyle(e).webkitLineClamp)), Array(geometry.cards.length).fill(width >= 1100 ? '5' : '3'));
-      // В низких окнах длинное описание увеличивает естественную высоту ряда.
-      // Плотность двух рядов сохраняем на опорных 1080p/1440p/2160p при штатном rem.
-      if (width >= 1920 && height / geometry.font >= 67.5) assert.ok(Math.abs(geometry.cards.at(-1)!.bottom - (height - geometry.font / 2)) < 1, 'Ряды каталога не помещаются');
       const before = JSON.stringify(geometry.cards);
+      await page.setViewportSize({ width, height: height + 240 });
+      assert.equal(JSON.stringify((await page.evaluate(catalogGeometry)).cards), before, 'Высота окна меняет карточки');
+      await page.setViewportSize({ width, height });
       await page.evaluate(() => { Object.defineProperty(visualViewport!, 'height', { configurable: true, get: () => 500 }); visualViewport!.dispatchEvent(new Event('resize')); window.scrollTo(0, 80); });
       await page.waitForTimeout(60);
       const after = await page.evaluate(catalogGeometry);
