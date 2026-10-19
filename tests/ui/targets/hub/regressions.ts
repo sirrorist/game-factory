@@ -96,7 +96,8 @@ try {
           await open(page); const measured = await geometry(page); assert.deepEqual(measured.issues, []);
           assert.equal(measured.font, Number((16 * Math.max(1, width / 1920)).toFixed(4)));
           assert.equal(measured.columns, width < 640 ? 1 : width < 1100 ? 2 : 3);
-          if (width >= 1920 && height >= 920) assert.ok(Math.abs(measured.cards[5]!.bottom - (height - measured.font / 2)) < 1, 'Два ряда не помещаются с нижним отступом');
+          // Лимит 5 строк допускает прокрутку низкого окна; опорные полные экраны сохраняют два ряда.
+          if (width >= 1920 && height / measured.font >= 67.5) assert.ok(Math.abs(measured.cards[5]!.bottom - (height - measured.font / 2)) < 1, 'Два ряда не помещаются с нижним отступом');
           const stableBefore = JSON.stringify(measured.cards);
           const stability = await page.evaluate(() => {
             const viewport = visualViewport!, height = viewport.height, scale = viewport.scale;

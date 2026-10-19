@@ -56,7 +56,7 @@ export function catalogGeometry() {
 }
 
 export async function hubUiSmoke(browser: Browser, origin: string) {
-  for (const [width, height] of [[314,844],[440,956],[844,390],[1920,920],[2560,1280],[3840,2160]] as const) {
+  for (const [width, height] of [[314,844],[440,956],[844,390],[1920,920],[1920,1080],[2560,1280],[2560,1440],[3840,2160]] as const) {
     const page = await browser.newPage({ viewport: { width, height }, hasTouch: width < 1100, isMobile: width < 1100, colorScheme: 'dark' });
     const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
     try {
@@ -64,7 +64,10 @@ export async function hubUiSmoke(browser: Browser, origin: string) {
       await page.waitForTimeout(80);
       const geometry = await page.evaluate(catalogGeometry);
       assert.deepEqual(geometry.issues, []); assert.ok(geometry.cards.length >= 4);
-      if (width >= 1920) assert.ok(Math.abs(geometry.cards.at(-1)!.bottom - (height - geometry.font / 2)) < 1, 'Ряды каталога не помещаются');
+      assert.deepEqual(await page.locator('.gf-catalog .gf-card__desc').evaluateAll(nodes => nodes.map(e => getComputedStyle(e).webkitLineClamp)), Array(geometry.cards.length).fill(width >= 1100 ? '5' : '3'));
+      // В низких окнах длинное описание увеличивает естественную высоту ряда.
+      // Плотность двух рядов сохраняем на опорных 1080p/1440p/2160p при штатном rem.
+      if (width >= 1920 && height / geometry.font >= 67.5) assert.ok(Math.abs(geometry.cards.at(-1)!.bottom - (height - geometry.font / 2)) < 1, 'Ряды каталога не помещаются');
       const before = JSON.stringify(geometry.cards);
       await page.evaluate(() => { Object.defineProperty(visualViewport!, 'height', { configurable: true, get: () => 500 }); visualViewport!.dispatchEvent(new Event('resize')); window.scrollTo(0, 80); });
       await page.waitForTimeout(60);
