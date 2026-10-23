@@ -15,6 +15,17 @@
 | [specs/deploy-vps.md](specs/deploy-vps.md) | деплой на VPS-1 - выполнен и принят 2026-09-26; критерии приёмки прода | история; как устроено сейчас - DEPLOY, OPERATIONS |
 | [DECISIONS.md](DECISIONS.md) | журнал решений: что выбрали, почему, что отвергли | перед тем как "улучшить" принятое |
 
+Первый почтовый подшаг 2А-03: [утверждённый план R2](HUB-STAGE-2A-03-MAIL-PLAN.md),
+[локальные результаты и ограничения проверок](HUB-STAGE-2A-03-MAIL-REPORT.md),
+[инструкция подключения](HUB-MAIL-OPERATIONS.md),
+[подготовленные конфигурация размещения и команды](HUB-MAIL-DEPLOYMENT.md),
+[перепроверка Bash/Compose и согласованный патч updater](HUB-MAIL-DEPLOYMENT-RECHECK.md),
+[план сборки и публикации образа шлюза](HUB-MAIL-IMAGE-PLAN.md),
+[результаты реализации образа](HUB-MAIL-IMAGE-REPORT.md) и [промпт ревью](HUB-MAIL-IMAGE-REVIEW-PROMPT.md),
+[попытка сборки и команды для тестового Engine](HUB-MAIL-IMAGE-BUILD.md),
+[промпт ревью размещения](HUB-MAIL-DEPLOYMENT-REVIEW-PROMPT.md),
+[промпт ревью реализации](HUB-STAGE-2A-03-MAIL-REVIEW-PROMPT.md). Реальная почта не подключена.
+
 ## Как устроено
 
 | Документ | Что в нём | Когда открывать |

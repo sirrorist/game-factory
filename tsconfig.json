@@ -12,6 +12,8 @@
   },
   "include": [
     "apps/play-server/**/*.ts",
+    "apps/mail-relay/**/*.ts",
+    "apps/hub/test/mail-client.test.ts",
     "packages/manifest/**/*.ts",
     "packages/registry/**/*.ts",
     "packages/hub-bridge/**/*.ts",

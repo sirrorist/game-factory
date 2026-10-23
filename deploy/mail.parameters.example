@@ -1,0 +1,6 @@
+# Несекретные строки для будущего добавления в root .env рядом с compose.yml.
+# Не заменять существующий .env: GF_IMAGE_TAG и прежние строки сохраняются.
+# Пустые значения останавливают Compose; реальные image/network ещё не подготовлены.
+COMPOSE_FILE=compose.yml:compose.mail.yml
+GF_MAIL_RELAY_IMAGE=
+GF_MAIL_EGRESS_NETWORK=

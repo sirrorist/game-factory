@@ -1,0 +1,6 @@
+# Отдельный контекст шлюза; корневой .dockerignore других образов не меняется.
+**
+!package.json
+!apps/mail-relay/Dockerfile
+!apps/mail-relay/Dockerfile.dockerignore
+!apps/mail-relay/src/*.ts

@@ -27,7 +27,8 @@ compose() { docker compose --profile publish "$@"; }
 image_ids() {
   local s img
   for s in "${SERVICES[@]}"; do
-    img=$(compose config --images "$s")
+    img=$(compose config --format json | python3 -c 'import json, sys; print(json.load(sys.stdin)["services"][sys.argv[1]]["image"])' "$s") || return
+    [[ -n $img && $img != *$'\n'* ]] || return 1
     docker image inspect --format '{{.Id}}' "$img" 2>/dev/null || echo "нет:$img"
   done
 }

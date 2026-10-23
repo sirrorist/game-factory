@@ -1,0 +1,52 @@
+# Подготовленный overlay к compose.prod.yml. Сам по себе сервисы не запускает.
+# Порядок файлов, root-копия и gf-update: docs/HUB-MAIL-DEPLOYMENT.md.
+services:
+  hub:
+    environment:
+      GF_MAIL_RELAY_URL: http://mail-relay:4102/v1/send
+      GF_MAIL_SERVICE_SECRET_FILE: /run/secrets/mail_service_secret
+    secrets: [mail_service_secret]
+    networks: [gf-mail]
+    depends_on:
+      mail-relay:
+        condition: service_started
+
+  mail-relay:
+    image: ${GF_MAIL_RELAY_IMAGE:?нужен проверенный образ шлюза по digest}
+    user: "1000:1000"
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 128m
+    cpus: "0.25"
+    pids_limit: 32
+    labels:
+      traefik.enable: "false"
+    environment:
+      GF_HUB_ORIGIN: https://games.youranus.ru
+      GF_MAIL_FROM: noreply@auth.youranus.ru
+      GF_MAIL_PROFILE_SHA256: 2f6ade95883c8735f14d51452fe94d0964a80dbc47c04c9b796df2a45a5b74dd
+      GF_MAIL_SERVICE_SECRET_FILE: /run/secrets/mail_service_secret
+      GF_RESEND_API_KEY_FILE: /run/secrets/resend_api_key
+    secrets: [mail_service_secret, resend_api_key]
+    networks: [gf-mail, gf-mail-egress]
+    logging:
+      driver: json-file
+      options: {max-size: 1m, max-file: "2"}
+
+secrets:
+  mail_service_secret:
+    file: ./secrets/mail_service_secret
+  resend_api_key:
+    file: ./secrets/resend_api_key
+
+networks:
+  # Оператор заранее создаёт именно internal-сеть с согласованными ограничениями.
+  # external не доказывает internal: это отдельная проверка перед запуском.
+  gf-mail:
+    external: true
+    name: gf-mail
+  gf-mail-egress:
+    external: true
+    name: ${GF_MAIL_EGRESS_NETWORK:?нужна отдельно подготовленная ограниченная egress-сеть}

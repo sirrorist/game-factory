@@ -1,0 +1,55 @@
+# Пример только почтовой связи, не готовая замена compose.prod.yml и не автодеплой.
+# Исходящую external-сеть предварительно ограничивает оператор (HUB-MAIL-OPERATIONS.md).
+name: game-factory-mail-example
+
+services:
+  hub:
+    image: ${GF_MAIL_HUB_IMAGE:?нужен отдельно проверенный образ хаба по digest}
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    labels:
+      traefik.enable: "false"
+    environment:
+      GF_HUB_ORIGIN: ${GF_HUB_ORIGIN:?нужен согласованный origin}
+      GF_MAIL_RELAY_URL: http://mail-relay:4102/v1/send
+      GF_MAIL_SERVICE_SECRET_FILE: /run/secrets/mail_service_secret
+    secrets: [mail_service_secret]
+    networks: [gf-mail]
+
+  mail-relay:
+    image: ${GF_MAIL_RELAY_IMAGE:?нужен отдельно собранный и проверенный образ шлюза по digest}
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 128m
+    cpus: "0.25"
+    pids_limit: 32
+    labels:
+      traefik.enable: "false"
+    environment:
+      GF_HUB_ORIGIN: ${GF_HUB_ORIGIN:?нужен согласованный origin}
+      GF_MAIL_FROM: ${GF_MAIL_FROM:?нужен согласованный подтверждённый отправитель}
+      GF_MAIL_PROFILE_SHA256: ${GF_MAIL_PROFILE_SHA256:?нужен сохранённый pin профиля v1}
+      GF_MAIL_SERVICE_SECRET_FILE: /run/secrets/mail_service_secret
+      GF_RESEND_API_KEY_FILE: /run/secrets/resend_api_key
+    secrets: [mail_service_secret, resend_api_key]
+    networks: [gf-mail, gf-mail-egress]
+    logging:
+      driver: json-file
+      options: {max-size: 1m, max-file: "2"}
+
+secrets:
+  mail_service_secret:
+    file: ./secrets/mail_service_secret
+  resend_api_key:
+    file: ./secrets/resend_api_key
+
+networks:
+  gf-mail:
+    internal: true
+  gf-mail-egress:
+    external: true
+    name: ${GF_MAIL_EGRESS_NETWORK:?нужна отдельно подготовленная ограниченная сеть}
