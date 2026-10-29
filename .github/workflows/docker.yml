@@ -61,7 +61,7 @@ jobs:
           $c run --rm migrate
           $c run --rm migrate
           $c exec -T db psql -U gf -d gf -Atc "select string_agg(tablename, ',' order by tablename) from pg_tables where schemaname = 'public'" | tee tables.txt
-          grep -qx 'account,game_saves,passkey,scores,session,user,verification' tables.txt
+          grep -qx 'access_events,access_lock,account,auth_actions,auth_mail_counters,auth_mail_operations,auth_recovery_guards,game_saves,passkey,scores,session,user,verification' tables.txt
           # Роль хаба заведена migrate и не суперпользователь (D-051, D-058).
           $c exec -T db psql -U gf -d gf -Atc "select rolsuper::text || ',' || rolcanlogin::text from pg_roles where rolname = 'gf_hub'" | tee role.txt
           grep -qx 'false,true' role.txt

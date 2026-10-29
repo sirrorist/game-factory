@@ -1,25 +1,28 @@
 # Тесты и план проверок
 
-## Standalone/browser-стенд A — подготовлен, интеграция ещё не запущена
+## Standalone/browser-стенд A — первый CI красный, исправления локально
 
-2026-10-29 по D-065 реализован [план](HUB-STAGE-2A-03-AUTH-INTEGRATION-PLAN.md)
-с двумя уточнениями ревью: чтение checkout запрещено дочернему Node и проверяется
-намеренной внешней зависимостью; Referer требует поступления запросов и
-положительного контроля канала. Отдельный job/PG, production standalone,
-HTTPS/Chromium и управляемая подмена фиксированного relay.
+По переданному владельцем CI-логу: 18 из 20 сценариев прошли на настоящих
+standalone/PG/HTTPS/Chromium. Два сценария неверного ключа ошибочно ждали exit;
+общий job красный. Исправленный полный прогон ещё не запускался.
 
-Локально node --test --experimental-test-isolation=none tests/auth-a/harness.test.ts
-— **18/18** после двух P2 ревью, root tsc без ошибок, шесть новых мутаций
-— целевые testCodeFailure; прежние девять не повторялись. Проверены безопасный
-CSS Referer, запрет bearer и группы с потомком после выхода лидера/TERM.
-Прежний ManagedProcess воспроизводит ошибку в новом тесте.
-Мутации исполнялись в отдельных временных копиях, не на рабочих исходниках.
-Проверены реальные дочерние процессы/файловые разрешения и loopback HTTP/HTTPS;
-браузер, Next build и новая БД **не запускались**. Новая команда
-pnpm test:auth-integration разрешена только выделенному CI job после согласования
-Git/dev/запуска. Общие pnpm test/e2e не подхватывают эти integration-файлы.
-[Отчёт и ограничения](HUB-STAGE-2A-03-AUTH-INTEGRATION-REPORT.md),
-[промпт ревью реализации](HUB-STAGE-2A-03-AUTH-INTEGRATION-REVIEW-PROMPT.md).
+Команда node --test --experimental-test-isolation=none tests/auth-a/harness.test.ts
+— **28/28**, без пропусков. Десять новых случаев проверяют живой listener с 500,
+здоровый 200, чужой 503, отсутствие диагностики, обрыв, зависание, permission error,
+а также три исхода exit. Отказ требует ожидаемой диагностики и HTTP 500 либо
+ненулевого exit. У неверного ключа остаётся pending и отсутствует отправка.
+Существующие Referer/cleanup/allowlist/HTTPS проверки сохранены.
+
+Команда node --test --experimental-test-isolation=none packages/db/test/db.pgtest.ts
+— **13/13**: список таблиц после применения миграций обязан точно совпасть
+с Docker workflow (13 таблиц вместо прежних семи). Root tsc — exit 0.
+Восемь подмен во временных копиях дали testCodeFailure: два replay старых
+ожиданий и шесть ослаблений проверки отказа. Старые мутации не повторялись.
+Первый sandbox-прогон harness с EPERM не засчитан; повтор вне sandbox зелёный.
+
+Артефакты — test-results/auth-ci-fixes. Новые Git/CI/Next build/Docker в этом
+ходе не выполнялись. Транспорт/auth runtime не менялись. Общие pnpm test/e2e
+не подхватывают integration-файлы. [Отчёт](HUB-STAGE-2A-03-AUTH-INTEGRATION-REPORT.md).
 
 ## Закрытый A 2А-03, локально 2026-10-28
 

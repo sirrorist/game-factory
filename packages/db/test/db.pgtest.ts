@@ -7,7 +7,7 @@
 import { createHmac } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
@@ -43,8 +43,11 @@ async function pgError(p: Promise<unknown>): Promise<string> {
 
 test('миграции накатываются, повторный запуск ничего не ломает', async () => {
   await migrate(db, { migrationsFolder: MIGRATIONS_DIR });
-  const r = await db.execute(sql`select count(*)::int as n from information_schema.tables where table_name in ('game_saves', 'scores', 'user', 'session', 'account', 'verification', 'passkey')`);
-  assert.equal((r.rows[0] as { n: number }).n, 7);
+  const r = await db.execute(sql`select string_agg(tablename, ',' order by tablename) as names from pg_tables where schemaname = 'public'`);
+  const workflow = readFileSync(new URL('../../../.github/workflows/docker.yml', import.meta.url), 'utf8');
+  const expected = workflow.match(/grep -qx '([^'\n]+)' tables\.txt/)?.[1];
+  assert.ok(expected, 'Docker CI должен проверять полный список таблиц');
+  assert.equal((r.rows[0] as { names: string }).names, expected, 'ожидание Docker CI разошлось с миграциями');
   assert.equal(await ping(db), true);
 });
 

@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
-import { requireCheck, standaloneArgs } from './guards.ts';
+import { requireCheck, standaloneArgs, until } from './guards.ts';
 
 export class ManagedProcess {
   readonly child: ChildProcess;
@@ -107,4 +107,25 @@ export async function command(command: string, args: string[], cwd: string, env:
     const outcome = await child.completed(ms);
     requireCheck(outcome.code === 0, 'подготовительная команда завершилась ошибкой');
   } finally { await child.stop(); }
+}
+
+/** Next может оставить listener после ошибки prepare; проверяем отказ, а не обязательный exit. */
+export async function expectConfigurationRejection(child: ManagedProcess, readinessUrl: string, diagnostic: () => boolean, ms = 10_000) {
+  await until(async () => {
+    requireCheck(!child.denied, 'отказ файловых разрешений не равен ошибке конфигурации');
+    if (!child.running) {
+      const exit = await child.completed(1000);
+      requireCheck(exit.code !== 0 && exit.code !== null && diagnostic(), 'не подтверждён отказ именно конфигурации');
+      return true;
+    }
+    let status: number;
+    try {
+      const response = await fetch(readinessUrl, { signal: AbortSignal.timeout(500), redirect: 'manual' });
+      status = response.status;
+      await response.body?.cancel();
+    } catch { return false; } // До bind это нормально; один таймаут не доказывает отказ.
+    requireCheck(status !== 200, 'неверная конфигурация достигла HTTP-готовности');
+    // 503 от неработающей БД или произвольный ответ не доказывают ошибку ключа.
+    return status === 500 && diagnostic();
+  }, 'не подтверждён ограниченный отказ конфигурации', ms);
 }

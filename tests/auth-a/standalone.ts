@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { lookup } from 'node:dns/promises';
 import { checkLayout, cleanEnvironment, requireCheck, testDatabaseUrl, until } from './guards.ts';
-import { ManagedProcess, abortResources, command, launchRuntime } from './process.ts';
+import { ManagedProcess, abortResources, command, expectConfigurationRejection, launchRuntime } from './process.ts';
 import { Collector, TlsProxy, closeServer, listen } from './network.ts';
 import { integrationDatabase } from '../../packages/db/test/auth-integration-fixtures.ts';
 
@@ -98,7 +98,8 @@ export async function setup() {
           try { const r = await fetch(`http://127.0.0.1:${port}/healthz`, { signal: AbortSignal.timeout(1000) }); return r.status === 200; }
           catch { return false; }
         }, 'standalone не готов за 30 секунд', 30_000);
-      }, stop: (signal: NodeJS.Signals = 'SIGTERM') => child.stop(signal) };
+      }, rejected: (diagnostic: () => boolean) => expectConfigurationRejection(child, `http://127.0.0.1:${port}/healthz`, diagnostic),
+      stop: (signal: NodeJS.Signals = 'SIGTERM') => child.stop(signal) };
     }
     return { root, layout, fixtures, origin, proxy, probe, collector, db: readyDb, start, cleanup, abort, browserClosers };
   } catch {

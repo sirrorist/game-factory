@@ -9,7 +9,7 @@ import { request as tlsRequest } from 'node:https';
 import { execFileSync } from 'node:child_process';
 import { createConnection, createServer } from 'node:net';
 import { checkLayout, cleanEnvironment, inside, testDatabaseUrl, until } from './guards.ts';
-import { ManagedProcess, abortResources, launchRuntime } from './process.ts';
+import { ManagedProcess, abortResources, expectConfigurationRejection, launchRuntime } from './process.ts';
 import { Collector, TlsProxy, closeServer, listen } from './network.ts';
 import { checkAutomaticReferers, checkBearerReferers, checkNoSessionCookies, checkObserved } from './browser.ts';
 
@@ -74,6 +74,41 @@ test('дочерний процесс: timeout и остановка не ост
   finally { await child.stop('SIGKILL'); }
   assert.equal(child.running, false);
 });
+for (const mode of ['500', '200', '503', 'no-diagnostic', 'disconnect', 'hang', 'permission'] as const) {
+  test(`ошибка конфигурации: HTTP ${mode}, живой listener`, { timeout: 5000 }, async () => {
+    const root = await mkdtemp(join(tmpdir(), 'gf-startup-unit-')), ready = join(root, 'ready');
+    const diagnostic = 'synthetic-invalid-mail-key';
+    const script = `const fs = require('node:fs');
+      const server = require('node:http').createServer((req,res) => {
+        ${mode === 'disconnect' ? 'req.socket.destroy();' : mode === 'hang' ? '' : `res.writeHead(${mode === '200' ? 200 : mode === '503' ? 503 : 500}); res.end();`}
+      });
+      server.listen(0,'127.0.0.1',() => {
+        ${mode === 'no-diagnostic' ? '' : `console.error(${JSON.stringify(diagnostic)});`}
+        ${mode === 'permission' ? "console.error('ERR_ACCESS_DENIED');" : ''}
+        fs.writeFileSync(${JSON.stringify(ready)},String(server.address().port));
+      });`;
+    const child = new ManagedProcess(process.execPath, ['-e', script], root, cleanEnvironment());
+    try {
+      let port = '';
+      await until(async () => { try { port = await readFile(ready, 'utf8'); return true; } catch { return false; } }, 'listener не готов', 2000);
+      const check = () => expectConfigurationRejection(child, `http://127.0.0.1:${port}/healthz`, () => child.hasOutput(diagnostic), 300);
+      if (mode === '500') { await check(); assert.equal(child.running, true); }
+      else await assert.rejects(check(), /готовности|не подтверждён|разрешений/);
+    } finally { await child.stop('SIGKILL'); await rm(root, { recursive: true, force: true }); }
+  });
+}
+for (const [code, diagnostic] of [[1, true], [0, true], [1, false]] as const) {
+  test(`ошибка конфигурации: exit ${code}, диагностика ${diagnostic}`, async () => {
+    const marker = 'synthetic-invalid-mail-key';
+    const child = new ManagedProcess(process.execPath, ['-e', `${diagnostic ? `console.error('${marker}');` : ''} process.exit(${code});`], tmpdir(), cleanEnvironment());
+    try {
+      await child.completed(2000);
+      const check = () => expectConfigurationRejection(child, 'http://127.0.0.1:1/healthz', () => child.hasOutput(marker), 300);
+      if (code === 1 && diagnostic) await check();
+      else await assert.rejects(check(), /не подтверждён/);
+    } finally { await child.stop(); }
+  });
+}
 test('Referer: пустое наблюдение/ошибка HTTP/неверное значение не являются успехом', () => {
   assert.throws(() => checkObserved([], '/probe'), /не поступил/);
   assert.throws(() => checkObserved([{ path: '/probe', status: 500 }], '/probe'), /не поступил/);

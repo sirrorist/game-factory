@@ -72,14 +72,13 @@ test('закрытый A: настоящий standalone/PG/HTTPS/Chromium', { ti
     });
     for (const key of ['missing', 'bad-key'] as const) {
       await scenario(`runtime: оба флага, ${key}, конфигурация отвергнута до readiness`, async () => {
-        await reset(); const server = await s.start({ api: true, dispatch: true, key });
+        await reset(); const fixture = await s.db.fixture(), pending = await s.db.seed(fixture.email, 'verify');
+        const server = await s.start({ api: true, dispatch: true, key });
         try {
-          const exit = await server.child.completed(10_000);
-          requireCheck(exit.code !== 0 && exit.code !== null && !server.child.denied, 'не подтверждён отказ именно конфигурации');
-          requireCheck(key === 'missing'
+          await server.rejected(() => key === 'missing'
             ? server.child.hasOutput('ENOENT') && server.child.hasOutput(join(s.fixtures, 'missing'))
-            : server.child.hasOutput('нужен отдельный ключ почты из 32 байт'), 'нет ожидаемой диагностики ключа');
-          requireCheck(s.collector.messages.length === 0, 'отправка с неверным ключом');
+            : server.child.hasOutput('нужен отдельный ключ почты из 32 байт'));
+          requireCheck(s.collector.messages.length === 0 && (await s.db.operation(pending.id))?.state === 'pending', 'неверный ключ обработал pending/отправку');
         } finally { await server.stop(); }
       });
     }
