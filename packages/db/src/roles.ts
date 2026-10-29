@@ -52,4 +52,14 @@ export async function ensureHubRole(db: Exec, password: string): Promise<void> {
   await db.execute(sql.raw(`grant select, insert, update, delete on all tables in schema public to ${HUB_ROLE}`));
   // identity-колонки (scores.id) берут значения из последовательности - без usage вставка падает.
   await db.execute(sql.raw(`grant usage, select on all sequences in schema public to ${HUB_ROLE}`));
+  // До усиленного входа управление правами — только операторским подключением.
+  // Better Auth меняет профиль, но не может записать роль, статус или поколение.
+  await db.execute(sql.raw(`revoke insert, update, delete on "user" from ${HUB_ROLE}`));
+  // INSERT перечисляет и DEFAULT-колонки Drizzle; значения прав ограничивает триггер.
+  await db.execute(sql.raw(`grant insert, update (name, email, email_verified, image, updated_at) on "user" to ${HUB_ROLE}`));
+  await db.execute(sql.raw(`revoke insert, update, delete on access_events from ${HUB_ROLE}`));
+  await db.execute(sql.raw(`revoke insert, update, delete on access_lock from ${HUB_ROLE}`));
+  await db.execute(sql.raw(`revoke insert, update, delete on auth_recovery_guards from ${HUB_ROLE}`));
+  await db.execute(sql.raw(`grant execute on function gf_consume_auth_action(text,text,text,text) to ${HUB_ROLE}`));
+  await db.execute(sql.raw(`grant execute on function gf_auth_mail_lock() to ${HUB_ROLE}`));
 }

@@ -6,7 +6,7 @@ import { Logo } from '@/components/logo.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { FirstScreen } from '@/components/first-screen.tsx';
-import { currentOwner } from '@/lib/session.ts';
+import { currentWithPermission } from '@/lib/session.ts';
 import { HotbarDemo, Replay, RogueDestinyHudDemo } from './demos.tsx';
 import { PopupDemo } from './popup-demo.tsx';
 import { KitNavigation } from './kit-navigation.tsx';
@@ -72,7 +72,7 @@ function Scene({ children, className = '' }: { children: ReactNode; className?: 
 }
 
 export default async function KitPage() {
-  if (!(await currentOwner())) redirect('/login');
+  if (!(await currentWithPermission('kit.view'))) redirect('/login');
   return (
     <div className="gf-kit-page">
       <FirstScreen>

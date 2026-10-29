@@ -5,7 +5,7 @@ import { DownloadLink } from '@/components/download-link.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import { GameTags } from '@/components/game-tags.tsx';
 import { findGame } from '@/lib/catalog.ts';
-import { currentOwner } from '@/lib/session.ts';
+import { currentWithPermission } from '@/lib/session.ts';
 import { GameFrame } from './game-frame.tsx';
 
 export const dynamic = 'force-dynamic';
@@ -14,7 +14,7 @@ type Props = { params: Promise<{ id: string }> };
 
 async function gameFor(params: Props['params']) {
   // Пререлиз гостю - 404, как несуществующая игра (D-060)
-  return findGame((await params).id, { owner: (await currentOwner()) !== null });
+  return findGame((await params).id, { owner: (await currentWithPermission('prereleases.view.all')) !== null });
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {

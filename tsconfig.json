@@ -14,6 +14,7 @@
     "apps/play-server/**/*.ts",
     "apps/mail-relay/**/*.ts",
     "apps/hub/test/mail-client.test.ts",
+    "apps/hub/test/auth-action-http.test.ts",
     "packages/manifest/**/*.ts",
     "packages/registry/**/*.ts",
     "packages/hub-bridge/**/*.ts",

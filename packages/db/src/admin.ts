@@ -1,3 +1,4 @@
+import { retryTransaction } from './transaction.ts';
 // Команды владельца на сервере - в одноразовом контейнере `migrate`, ролью владельца базы:
 //
 //   docker compose run --rm -it migrate node src/admin.ts create-owner --email <почта> --name <имя>
@@ -17,6 +18,8 @@ import { eq } from 'drizzle-orm';
 import { account, createDb, databaseUrl, passkey, session, user, type AnyDb } from './index.ts';
 
 import { MIN_PASSWORD_LENGTH } from './policy.ts';
+import { accessActorContext, bootstrapOwner, changeUserAccess, lockAccessChanges } from './access.ts';
+import { isUserRole, isUserStatus } from './access-policy.ts';
 
 export { MIN_PASSWORD_LENGTH };
 const SCRYPT = { N: 16384, r: 16, p: 1, dkLen: 64 };
@@ -39,10 +42,12 @@ export async function createOwner(db: AnyDb, email: string, name: string, passwo
   checkPassword(password);
   const id = newId();
   const hash = await hashPassword(password);
-  await db.transaction(async (tx) => {
+  await retryTransaction(db, async (tx) => {
+    await lockAccessChanges(tx);
+    await accessActorContext(tx, { kind: 'operator' }, 'Создание владельца оператором');
     const [taken] = await tx.select({ id: user.id }).from(user).where(eq(user.email, email));
     if (taken) throw new Error(`пользователь ${email} уже есть - сменить пароль: set-password`);
-    await tx.insert(user).values({ id, email, name, emailVerified: true });
+    await tx.insert(user).values({ id, email, name, emailVerified: true, role: 'owner' });
     await tx.insert(account).values({ id: newId(), accountId: id, providerId: 'credential', userId: id, password: hash });
   });
   return id;
@@ -51,18 +56,23 @@ export async function createOwner(db: AnyDb, email: string, name: string, passwo
 export async function setPassword(db: AnyDb, email: string, password: string): Promise<void> {
   checkPassword(password);
   const hash = await hashPassword(password);
-  const [u] = await db.select({ id: user.id }).from(user).where(eq(user.email, email));
-  if (!u) throw new Error(`пользователя ${email} нет`);
-  const done = await db
-    .update(account)
-    .set({ password: hash, updatedAt: new Date() })
-    .where(eq(account.userId, u.id))
-    .returning({ id: account.id });
-  if (!done.length) throw new Error(`у ${email} нет входа по паролю`);
-  // Новый пароль - значит, старый мог утечь: все сессии - заново, и passkey тоже - тот, кто
-  // знал пароль, мог добавить свой ключ и войти им после смены пароля. Свои - добавить на /account.
-  await db.delete(session).where(eq(session.userId, u.id));
-  await db.delete(passkey).where(eq(passkey.userId, u.id));
+  await retryTransaction(db, async (tx) => {
+    await lockAccessChanges(tx);
+    await accessActorContext(tx, { kind: 'operator' }, 'Аварийная смена пароля оператором');
+    const [u] = await tx.select().from(user).where(eq(user.email, email)).for('update');
+    if (!u) throw new Error(`пользователя ${email} нет`);
+    const done = await tx
+      .update(account)
+      .set({ password: hash, updatedAt: new Date() })
+      .where(eq(account.userId, u.id))
+      .returning({ id: account.id });
+    if (!done.length) throw new Error(`у ${email} нет входа по паролю`);
+    // Новый пароль - значит, старый мог утечь: все сессии - заново, и passkey тоже - тот, кто
+    // знал пароль, мог добавить свой ключ и войти им после смены пароля. Свои - добавить на /account.
+    await tx.update(user).set({ securityGeneration: u.securityGeneration + 1, updatedAt: new Date() }).where(eq(user.id, u.id));
+    await tx.delete(session).where(eq(session.userId, u.id));
+    await tx.delete(passkey).where(eq(passkey.userId, u.id));
+  });
 }
 
 function checkPassword(password: string): void {
@@ -123,20 +133,32 @@ function arg(args: string[], name: string): string {
 
 async function main(argv: string[]): Promise<void> {
   const [cmd, ...args] = argv;
-  if (cmd !== 'create-owner' && cmd !== 'set-password') {
-    throw new Error('команды: create-owner --email <почта> --name <имя> | set-password --email <почта>');
+  if (!['create-owner', 'set-password', 'bootstrap-owner', 'set-access'].includes(cmd ?? '')) {
+    throw new Error('команды: create-owner | set-password | bootstrap-owner | set-access; учётка задаётся --email');
   }
   const email = arg(args, 'email').trim().toLowerCase();
   const name = cmd === 'create-owner' ? arg(args, 'name') : '';
   const url = databaseUrl();
   if (!url) throw new Error('база не настроена: нужен GF_DATABASE_URL или GF_DB_HOST + GF_DB_PASSWORD_FILE');
-  const password = await readPassword();
+  const role = args.includes('--role') ? arg(args, 'role') : undefined;
+  const status = args.includes('--status') ? arg(args, 'status') : undefined;
+  if (role !== undefined && !isUserRole(role)) throw new Error('неизвестная роль');
+  if (status !== undefined && !isUserStatus(status)) throw new Error('неизвестный статус');
+  const reason = cmd === 'bootstrap-owner' || cmd === 'set-access' ? arg(args, 'reason') : '';
+  const password = cmd === 'create-owner' || cmd === 'set-password' ? await readPassword() : '';
   const { db, close } = createDb(url);
   try {
     if (cmd === 'create-owner') console.log(`владелец заведён: ${email} (${await createOwner(db, email, name, password)})`);
-    else {
+    else if (cmd === 'set-password') {
       await setPassword(db, email, password);
       console.log(`пароль сменён: ${email}; сессии и passkey сброшены - войти паролем, passkey добавить заново`);
+    } else {
+      const [target] = await db.select({ id: user.id }).from(user).where(eq(user.email, email));
+      if (!target) throw new Error('учётка не найдена');
+      const updated = cmd === 'bootstrap-owner'
+        ? await bootstrapOwner(db, target.id, reason)
+        : await changeUserAccess(db, { actor: { kind: 'operator' }, targetUserId: target.id, role, status, reason });
+      console.log(`доступ обновлён: ${email}; роль=${updated.role}, статус=${updated.status}; старые сессии отозваны при изменении прав`);
     }
   } finally {
     await close();

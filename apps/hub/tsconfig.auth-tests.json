@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": false
+  },
+  "include": [
+    "test/auth-headers.test.ts",
+    "test/auth-action-http.test.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

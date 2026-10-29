@@ -15,6 +15,20 @@
       "when": 1790871157308,
       "tag": "0001_auth",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792507701790,
+      "tag": "0002_user_access",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793188800000,
+      "tag": "0003_auth_mail",
+      "breakpoints": true
     }
   ]
 }

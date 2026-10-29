@@ -6,11 +6,16 @@ import { sql, type SQL } from 'drizzle-orm';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import * as schema from './schema.ts';
+import * as baseSchema from './schema.ts';
+import * as authSchema from './auth-schema.ts';
+const schema = { ...baseSchema, ...authSchema };
 
 export * from './schema.ts';
 export { HUB_ROLE } from './roles.ts';
 export { MIN_PASSWORD_LENGTH } from './policy.ts';
+export * from './access-policy.ts';
+export * from './access.ts';
+export { retryTransaction } from './transaction.ts';
 export { schema };
 
 export type Db = PostgresJsDatabase<typeof schema>;
@@ -54,3 +59,7 @@ export async function ping(db: { execute(query: SQL): PromiseLike<unknown> }): P
     return false;
   }
 }
+export * from './auth-schema.ts';
+export * from './auth-actions.ts';
+export * from './auth-mail.ts';
+export * from './auth-crypto.ts';

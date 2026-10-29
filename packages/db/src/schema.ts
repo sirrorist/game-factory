@@ -23,9 +23,42 @@ export const user = pgTable('user', {
   email: text('email').notNull().unique(),
   emailVerified: boolean('email_verified').notNull().default(false),
   image: text('image'),
+  role: text('role').notNull().default('user'),
+  status: text('status').notNull().default('active'),
+  securityGeneration: integer('security_generation').notNull().default(0),
+  authActionsNotBefore: timestamp('auth_actions_not_before', { withTimezone: true }).notNull().default(sql`'1970-01-01'::timestamptz`),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
-});
+}, (t) => [
+  check('user_role_valid', sql`${t.role} in ('user', 'developer', 'admin', 'owner')`),
+  check('user_status_valid', sql`${t.status} in ('active', 'suspended')`),
+  check('user_security_generation_valid', sql`${t.securityGeneration} >= 0`),
+]);
+
+/** Единственная строка сериализует изменения доступа, в том числе при отсутствии owner. */
+export const accessLock = pgTable('access_lock', {
+  id: integer('id').primaryKey(),
+}, (t) => [check('access_lock_singleton', sql`${t.id} = 1`)]);
+
+/** Снимки прав сохраняются и после удаления учётки; персональных значений/секретов нет. */
+export const accessEvents = pgTable('access_events', {
+  id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+  actorKind: text('actor_kind').notNull(),
+  actorId: text('actor_id'),
+  targetUserId: text('target_user_id').notNull(),
+  action: text('action').notNull(),
+  previousRole: text('previous_role'),
+  nextRole: text('next_role'),
+  previousStatus: text('previous_status'),
+  nextStatus: text('next_status'),
+  securityGeneration: integer('security_generation').notNull(),
+  reason: text('reason').notNull(),
+  createdAt: createdAt(),
+}, (t) => [
+  check('access_events_actor_valid', sql`${t.actorKind} in ('operator', 'user', 'system')`),
+  check('access_events_reason_valid', sql`length(${t.reason}) between 1 and 1000`),
+  index('access_events_target_idx').on(t.targetUserId, t.createdAt),
+]);
 
 export const session = pgTable(
   'session',
@@ -38,6 +71,7 @@ export const session = pgTable(
     ipAddress: text('ip_address'),
     userAgent: text('user_agent'),
     userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+    securityGeneration: integer('security_generation').notNull().default(0),
   },
   (t) => [index('session_user_id_idx').on(t.userId)],
 );

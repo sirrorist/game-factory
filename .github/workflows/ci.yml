@@ -19,6 +19,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  auth-a-integration:
+    name: auth-a-integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+        env:
+          POSTGRES_USER: gf_ci
+          POSTGRES_DB: gf_auth_a
+          POSTGRES_PASSWORD: auth-a-ci-only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U gf_ci -d gf_auth_a" --health-interval 2s --health-timeout 3s --health-retries 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - run: pnpm install --frozen-lockfile
+      - name: Лёгкие проверки harness
+        run: pnpm test:auth-harness
+      - name: Chromium для отдельного стенда
+        run: pnpm exec playwright install --with-deps chromium
+      # Только одноразовый runner; клиент использует неизменённый production endpoint.
+      - name: Локальное имя тестового collector
+        run: echo '127.0.0.1 mail-relay' | sudo tee -a /etc/hosts > /dev/null
+      - name: Standalone build, HTTPS, браузер и dispatcher lifecycle
+        run: pnpm test:auth-integration
+        env:
+          CI: 'true'
+          GF_AUTH_INTEGRATION_CI: '1'
+          GF_AUTH_INTEGRATION_PG: postgres://gf_ci:auth-a-ci-only@127.0.0.1:5432/gf_auth_a
+
   mail-image:
     name: mail-image
     runs-on: ubuntu-24.04

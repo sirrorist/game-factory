@@ -15,6 +15,28 @@
 | [specs/deploy-vps.md](specs/deploy-vps.md) | деплой на VPS-1 - выполнен и принят 2026-09-26; критерии приёмки прода | история; как устроено сейчас - DEPLOY, OPERATIONS |
 | [DECISIONS.md](DECISIONS.md) | журнал решений: что выбрали, почему, что отвергли | перед тем как "улучшить" принятое |
 
+Проект 2А, ещё не утверждён: [контракт пользователей, ролей и размещений R2](HUB-USERS-ROLES-CONTRACT.md),
+[конкретный план и решения владельца](HUB-STAGE-2A-PLAN.md),
+[перепроверка замечаний R1–R6](HUB-USERS-ROLES-REVIEW-RECHECK.md).
+[Промпт повторного независимого ревью](HUB-USERS-ROLES-REVIEW-PROMPT.md) — проверяющего запускает владелец.
+
+Локальный шаг 2А-02: [реализация ролей и результаты проверок](HUB-STAGE-2A-02-REPORT.md),
+[промпт ревью кода](HUB-STAGE-2A-02-REVIEW-PROMPT.md). Рабочая БД не изменена.
+
+Закрытый auth-подшаг A 2А-03: [утверждённый объём A](HUB-STAGE-2A-03-AUTH-PLAN.md),
+[ревью плана](HUB-STAGE-2A-03-AUTH-PLAN-REVIEW-PROMPT.md),
+[локальная реализация](HUB-STAGE-2A-03-AUTH-REPORT.md) и
+[промпт ревью кода](HUB-STAGE-2A-03-AUTH-REVIEW-PROMPT.md),
+[перепроверка трёх замечаний](HUB-STAGE-2A-03-AUTH-RECHECK-PROMPT.md).
+После чистого ревью подготовлен [план standalone/browser-проверки A](HUB-STAGE-2A-03-AUTH-INTEGRATION-PLAN.md)
+и [промпт ревью плана](HUB-STAGE-2A-03-AUTH-INTEGRATION-PLAN-REVIEW-PROMPT.md).
+[Стенд подготовлен, локальные проверки и границы](HUB-STAGE-2A-03-AUTH-INTEGRATION-REPORT.md),
+[промпт ревью реализации](HUB-STAGE-2A-03-AUTH-INTEGRATION-REVIEW-PROMPT.md),
+[перепроверка двух P2](HUB-STAGE-2A-03-AUTH-INTEGRATION-RECHECK-PROMPT.md).
+Настоящий интеграционный CI ещё не запускался; Git/dev/CI и B/C/D отдельно.
+[Кандидат 2А-02 + A + стенд](HUB-AUTH-DEV-PROPOSAL.md) — после разрешённой
+Git-сверки подготовлен патч к локальному dev; apply/commit/push/CI отдельно.
+
 Первый почтовый подшаг 2А-03: [утверждённый план R2](HUB-STAGE-2A-03-MAIL-PLAN.md),
 [локальные результаты и ограничения проверок](HUB-STAGE-2A-03-MAIL-REPORT.md),
 [инструкция подключения](HUB-MAIL-OPERATIONS.md),

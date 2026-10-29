@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { SiteHeader } from '@/components/site-header.tsx';
 import { UserMenu } from '@/components/user-menu.tsx';
-import { currentOwner } from '@/lib/session.ts';
+import { currentWithPermission } from '@/lib/session.ts';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover' };
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
-  const owner = (await currentOwner()) !== null;
+  const owner = (await currentWithPermission('kit.view')) !== null;
   return (
     <html lang="ru">
       <body className="min-h-dvh">

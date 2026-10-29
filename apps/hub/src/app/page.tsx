@@ -8,14 +8,14 @@ import { Badge } from '@/components/ui/badge.tsx';
 import { buttonVariants } from '@/components/ui/button.tsx';
 import { Card, CardContent, CardCover, CardFooter } from '@/components/ui/card.tsx';
 import { listGames } from '@/lib/catalog.ts';
-import { currentOwner } from '@/lib/session.ts';
+import { currentWithPermission } from '@/lib/session.ts';
 
 // Реестр меняется после каждого `gf build` - страницу не кешируем.
 export const dynamic = 'force-dynamic';
 
 export default async function CatalogPage() {
   // Пререлизы (до 1.0.0) - только владельцу (D-060)
-  const games = listGames({ owner: (await currentOwner()) !== null });
+  const games = listGames({ owner: (await currentWithPermission('prereleases.view.all')) !== null });
   if (games.length === 0) {
     return (
       <FirstScreen>

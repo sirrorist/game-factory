@@ -23,7 +23,14 @@ const config: NextConfig = {
   transpilePackages: ['@gf/db', '@gf/hub-bridge', '@gf/manifest', '@gf/registry'],
   poweredByHeader: false,
   async headers() {
-    return [{ source: '/:path*', headers: securityHeaders }];
+    return [
+      { source: '/:path*', headers: securityHeaders },
+      { source: '/account/:action(verify-email|reset-password)', headers: [
+        { key: 'Referrer-Policy', value: 'no-referrer' },
+        { key: 'Cache-Control', value: 'no-store' },
+        { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+      ] },
+    ];
   },
 };
 
