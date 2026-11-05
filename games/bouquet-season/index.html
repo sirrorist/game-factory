@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#234e43">
+  <title>Сезон букетов</title>
+</head>
+<body>
+  <div id="app" aria-busy="true">
+    <div id="world" inert>
+      <main><section class="greenhouse" aria-label="Мастерская"><div id="stage"></div><div id="scene-caption" class="scene-caption"><span class="eyebrow">СЕЗОН БУКЕТОВ · 1.0.0</span><h2>Здесь начинается<br>ваша оранжерея</h2><p>Расставьте цветы, свет и полив на своём участке.</p></div></section></main>
+      <header><div><span class="eyebrow">ЦВЕТОЧНАЯ МАСТЕРСКАЯ</span><h1>Сезон букетов</h1><h2 id="season-status">Мастерская · Между сезонами</h2></div><button id="menu-button" aria-controls="panel" aria-expanded="true" disabled>Меню</button></header>
+      <footer><span id="storage-status">Подключение…</span><button id="debug-button" disabled>Диагностика · F3</button></footer>
+      <nav id="field-tools" aria-label="Управление участком" hidden><p id="stock-status" class="stock-status"></p><div class="placement-hint"><span id="placement-status" role="status"></span><button id="tutorial-button" hidden>Подсказка</button></div><div class="field-actions"><button id="catalog-button">Каталог</button><button id="cancel-placement" hidden>Отмена</button><button id="orders-button">Заказы</button><button id="undo-button" disabled>Отменить ход</button><button id="overview-button">Всё поле</button><button id="next-day-button" title="Для перехода дня нужен активный основной заказ" disabled>Следующий день</button></div></nav>
+    </div>
+    <div id="drawer-layer" data-state="open">
+      <div id="drawer-shade" aria-hidden="true"></div>
+      <section id="panel" role="dialog" aria-modal="true" aria-labelledby="panel-title" tabindex="-1">
+        <div class="drawer-tools"><button id="drawer-debug" aria-label="Диагностика · F3" disabled>F3</button><button id="drawer-close" aria-label="Закрыть меню" disabled>Закрыть</button></div>
+        <div id="panel-body" aria-live="polite"><div class="panel-heading"><h2 id="panel-title">Открываем мастерскую…</h2></div><div class="panel-content"><p>Проверяем сохранения.</p></div></div>
+      </section>
+    </div>
+    <pre id="debug" hidden aria-label="Диагностика"></pre>
+    <div id="notice" role="status" aria-live="polite" aria-atomic="true" data-dock="panel"></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
