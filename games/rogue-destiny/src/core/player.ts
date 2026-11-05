@@ -12,6 +12,7 @@ export function createPlayer(): PlayerState {
     aetherHeat: 0,
     fatigue: 0,
     temporaryMana: 0,
+    aetherCore: 100,
     threadsOfFate: 2,
     maxThreads: 3,
     lightSupply: 100,
@@ -58,7 +59,7 @@ export function applyDamage(
     return { actualDamage: effectiveDamage, survivedByFate: false };
   }
 
-  player.hp -= effectiveDamage;
+  player.hp = Math.min(player.hp - effectiveDamage, getEffectiveMaxHp(player));
   return { actualDamage: effectiveDamage, survivedByFate: false };
 }
 
@@ -70,7 +71,14 @@ export function castMagic(
     return { success: false, inRedline: false, isOverloaded: false };
   }
 
-  player.aetherHeat = Math.min(100, player.aetherHeat + heatCost);
+  if (!Number.isFinite(heatCost) || heatCost <= 0 || player.aetherHeat >= 100) {
+    return { success: false, inRedline: false, isOverloaded: player.aetherHeat >= 100 };
+  }
+  // Эссенция, перехваченная щитом, заменяет часть нагрузки на сожжённые каналы.
+  const channelCost = Math.ceil(heatCost * (player.aetherCore < 25 ? 1.25 : 1));
+  const borrowed = Math.min(player.temporaryMana, channelCost);
+  player.temporaryMana -= borrowed;
+  player.aetherHeat = Math.min(100, player.aetherHeat + channelCost - borrowed);
 
   const inRedline = player.aetherHeat >= 80 && player.aetherHeat <= 95;
   const isOverloaded = player.aetherHeat >= 100;
@@ -104,7 +112,7 @@ export function forceVentHeat(player: PlayerState): { heatVented: number; health
   // Штраф: ожог сожженных каналов мага (12% максимального HP переходит в серую травму)
   const burn = Math.max(5, Math.round(player.maxHp * 0.12));
   player.greyHp = Math.min(player.maxHp - 1, player.greyHp + burn);
-  player.hp = Math.max(1, player.hp - burn);
+  player.hp = Math.min(getEffectiveMaxHp(player), Math.max(1, player.hp - burn));
   player.injuriesCount += 1;
 
   return { heatVented, healthBurned: burn };
@@ -117,20 +125,23 @@ export function performParry(
 ): { reflectedDamage: number; manaGained: number } {
   let reflectedDamage = 0;
   let manaGained = 0;
+  if (player.isDead || !Number.isFinite(incomingDamage) || incomingDamage <= 0) return { reflectedDamage, manaGained };
 
   if (parryType === 'reflect' || parryType === 'both') {
     reflectedDamage = incomingDamage;
   }
 
   if (parryType === 'siphon' || parryType === 'both') {
-    manaGained = Math.round(incomingDamage * 1.2);
-    player.temporaryMana = Math.min(100, player.temporaryMana + manaGained);
+    const before = player.temporaryMana;
+    player.temporaryMana = Math.min(100, before + Math.round(incomingDamage * 1.2));
+    manaGained = player.temporaryMana - before;
   }
 
   return { reflectedDamage, manaGained };
 }
 
 export function applyHealing(player: PlayerState, amount: number): number {
+  if (player.isDead || !Number.isFinite(amount) || amount <= 0) return 0;
   const ceiling = getEffectiveMaxHp(player);
   const oldHp = player.hp;
   player.hp = Math.min(ceiling, player.hp + amount);
@@ -138,6 +149,7 @@ export function applyHealing(player: PlayerState, amount: number): number {
 }
 
 export function restAtAetherRift(player: PlayerState): void {
+  player.aetherCore = 100;
   player.greyHp = 0;
   player.hp = player.maxHp;
   player.aetherHeat = 0;
@@ -154,4 +166,9 @@ export function calculateScore(player: PlayerState): number {
     player.score;
 
   return Math.max(0, score);
+}
+
+export function damageAetherCore(player: PlayerState, amount: number): void {
+  if (!Number.isFinite(amount) || amount <= 0 || player.isDead) return;
+  player.aetherCore = Math.max(0, player.aetherCore - amount);
 }

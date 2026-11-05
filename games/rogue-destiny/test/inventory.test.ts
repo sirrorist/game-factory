@@ -151,3 +151,21 @@ test('вращение предметов нормализует координ�
     assert.ok(c.x >= 0 && c.y >= 0);
   }
 });
+test('кэш характеристик обновляется после размещения и удаления предметов', () => {
+ const g=createInventory(); const a=calculateInventoryStats(g);
+ assert.equal(calculateInventoryStats(g),a);
+ const rune: InventoryItem={id:'cache-rune',name:'Руна',category:'rune',rarity:'common',element:'ice',shape:[{x:0,y:0}],weight:2,rotation:0};
+ placeItem(g,rune,0,0);assert.equal(calculateInventoryStats(g).totalWeight,2);
+ removeItem(g,rune.id);assert.equal(calculateInventoryStats(g).totalWeight,0);
+});
+test('второй объект с тем же id не оставляет призрачных клеток в сетке', () => {
+ const g=createInventory();const a:InventoryItem={id:'unique',name:'Руна',category:'rune',rarity:'common',element:'ice',shape:[{x:0,y:0}],weight:1,rotation:0};
+ assert.equal(placeItem(g,a,0,0),true);assert.equal(placeItem(g,{...a,gridX:undefined,gridY:undefined},2,0),false);
+ assert.equal(g.slots[0]?.itemId,'unique');assert.equal(g.slots[2]?.itemId,null);
+});
+test('ледяной резонанс имеет цену: соседний бинт лечит слабее, перенос отменяет штраф', () => {
+ const g=createInventory();const ice:InventoryItem={id:'ice',name:'Лёд',category:'rune',rarity:'common',element:'ice',shape:[{x:0,y:0}],weight:1,rotation:0};
+ const potion:InventoryItem={...ice,id:'heal',name:'Бинт',category:'potion',element:'physical',healAmount:30};
+ placeItem(g,ice,0,0);placeItem(g,potion,1,0);assert.equal(calculateInventoryStats(g).healingMultiplier,0.5);
+ placeItem(g,potion,3,0);assert.equal(calculateInventoryStats(g).healingMultiplier,1);
+});

@@ -3,6 +3,7 @@
  * расхода света от прогресса и метроидвания-замков.
  * Чистая логика без DOM.
  */
+import { isItemContaminated } from './inventory.ts';
 import type {
   DungeonFloor,
   DungeonRoom,
@@ -12,7 +13,11 @@ import type {
   RoomCue,
 } from './types.ts';
 
-export function generateFloor(floorNumber: number): DungeonFloor {
+export function generateFloor(floorNumber: number, runSeed = 0): DungeonFloor {
+  // Номер этажа задаёт стабильную генерацию: сохранение восстанавливает ту же карту.
+  let seed = (Math.max(1, Math.floor(floorNumber)) * 2654435761 ^ runSeed) >>> 0;
+  if (seed === 0) seed = 1;
+  const random = (): number => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) / 4294967296; };
   const rooms: DungeonRoom[] = [
     {
       id: 'room_0',
@@ -104,6 +109,15 @@ export function generateFloor(floorNumber: number): DungeonFloor {
     },
   ];
 
+  // Первый этаж сохраняет знакомые ориентиры; дальше меняются изгибы маршрутов.
+  if (floorNumber > 1 || runSeed !== 0) {
+    for (let i = 1; i < rooms.length; i++) {
+      const room = rooms[i]!;
+      rooms[i] = { ...room, x: room.x + Math.floor(random() * 7) - 3, y: room.y + Math.floor(random() * 7) - 3,
+        width: room.width + Math.floor(random() * 3) * 2, height: room.height + Math.floor(random() * 3) * 2 };
+    }
+  }
+
   const connections: [string, string][] = [
     ['room_0', 'room_1'],
     ['room_1', 'room_2'],
@@ -113,6 +127,22 @@ export function generateFloor(floorNumber: number): DungeonFloor {
     ['room_4', 'room_5'],
   ];
 
+  if (runSeed !== 0 && (runSeed + floorNumber) % 3 !== 0) {
+    const junction = rooms.find((room) => room.id === 'room_1')!;
+    rooms.push({ id: 'room_6', x: junction.x + Math.floor(random() * 5) - 2, y: -23 - Math.floor(random() * 4),
+      width: 12, height: 10, type: 'library', isRevealed: false, isVisited: false, hasAetherRift: false,
+      lockType: 'illusionary', secret: true });
+    connections.push(['room_1', 'room_6']);
+  }
+  if (runSeed !== 0) {
+    const branch = rooms.find(room => room.id === 'room_3')!;
+    const locks: MetroidvaniaLockType[] = ['submerged','steamVent','soundTrap','elementalWard','pitchBlack','chasm'];
+    rooms.push({ id: 'room_7', x: branch.x - 18, y: branch.y + 24, width: 12, height: 10,
+      type: 'vault', isRevealed: false, isVisited: false, hasAetherRift: false,
+      lockType: locks[((runSeed >>> 0) + floorNumber * 17) % locks.length]!,
+      cue: { type: 'whisper', message: 'За боковым проходом слышен звон запечатанного реликвария.' } });
+    connections.push(['room_3','room_7']);
+  }
   return {
     floorNumber,
     rooms,
@@ -138,7 +168,9 @@ export function enterRoom(
   if (!room.isRevealed) {
     room.isRevealed = true;
     newlyRevealed = true;
-    // Вход в новую комнату расходует свет по прогрессу
+  }
+  // Разведка свитком показывает карту, но не заменяет реальное исследование зала.
+  if (!room.isVisited) {
     lightSpent = 15;
     player.lightSupply = Math.max(0, player.lightSupply - lightSpent);
   }
@@ -152,26 +184,26 @@ export function canUnlockMetroidvania(
   grid: InventoryGrid,
   codexKnowledge: Set<string>,
 ): { canUnlock: boolean; reason: string } {
-  const hasCategory = (cat: string) =>
-    Array.from(grid.items.values()).some((i) => i.category === cat);
-  const hasElement = (elem: string) =>
-    Array.from(grid.items.values()).some((i) => i.element === elem);
+  const usable = Array.from(grid.items.values()).filter(item => !item.isSpoiled && !isItemContaminated(grid,item) && item.durability !== 0);
+  const hasCategory = (cat: string) => usable.some(item => item.category === cat);
+  const hasElement = (elem: string) => usable.some(item => item.element === elem);
+  const hasUtility = (utility: string) => usable.some(item => item.utility === utility);
 
   switch (lockType) {
     case 'brambles':
-      if (hasElement('fire')) {
-        return { canUnlock: true, reason: 'Огненное оружие сжигает терновые корни!' };
+      if (hasElement('fire') || hasElement('poison')) {
+        return { canUnlock: true, reason: 'Стихийный резонанс разрушает терновые корни!' };
       }
       return { canUnlock: false, reason: 'Нужен огонь или кислота, чтобы прожечь лозы.' };
 
     case 'runeCipher':
-      if (codexKnowledge.has('sylvan_ciphers') || hasCategory('tool')) {
+      if (codexKnowledge.has('sylvan_ciphers') || hasUtility('cipher')) {
         return { canUnlock: true, reason: 'Древний шифр расшифрован благодаря записям Кодекса!' };
       }
       return { canUnlock: false, reason: 'Дисковый замок заперт. Нужны знания шифра из Кодекса.' };
 
     case 'submerged':
-      if (hasCategory('tool') || codexKnowledge.has('water_breathing')) {
+      if (hasUtility('breathing') || codexKnowledge.has('water_breathing')) {
         return { canUnlock: true, reason: 'Дыхательная трубка позволяет преодолеть затопленный сифон!' };
       }
       return { canUnlock: false, reason: 'Вода до потолка. Без дыхательной трубки герой захлебнется.' };
@@ -192,12 +224,33 @@ export function canUnlockMetroidvania(
       return { canUnlock: false, reason: 'Раскаленный пар преграждает путь. Нужен морозный кристалл.' };
 
     case 'illusionary':
-      if (hasElement('fire') || hasElement('ice') || hasCategory('scroll')) {
+      if (codexKnowledge.has('true_sight') || hasElement('fire') || hasElement('ice') || hasCategory('scroll')) {
         return { canUnlock: true, reason: 'Эфирный резонанс развеивает иллюзорную стену!' };
       }
       return { canUnlock: false, reason: 'Кажется, это обычная стена... но вода уходит под неё.' };
 
+    case 'chasm':
+      if (codexKnowledge.has('aether_step') || hasUtility('grapple')) return { canUnlock: true, reason: 'Эфирный скачок позволяет преодолеть разлом.' };
+      return { canUnlock: false, reason: 'Для бездны нужен готовый Эфирный скачок или крюк.' };
+    case 'elementalWard':
+      if (codexKnowledge.has('elemental_ward')) return { canUnlock: true, reason: 'Знание перехваченного эфира снимает барьер.' };
+      return { canUnlock: false, reason: 'Поймайте атаку идеальным парированием, чтобы понять барьер.' };
+    case 'pitchBlack':
+      if (codexKnowledge.has('fate_light') || hasUtility('light')) return { canUnlock: true, reason: 'Эфирный свет указывает путь в абсолютной тьме.' };
+      return { canUnlock: false, reason: 'В абсолютной тьме нужен эфирный источник света или Нить Судьбы.' };
     default:
-      return { canUnlock: true, reason: 'Преграда преодолена.' };
+      return { canUnlock: false, reason: 'Способ преодоления этой преграды пока неизвестен.' };
   }
+}
+
+/** Звуковой проход снова запирается при шумном ранце, оставляя выход изнутри. */
+export function refreshSoundGates(floor: DungeonFloor, grid: InventoryGrid, x: number, z: number): string[] {
+  const closed: string[] = [];
+  if (canUnlockMetroidvania('soundTrap',grid,new Set()).canUnlock) return closed;
+  for (const room of floor.rooms) {
+    if (room.lockType !== 'soundTrap' || !room.unlocked) continue;
+    if (Math.abs(x-room.x) < room.width/2+0.5 && Math.abs(z-room.y) < room.height/2+0.5) continue;
+    room.unlocked = false; closed.push(room.id);
+  }
+  return closed;
 }

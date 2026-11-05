@@ -39,12 +39,19 @@ export interface InventoryItem {
   /** Прочность предмета (для кристаллов, оружия, линз) */
   durability?: number;
   maxDurability?: number;
+  relicEffect?: 'lens' | 'chain' | 'thread';
+  parryType?: 'siphon' | 'reflect' | 'both';
+  isSevered?: boolean;
+  burnTime?: number;
+  poisonTime?: number;
   /** Числовые параметры */
   damage?: number;
   defense?: number;
   heatCost?: number;
+  utility?: 'breathing' | 'grapple' | 'cipher' | 'light';
   fatigueCost?: number;
   healAmount?: number;
+  fatigueRestore?: number;
   /** Флаг испорченности/загрязненности */
   isSpoiled?: boolean;
 }
@@ -58,6 +65,7 @@ export interface InventorySlot {
 }
 
 export interface InventoryGrid {
+  revision: number;
   readonly width: number;
   readonly height: number;
   readonly slots: InventorySlot[];
@@ -73,6 +81,8 @@ export interface InventoryStats {
   readonly bonusFireDamage: number;
   readonly bonusPoisonDamage: number;
   readonly bonusCritRate: number;
+  readonly healingMultiplier: number;
+  readonly scrollMultiplier: number;
 }
 
 export interface PlayerState {
@@ -86,6 +96,8 @@ export interface PlayerState {
   fatigue: number;
   /** Временная забранная мана врагов (0..100) */
   temporaryMana: number;
+  /** Целостность Ядра: споры, кошмар и тьма повреждают проводимость магии. */
+  aetherCore: number;
   /** Активные Нити Судьбы (1..3) */
   threadsOfFate: number;
   maxThreads: number;
@@ -124,11 +136,15 @@ export interface DungeonRoom {
   readonly y: number;
   readonly width: number;
   readonly height: number;
-  readonly type: 'spawn' | 'hall' | 'corridor' | 'library' | 'shrine' | 'mimic_room' | 'boss_gate';
+  readonly type: 'spawn' | 'hall' | 'corridor' | 'library' | 'shrine' | 'mimic_room' | 'boss_gate' | 'vault';
   isRevealed: boolean;
   isVisited: boolean;
   hasAetherRift: boolean;
   lockType?: MetroidvaniaLockType;
+  unlocked?: boolean;
+  relicTaken?: boolean;
+  devastated?: boolean;
+  secret?: boolean;
   cue?: RoomCue;
 }
 

@@ -3,7 +3,10 @@
  */
 import * as THREE from 'three';
 import type { DungeonFloor, DungeonRoom } from '../core/types.ts';
+import { createGateMarker, GATE_COLORS } from './gates.ts';
+import { secretDoor } from '../core/secrets.ts';
 import { createCryptMaterials } from './materials.ts';
+import { createCryptProp } from './props.ts';
 
 export interface AncientPortal3D {
   group: THREE.Group;
@@ -20,6 +23,10 @@ export interface CryptWorld {
   waterPlane: THREE.Mesh;
   mimics: SporeMimic3D[];
   portals: AncientPortal3D[];
+  barriers: Map<string, THREE.Group>;
+  revealRoom: (id: string) => void;
+  devastateRoom: (id: string) => void;
+  lighting: { light: THREE.PointLight; position: THREE.Vector3; distance: number }[];
 }
 
 /**
@@ -33,18 +40,53 @@ export function buildCryptWorld(scene: THREE.Scene, floor: DungeonFloor, lowPowe
   const roomLights = new Map<string, THREE.PointLight>();
   const mimics: SporeMimic3D[] = [];
   const portals: AncientPortal3D[] = [];
+  const barriers = new Map<string, THREE.Group>();
+  const destruction = new Map<string,()=>void>();
+  const hiddenElements = new Map<string, THREE.Object3D[]>();
+  const secretWalls = new Map<string, THREE.Group>();
+  function trackSecret(room: DungeonRoom, element: THREE.Object3D): void {
+    const elements = hiddenElements.get(room.id) ?? [];
+    elements.push(element); hiddenElements.set(room.id, elements);
+    element.visible = room.isRevealed;
+  }
 
   // Огромная водная гладь затопленного пола
   const waterGeo = new THREE.PlaneGeometry(300, 300);
   const waterPlane = new THREE.Mesh(waterGeo, materials.water);
   waterPlane.rotation.x = -Math.PI / 2;
-  waterPlane.position.y = 0.05;
+  waterPlane.position.y = 0.08;
   worldGroup.add(waterPlane);
 
   for (const room of floor.rooms) {
     const roomGroup = new THREE.Group();
     roomGroup.position.set(room.x, 0, room.y);
+    if (room.secret) {
+      trackSecret(room, roomGroup);
+      const door = secretDoor(floor, room);
+      const wall = new THREE.Group();
+      const stone = new THREE.Mesh(new THREE.BoxGeometry(4.3, 3.4, 0.35), materials.stone);
+      stone.position.y = 1.7; stone.castShadow = true; wall.add(stone);
+      // Лишь течение воды уходит под стену: явного значка/плашки секрета нет.
+      const stream = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 1.8), new THREE.MeshBasicMaterial({ color: '#86aab8', transparent: true, opacity: 0.22, depthWrite: false }));
+      stream.rotation.x = -Math.PI / 2; stream.position.set(0, 0.095, -0.6); wall.add(stream);
+      wall.position.set(door.x, 0, door.z); wall.rotation.y = door.angle;
+      wall.visible = !room.unlocked; worldGroup.add(wall); secretWalls.set(room.id, wall);
+    }
 
+    if (room.lockType && !room.secret) {
+      const barrier = new THREE.Group();
+      const runeMaterial = new THREE.MeshBasicMaterial({ color: GATE_COLORS[room.lockType], transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false });
+      const horizontal = new THREE.PlaneGeometry(room.width, 2.8);
+      const vertical = new THREE.PlaneGeometry(room.height, 2.8);
+      for (const side of [-1, 1]) {
+        const front = new THREE.Mesh(horizontal, runeMaterial); front.position.set(0, 1.4, side * room.height / 2); barrier.add(front);
+        const edge = new THREE.Mesh(vertical, runeMaterial); edge.rotation.y = Math.PI / 2; edge.position.set(side * room.width / 2, 1.4, 0); barrier.add(edge);
+      }
+      barrier.add(createGateMarker(room,floor));
+      barrier.visible = !room.unlocked;
+      roomGroup.add(barrier);
+      barriers.set(room.id, barrier);
+    }
     // Каменный пол комнаты (слегка притоплен под воду)
     const floorGeo = new THREE.BoxGeometry(room.width, 0.4, room.height);
     const floorMesh = new THREE.Mesh(floorGeo, materials.floor);
@@ -52,6 +94,8 @@ export function buildCryptWorld(scene: THREE.Scene, floor: DungeonFloor, lowPowe
     floorMesh.receiveShadow = true;
     roomGroup.add(floorMesh);
 
+    const columns: THREE.Mesh[] = [];
+    const decorations: THREE.Object3D[] = [];
     // Колонны по углам и краям
     const colGeo = new THREE.CylinderGeometry(0.5, 0.6, 6, 8);
     const colPositions: [number, number][] = [
@@ -65,14 +109,31 @@ export function buildCryptWorld(scene: THREE.Scene, floor: DungeonFloor, lowPowe
       const col = new THREE.Mesh(colGeo, materials.stone);
       col.position.set(cx, 3, cz);
       col.castShadow = true;
-      roomGroup.add(col);
+      roomGroup.add(col); columns.push(col);
+    }
+
+    // Погребальные ансамбли по краям оставляют середину комнаты свободной для боя.
+    for (let side = -1; side <= 1; side += 2) {
+      const prop = createCryptProp(room.type === 'shrine' ? 1 : 0, materials.stone, room.type === 'shrine' ? 3.4 : 1.6);
+      prop.position.x = side * (room.width / 2 - 2.4);
+      prop.position.z = -room.height / 2 + 2.4;
+      prop.rotation.y = side * 0.2;
+      prop.rotation.z = side * 0.045;
+      roomGroup.add(prop); decorations.push(prop);
+    }
+    if (room.type === 'mimic_room' || room.type === 'boss_gate') {
+      const tomb = createCryptProp(4, materials.staffWood, 0.85);
+      tomb.position.x = -room.width / 2 + 3;
+      tomb.position.z = 2;
+      tomb.rotation.y = 0.3;
+      roomGroup.add(tomb);
     }
 
     // Арочные своды над комнатой
     const archGeo = new THREE.TorusGeometry(room.width / 2.5, 0.35, 6, 12, Math.PI);
     const archMesh = new THREE.Mesh(archGeo, materials.stone);
     archMesh.position.set(0, 5, 0);
-    roomGroup.add(archMesh);
+    roomGroup.add(archMesh); decorations.push(archMesh);
 
     // Вековые корни Древоточцев
     const rootPoints = [
@@ -84,7 +145,7 @@ export function buildCryptWorld(scene: THREE.Scene, floor: DungeonFloor, lowPowe
     const rootCurve = new THREE.CatmullRomCurve3(rootPoints);
     const rootGeo = new THREE.TubeGeometry(rootCurve, 16, 0.25, 6, false);
     const rootMesh = new THREE.Mesh(rootGeo, materials.roots);
-    roomGroup.add(rootMesh);
+    roomGroup.add(rootMesh); decorations.push(rootMesh);
 
     // Источник света комнаты (радиально зажигается при посещении)
     const roomLight = new THREE.PointLight('#f97316', room.isVisited ? 1.8 : 0.2, 22, 1.8);
@@ -176,6 +237,19 @@ export function buildCryptWorld(scene: THREE.Scene, floor: DungeonFloor, lowPowe
       });
     }
 
+    let devastated=false;
+    destruction.set(room.id,()=>{
+      if(devastated) return;devastated=true;
+      for(const mimic of mimics) if(mimic.roomId===room.id) {mimic.openChest();mimic.mesh.visible=false;}
+      for(const decoration of decorations) decoration.visible=false;
+      for(const column of columns) {column.scale.y=0.12;column.position.y=0.36;}
+      const charred=materials.floor.clone();charred.color.set('#30282e');floorMesh.material=charred;
+      const cracks=new THREE.Group(),crackGeo=new THREE.BoxGeometry(0.09,0.035,room.width*0.7);
+      const crackMaterial=new THREE.MeshBasicMaterial({color:'#926450'});
+      for(let i=0;i<5;i++){const crack=new THREE.Mesh(crackGeo,crackMaterial);crack.rotation.y=i*1.21;crack.position.set(Math.sin(i*3)*1.5,0.14,Math.cos(i*2)*1.5);cracks.add(crack);}
+      roomGroup.add(cracks);
+    });
+    if(room.devastated) destruction.get(room.id)!();
     worldGroup.add(roomGroup);
   }
 
@@ -240,6 +314,8 @@ export function buildCryptWorld(scene: THREE.Scene, floor: DungeonFloor, lowPowe
     corrMesh.position.set(midX, -0.15, midZ);
     corrMesh.rotation.y = -angle;
     worldGroup.add(corrMesh);
+    const secretRoom = rA.secret ? rA : rB.secret ? rB : undefined;
+    if (secretRoom) trackSecret(secretRoom, corrMesh);
 
     // Расстановка факелов на палках по обочинам коридора
     const nx = -Math.sin(angle);
@@ -257,10 +333,18 @@ export function buildCryptWorld(scene: THREE.Scene, floor: DungeonFloor, lowPowe
 
       const torch = createTorchPost(torchX, torchZ, i * 1.3, !lowPower || i % 2 === 1);
       worldGroup.add(torch);
+      if (secretRoom) trackSecret(secretRoom, torch);
     }
   }
 
   scene.add(worldGroup);
+  worldGroup.updateMatrixWorld(true);
+  const lighting: CryptWorld['lighting'] = [];
+  worldGroup.traverse((node) => {
+    if (node instanceof THREE.PointLight) lighting.push({ light: node, position: node.getWorldPosition(new THREE.Vector3()), distance: 0 });
+  });
+  lighting.sort((a, b) => a.position.lengthSq() - b.position.lengthSq());
+  lighting.forEach((entry, i) => { entry.light.visible = i < (lowPower ? 3 : 7); });
 
   return {
     group: worldGroup,
@@ -271,6 +355,13 @@ export function buildCryptWorld(scene: THREE.Scene, floor: DungeonFloor, lowPowe
     waterPlane,
     mimics,
     portals,
+    barriers,
+    devastateRoom: (id: string) => destruction.get(id)?.(),
+    revealRoom: (id: string) => {
+      for (const element of hiddenElements.get(id) ?? []) element.visible = true;
+      const wall = secretWalls.get(id); if (wall) wall.visible = false;
+    },
+    lighting,
   };
 }
 

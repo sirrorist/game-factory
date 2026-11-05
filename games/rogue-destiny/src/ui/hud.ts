@@ -2,6 +2,7 @@
  * Модуль интерфейса игрока (HUD, статус-панель, миникарта, быстрые слоты).
  */
 import type { DungeonFloor, PlayerState } from '../core/types.ts';
+import { minimapLayout, mapMarkerVisible } from '../core/minimap.ts';
 import { getEffectiveMaxHp, calculateScore } from '../core/player.ts';
 
 export interface HudElements {
@@ -11,6 +12,7 @@ export interface HudElements {
   hpText: HTMLElement;
   heatBar: HTMLElement;
   heatText: HTMLElement;
+  coreText: HTMLElement;
   heatRedlineIndicator: HTMLElement;
   fatigueBar: HTMLElement;
   fatigueText: HTMLElement;
@@ -19,6 +21,7 @@ export interface HudElements {
   scoreText: HTMLElement;
   bestText: HTMLElement;
   floorText: HTMLElement;
+  objectiveText: HTMLElement;
   cueBanner: HTMLElement;
   cueText: HTMLElement;
   minimapCanvas: HTMLCanvasElement;
@@ -72,6 +75,7 @@ export function createHud(): HudElements {
         </div>
       </div>
 
+      <div class="core-caption">МАГИЧЕСКОЕ ЯДРО <span id="hud-core-text">100%</span></div>
       <!-- Нити Судьбы и Свет -->
       <div class="status-row">
         <div class="threads-box">
@@ -94,7 +98,9 @@ export function createHud(): HudElements {
         <span id="hud-score-text" class="score-badge" title="Счёт текущего забега">0 ОЧКОВ</span>
         <span id="hud-best-text" class="score-badge score-best" title="Лучший забег за всё время">РЕКОРД: 0</span>
       </div>
-      <canvas id="hud-minimap" width="160" height="120"></canvas>
+      <div id="hud-objective" class="objective-line"></div>
+      <canvas id="hud-minimap" width="160" height="120" aria-label="Карта исследованных залов" title="▲ герой · ● страж · ◆ Страж Семени"></canvas>
+      <div class="map-legend">▲ ВЫ · ● СТРАЖ · ◆ БОСС</div>
     </div>
 
     <!-- Баннер подсказки у двери (Eavesdropping) -->
@@ -137,6 +143,7 @@ export function createHud(): HudElements {
     hpText: container.querySelector('#hud-hp-text')!,
     heatBar: container.querySelector('#hud-heat-fill')!,
     heatText: container.querySelector('#hud-heat-text')!,
+    coreText: container.querySelector('#hud-core-text')!,
     heatRedlineIndicator: container.querySelector('.redline-zone')!,
     fatigueBar: container.querySelector('#hud-fatigue-fill')!,
     fatigueText: container.querySelector('#hud-fatigue-text')!,
@@ -145,6 +152,7 @@ export function createHud(): HudElements {
     scoreText: container.querySelector('#hud-score-text')!,
     bestText: container.querySelector('#hud-best-text')!,
     floorText: container.querySelector('#hud-floor-text')!,
+    objectiveText: container.querySelector('#hud-objective')!,
     cueBanner: container.querySelector('#hud-cue-banner')!,
     cueText: container.querySelector('#hud-cue-text')!,
     minimapCanvas: container.querySelector('#hud-minimap') as HTMLCanvasElement,
@@ -165,6 +173,9 @@ export function updateHud(hud: HudElements, player: PlayerState, floor: DungeonF
 
   hud.heatBar.style.width = `${player.aetherHeat}%`;
   hud.heatText.textContent = `${Math.round(player.aetherHeat)}%`;
+  hud.coreText.textContent = `${Math.round(player.aetherCore)}%`;
+  hud.coreText.title = player.aetherCore < 25 ? 'Ядро повреждено: магия даёт на 25% больше перегрева. Отдохните у Разлома.' : 'Споры, Оракул и абсолютная тьма повреждают Ядро.';
+  document.body.classList.toggle('core-distress', player.aetherCore < 25);
   if (player.aetherHeat >= 80 && player.aetherHeat <= 95) {
     hud.heatText.classList.add('text-redline');
   } else {
@@ -172,7 +183,8 @@ export function updateHud(hud: HudElements, player: PlayerState, floor: DungeonF
   }
 
   hud.fatigueBar.style.width = `${player.fatigue}%`;
-  hud.fatigueText.textContent = `${Math.round(player.fatigue)}%`;
+  hud.fatigueText.textContent = `${Math.round(player.fatigue)}%${player.fatigue>60?' · ИСТОЩЕНИЕ':''}`;
+  hud.fatigueText.title=player.fatigue>60?'Снижаются скорость, сила и сектор удара; замахи реже. Передохните или вернитесь к Разлому.':'До 60% усталости штрафов к точности нет.';
 
   // Нити Судьбы
   let threadsStr = '';
@@ -191,7 +203,7 @@ export function updateHud(hud: HudElements, player: PlayerState, floor: DungeonF
   hud.floorText.textContent = `ЭТАЖ ${player.currentFloor}: КРИПТЫ`;
 }
 
-export function drawMinimap(canvas: HTMLCanvasElement, floor: DungeonFloor): void {
+export function drawMinimap(canvas: HTMLCanvasElement, floor: DungeonFloor, targets: readonly {x:number;z:number;boss:boolean}[] = [], hero?: {x:number;z:number;yaw:number}): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
@@ -199,9 +211,7 @@ export function drawMinimap(canvas: HTMLCanvasElement, floor: DungeonFloor): voi
   ctx.fillStyle = '#0f172a';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  const scale = 2.2;
-  const offsetX = 20;
-  const offsetY = 60;
+  const { scale, offsetX, offsetY } = minimapLayout(floor.rooms, canvas.width, canvas.height);
 
   // Отрисовка связей
   ctx.strokeStyle = '#334155';
@@ -209,7 +219,7 @@ export function drawMinimap(canvas: HTMLCanvasElement, floor: DungeonFloor): voi
   for (const [rAId, rBId] of floor.connections) {
     const rA = floor.rooms.find((r) => r.id === rAId);
     const rB = floor.rooms.find((r) => r.id === rBId);
-    if (!rA || !rB || (!rA.isRevealed && !rB.isRevealed)) continue;
+    if (!rA || !rB || rA.secret && !rA.isRevealed || rB.secret && !rB.isRevealed || (!rA.isRevealed && !rB.isRevealed)) continue;
 
     ctx.beginPath();
     ctx.moveTo(rA.x * scale + offsetX, rA.y * scale + offsetY);
@@ -219,6 +229,7 @@ export function drawMinimap(canvas: HTMLCanvasElement, floor: DungeonFloor): voi
 
   // Отрисовка комнат
   for (const room of floor.rooms) {
+    if (room.secret && !room.isRevealed) continue;
     const rx = room.x * scale + offsetX - 8;
     const ry = room.y * scale + offsetY - 8;
 
@@ -232,6 +243,8 @@ export function drawMinimap(canvas: HTMLCanvasElement, floor: DungeonFloor): voi
 
     if (room.id === floor.activeRoomId) {
       ctx.fillStyle = '#38bdf8'; // Текущая комната игрока
+    } else if (room.devastated) {
+      ctx.fillStyle = '#81594c';
     } else if (room.hasAetherRift) {
       ctx.fillStyle = '#818cf8'; // Разлом
     } else {
@@ -239,7 +252,7 @@ export function drawMinimap(canvas: HTMLCanvasElement, floor: DungeonFloor): voi
     }
 
     ctx.fillRect(rx, ry, 16, 16);
-    ctx.strokeStyle = '#94a3b8';
+    ctx.strokeStyle = room.devastated ? '#d89175' : '#94a3b8';
     ctx.strokeRect(rx, ry, 16, 16);
 
     if (room.hasAetherRift) {
@@ -248,6 +261,21 @@ export function drawMinimap(canvas: HTMLCanvasElement, floor: DungeonFloor): voi
       ctx.fillText('⚡', rx + 3, ry + 12);
     }
   }
+  for(const target of targets) {
+    if(!mapMarkerVisible(floor,target.x,target.z)) continue;
+    const x=target.x*scale+offsetX,y=target.z*scale+offsetY;
+    ctx.fillStyle=target.boss?'#ed927c':'#e2b878';ctx.strokeStyle='#17202b';ctx.lineWidth=1;
+    ctx.beginPath();
+    if(target.boss) {ctx.moveTo(x,y-4);ctx.lineTo(x+4,y);ctx.lineTo(x,y+4);ctx.lineTo(x-4,y);ctx.closePath();}
+    else ctx.arc(x,y,2.4,0,Math.PI*2);
+    ctx.fill();ctx.stroke();
+  }
+  if(hero) {
+    ctx.save();ctx.translate(hero.x*scale+offsetX,hero.z*scale+offsetY);ctx.rotate(-hero.yaw);
+    ctx.fillStyle='#e7f9ff';ctx.strokeStyle='#102332';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,5);ctx.lineTo(-3.5,-3);ctx.lineTo(0,-1);ctx.lineTo(3.5,-3);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();
+  }
+
 }
 
 export function triggerDamageFlash(hud: HudElements): void {

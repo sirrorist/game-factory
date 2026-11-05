@@ -20,6 +20,7 @@ export function createInventory(width = 5, height = 4): InventoryGrid {
   }
 
   return {
+    revision: 0,
     width,
     height,
     slots,
@@ -60,8 +61,8 @@ export function getRotatedCoords(
   }));
 }
 
-export function getItemOccupiedCells(item: InventoryItem, originX: number, originY: number): GridCoord[] {
-  const rotated = getRotatedCoords(item.shape, item.rotation);
+export function getItemOccupiedCells(item: InventoryItem, originX: number, originY: number, rotation = item.rotation): GridCoord[] {
+  const rotated = getRotatedCoords(item.shape, rotation);
   return rotated.map((c) => ({
     x: originX + c.x,
     y: originY + c.y,
@@ -80,8 +81,12 @@ export function canPlaceItem(
   item: InventoryItem,
   gridX: number,
   gridY: number,
+  rotation = item.rotation,
 ): boolean {
-  const cells = getItemOccupiedCells(item, gridX, gridY);
+  if (!item.shape.length || !Number.isInteger(gridX) || !Number.isInteger(gridY)) return false;
+  const existing = grid.items.get(item.id);
+  if (existing && existing !== item) return false;
+  const cells = getItemOccupiedCells(item, gridX, gridY, rotation);
 
   for (const cell of cells) {
     const slot = getSlot(grid, cell.x, cell.y);
@@ -98,17 +103,18 @@ export function placeItem(
   item: InventoryItem,
   gridX: number,
   gridY: number,
+  rotation = item.rotation,
 ): boolean {
-  if (!canPlaceItem(grid, item, gridX, gridY)) {
+  if (!canPlaceItem(grid, item, gridX, gridY, rotation)) {
     return false;
   }
 
-  // Сначала очистим предыдущие слоты, если предмет уже был в сетке
-  if (item.gridX !== undefined && item.gridY !== undefined) {
-    removeItem(grid, item.id);
-  }
+  if (item.relicEffect === 'chain' && grid.items.has(item.id) && (item.gridX !== gridX || item.gridY !== gridY || item.rotation !== rotation)) item.isSevered = true;
 
-  const cells = getItemOccupiedCells(item, gridX, gridY);
+  // Размещение атомарно: до проверки цельного положения предмет остаётся в ранце.
+  for (const slot of grid.slots) if (slot.itemId === item.id) slot.itemId = null;
+
+  const cells = getItemOccupiedCells(item, gridX, gridY, rotation);
   for (const cell of cells) {
     const slot = getSlot(grid, cell.x, cell.y)!;
     slot.itemId = item.id;
@@ -116,7 +122,9 @@ export function placeItem(
 
   item.gridX = gridX;
   item.gridY = gridY;
+  item.rotation = rotation;
   grid.items.set(item.id, item);
+  grid.revision++;
 
   return true;
 }
@@ -128,10 +136,9 @@ export function placeItem(
 export function autoPlaceItem(grid: InventoryGrid, item: InventoryItem): boolean {
   const original = item.rotation;
   for (const rotation of [original, ...ROTATIONS.filter((r) => r !== original)]) {
-    item.rotation = rotation;
     for (let y = 0; y < grid.height; y++) {
       for (let x = 0; x < grid.width; x++) {
-        if (canPlaceItem(grid, item, x, y)) return placeItem(grid, item, x, y);
+        if (canPlaceItem(grid, item, x, y, rotation)) return placeItem(grid, item, x, y, rotation);
       }
     }
   }
@@ -173,7 +180,7 @@ export function findOverlaps(grid: InventoryGrid): string[] {
   return clashes;
 }
 
-export function removeItem(grid: InventoryGrid, itemId: string): boolean {
+export function removeItem(grid: InventoryGrid, itemId: string, preserveBelt = false): boolean {
   const item = grid.items.get(itemId);
   if (!item) return false;
 
@@ -183,13 +190,15 @@ export function removeItem(grid: InventoryGrid, itemId: string): boolean {
     }
   }
 
+  if (item.relicEffect === 'chain') item.isSevered = true;
   item.gridX = undefined;
   item.gridY = undefined;
   grid.items.delete(itemId);
+  grid.revision++;
 
   // Очистка из быстрых слотов
   for (let i = 0; i < grid.quickSlots.length; i++) {
-    if (grid.quickSlots[i] === itemId) {
+    if (!preserveBelt && grid.quickSlots[i] === itemId) {
       grid.quickSlots[i] = null;
     }
   }
@@ -203,15 +212,51 @@ export function calculateWeightClass(totalWeight: number): WeightClass {
   return 'heavy';
 }
 
+/** Усиление относится только к свитку, касающемуся целой линзы. */
+export function getScrollMultiplier(grid: InventoryGrid, scrollId: string): number {
+  const scroll = grid.items.get(scrollId);
+  if (!scroll || scroll.category !== 'scroll' || scroll.gridX === undefined || scroll.gridY === undefined) return 1;
+  const lenses = new Set<string>();
+  for (const cell of getItemOccupiedCells(scroll, scroll.gridX, scroll.gridY)) {
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const id = getSlot(grid, cell.x + dx!, cell.y + dy!)?.itemId;
+      const item = id ? grid.items.get(id) : undefined;
+      if (item?.category === 'relic' && item.relicEffect !== 'chain' && item.element === 'aether' && (item.durability ?? 0) > 0) lenses.add(item.id);
+    }
+  }
+  return Math.min(1.75, 1 + lenses.size * 0.25);
+}
+
+/** Уникальные соседи по сторонам всех клеток, включая повёрнутые формы. */
+export function getAdjacentItems(grid: InventoryGrid, item: InventoryItem): InventoryItem[] {
+  if (item.gridX === undefined || item.gridY === undefined) return [];
+  const ids = new Set<string>();
+  for (const cell of getItemOccupiedCells(item,item.gridX,item.gridY)) {
+    for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const id=getSlot(grid,cell.x+dx!,cell.y+dy!)?.itemId;
+      if(id && id!==item.id) ids.add(id);
+    }
+  }
+  return Array.from(ids).map(id=>grid.items.get(id)).filter((neighbor): neighbor is InventoryItem => !!neighbor);
+}
+
+const statsCache = new WeakMap<InventoryGrid, { revision: number; stats: InventoryStats }>();
 export function calculateInventoryStats(grid: InventoryGrid): InventoryStats {
+  const cached = statsCache.get(grid);
+  if (cached?.revision === grid.revision) return cached.stats;
   let totalWeight = 0;
   let totalArmor = 0;
+  let chainArmor = 0;
   let bonusFireDamage = 0;
   let bonusPoisonDamage = 0;
   let bonusCritRate = 0;
+  let healingMultiplier = 1;
+  let scrollMultiplier = 1;
 
   for (const item of grid.items.values()) {
     totalWeight += item.weight;
+    if (item.relicEffect === 'chain' && !item.isSevered && !isItemContaminated(grid,item)) chainArmor = 6;
+    if (item.category === 'scroll') scrollMultiplier = Math.max(scrollMultiplier, getScrollMultiplier(grid, item.id));
     if (item.defense) {
       totalArmor += item.defense;
     }
@@ -219,31 +264,9 @@ export function calculateInventoryStats(grid: InventoryGrid): InventoryStats {
 
   // Расчёт соседства и стихийного резонанса
   for (const item of grid.items.values()) {
-    if (item.gridX === undefined || item.gridY === undefined) continue;
+    if (item.gridX === undefined || item.gridY === undefined || item.durability === 0) continue;
 
-    const myCells = getItemOccupiedCells(item, item.gridX, item.gridY);
-    const adjacentItemIds = new Set<string>();
-
-    for (const cell of myCells) {
-      const neighbors: GridCoord[] = [
-        { x: cell.x + 1, y: cell.y },
-        { x: cell.x - 1, y: cell.y },
-        { x: cell.x, y: cell.y + 1 },
-        { x: cell.x, y: cell.y - 1 },
-      ];
-
-      for (const n of neighbors) {
-        const slot = getSlot(grid, n.x, n.y);
-        if (slot && slot.itemId && slot.itemId !== item.id) {
-          adjacentItemIds.add(slot.itemId);
-        }
-      }
-    }
-
-    for (const adjId of adjacentItemIds) {
-      const neighborItem = grid.items.get(adjId);
-      if (!neighborItem) continue;
-
+    for (const neighborItem of getAdjacentItems(grid,item)) {
       // Огонь греет соседнее оружие
       if (item.element === 'fire' && neighborItem.category === 'weapon') {
         bonusFireDamage += 6;
@@ -253,28 +276,30 @@ export function calculateInventoryStats(grid: InventoryGrid): InventoryStats {
       if (item.element === 'poison') {
         if (neighborItem.category === 'weapon') {
           bonusPoisonDamage += 5;
-        } else if (neighborItem.category === 'potion') {
-          neighborItem.isSpoiled = true;
         }
       }
 
-      // Лед дает критический шанс оружию
-      if (item.element === 'ice' && neighborItem.category === 'weapon') {
-        bonusCritRate += 0.12; // +12% крит
-      }
+      // Лёд усиливает критические удары, но замораживает соседние лечебные припасы.
+      if (item.element === 'ice' && neighborItem.category === 'weapon') bonusCritRate += 0.12;
+      if (item.rarity !== 'holy' && item.element === 'ice' && neighborItem.category === 'potion') healingMultiplier = 0.5;
     }
   }
 
-  return {
+  const stats: InventoryStats = {
     totalWeight,
     weightClass: calculateWeightClass(totalWeight),
-    totalArmor,
+    totalArmor: totalArmor + chainArmor,
     bonusFireDamage,
     bonusPoisonDamage,
     bonusCritRate,
+    healingMultiplier,
+    scrollMultiplier,
   };
+  statsCache.set(grid, { revision: grid.revision, stats });
+  return stats;
 }
 
+let fusionCounter = 0;
 export function scrollFusion(scrollA: InventoryItem, scrollB: InventoryItem): InventoryItem | null {
   if (scrollA.category !== 'scroll' || scrollB.category !== 'scroll') {
     return null;
@@ -284,7 +309,7 @@ export function scrollFusion(scrollA: InventoryItem, scrollB: InventoryItem): In
 
   if (elements[0] === 'fire' && elements[1] === 'poison') {
     return {
-      id: `fusion_${Date.now()}`,
+      id: `fusion_${Date.now()}_${fusionCounter++}`,
       name: 'Свиток Чумного Пламени',
       category: 'scroll',
       rarity: 'rare',
@@ -299,7 +324,7 @@ export function scrollFusion(scrollA: InventoryItem, scrollB: InventoryItem): In
 
   if (elements[0] === 'aether' && elements[1] === 'ice') {
     return {
-      id: `fusion_${Date.now()}`,
+      id: `fusion_${Date.now()}_${fusionCounter++}`,
       name: 'Свиток Абсолютного Окоченения',
       category: 'scroll',
       rarity: 'rare',
@@ -313,4 +338,25 @@ export function scrollFusion(scrollA: InventoryItem, scrollB: InventoryItem): In
   }
 
   return null;
+}
+
+/** Споры в соседней ячейке мешают использовать предмет до очистки ранца. */
+export function isItemContaminated(grid: InventoryGrid, item: InventoryItem): boolean {
+  if (item.gridX === undefined || item.gridY === undefined) return false;
+  for (const cell of getItemOccupiedCells(item, item.gridX, item.gridY)) {
+    for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      if (getSlot(grid, cell.x + dx!, cell.y + dy!)?.isMudded) return true;
+    }
+  }
+  return false;
+}
+export function infectInventory(grid: InventoryGrid): boolean {
+  const cell = grid.slots.find((slot) => !slot.isMudded && slot.itemId === null);
+  if (!cell) return false;
+  cell.isMudded = true; grid.revision++; return true;
+}
+export function cleanseInventory(grid: InventoryGrid): void {
+  for (const slot of grid.slots) slot.isMudded = false;
+  for (const item of grid.items.values()) { item.isSpoiled = false; item.burnTime = 0; item.poisonTime = 0; }
+  grid.revision++;
 }

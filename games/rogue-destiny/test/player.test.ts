@@ -91,3 +91,10 @@ test('расчёт очков учитывает этаж, элиту, Нити 
   // (2 * 100) + (2 * 25) + (2 * 50) - (1 * 5) = 200 + 50 + 100 - 5 = 345
   assert.equal(calculateScore(p), 345);
 });
+
+test('фокус перехвата не отражает урон, запас эссенции и отчёт ограничены потолком',()=>{
+ const p=createPlayer();p.temporaryMana=95;
+ const result=performParry(p,20,'siphon');assert.equal(result.reflectedDamage,0);assert.equal(result.manaGained,5);assert.equal(p.temporaryMana,100);
+ assert.equal(performParry(p,20,'siphon').manaGained,0);
+ for(const damage of [0,-1,NaN]) assert.deepEqual(performParry(p,damage,'both'),{reflectedDamage:0,manaGained:0});
+});

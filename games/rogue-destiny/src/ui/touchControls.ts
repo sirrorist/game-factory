@@ -12,11 +12,14 @@ export interface TouchControlsCallbacks {
   onAttack: () => void;
   onParry: (active: boolean) => void;
   onMagic: () => void;
+  onDodge: () => void;
   onInteract: () => void;
   onInventory: () => void;
+  onPause: () => void;
   onHeal: () => void;
   onScroll: () => void;
   onVent: () => void;
+  onMeltdown: () => void;
   /** Ввод в мир разрешён: закрыты ранец и окна сцен. */
   isActive: () => boolean;
 }
@@ -42,6 +45,7 @@ export interface TouchControls {
   readonly enabled: boolean;
   /** Отпустить всё: окно сцены открылось посреди жеста. */
   release: () => void;
+  setMeltdownReady: (ready: boolean) => void;
 }
 
 export function createTouchControls(canvas: HTMLCanvasElement, cb: TouchControlsCallbacks): TouchControls {
@@ -51,12 +55,15 @@ export function createTouchControls(canvas: HTMLCanvasElement, cb: TouchControls
   container.hidden = true;
   container.innerHTML = `
     <div id="touch-stick" class="touch-stick"><div id="touch-knob" class="touch-knob"></div></div>
+    <button id="touch-btn-pause" class="touch-btn touch-btn-pause" type="button" aria-label="Пауза и настройки">Ⅱ</button>
     <button id="touch-btn-inv" class="touch-btn touch-btn-inv" type="button" aria-label="Ранец">🎒</button>
     <div class="touch-action-pad">
-      <button id="touch-btn-scroll" class="touch-btn" type="button" aria-label="Свиток света">📜</button>
-      <button id="touch-btn-heal" class="touch-btn" type="button" aria-label="Бинт">🩹</button>
+      <button id="touch-btn-meltdown" class="touch-btn" type="button" aria-label="Срыв Ядра: одна Нить, один HP, уничтожение зала" disabled>🧵</button>
+      <button id="touch-btn-scroll" class="touch-btn" type="button" aria-label="Свиток">📜</button>
+      <button id="touch-btn-heal" class="touch-btn" type="button" aria-label="Лечение и припасы">🩹</button>
       <button id="touch-btn-vent" class="touch-btn" type="button" aria-label="Сброс перегрева">🔥</button>
       <button id="touch-btn-interact" class="touch-btn" type="button" aria-label="Действие">🖐️</button>
+      <button id="touch-btn-dodge" class="touch-btn" type="button" aria-label="Эфирный скачок">💨</button>
       <button id="touch-btn-magic" class="touch-btn touch-btn-magic" type="button" aria-label="Магия">⚡</button>
       <button id="touch-btn-parry" class="touch-btn touch-btn-parry" type="button" aria-label="Парирование">🛡️</button>
     </div>
@@ -88,6 +95,8 @@ export function createTouchControls(canvas: HTMLCanvasElement, cb: TouchControls
   function release(): void {
     stopStick();
     look.id = -1;
+    cb.onParry(false);
+    container.querySelector('#touch-btn-parry')?.classList.remove('active');
   }
 
   // Жесты - на холсте: кнопки и окна лежат поверх и до холста касание не пропускают.
@@ -154,11 +163,14 @@ export function createTouchControls(canvas: HTMLCanvasElement, cb: TouchControls
       fn();
     });
   }
+  press('touch-btn-pause', () => cb.onPause());
   press('touch-btn-inv', () => cb.onInventory());
+  press('touch-btn-meltdown', () => cb.isActive() && cb.onMeltdown());
   press('touch-btn-scroll', () => cb.isActive() && cb.onScroll());
   press('touch-btn-heal', () => cb.isActive() && cb.onHeal());
   press('touch-btn-vent', () => cb.isActive() && cb.onVent());
   press('touch-btn-interact', () => cb.isActive() && cb.onInteract());
+  press('touch-btn-dodge', () => cb.isActive() && cb.onDodge());
   press('touch-btn-magic', () => cb.isActive() && cb.onMagic());
 
   // Парирование - пока палец на кнопке, как ПКМ на ПК
@@ -189,5 +201,6 @@ export function createTouchControls(canvas: HTMLCanvasElement, cb: TouchControls
       return enabled;
     },
     release,
+    setMeltdownReady: (ready: boolean) => { container.querySelector<HTMLButtonElement>('#touch-btn-meltdown')!.disabled=!ready; },
   };
 }

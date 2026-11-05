@@ -1,6 +1,8 @@
 /**
  * Модуль сценарных энкаунтеров: Стелс-проверки, QTE-взлом мимика и диалог Эфирного Разлома.
  */
+import { CODEX, type CodexEntry } from '../core/codex.ts';
+import type { ChapterObjective } from '../core/objective.ts';
 import { QTE_ZONE, qteHit, qteSpeed, qteStep } from '../core/qte.ts';
 import { pruneNotifications, pushNotification, type Notice } from '../core/notifications.ts';
 export interface StealthChoice {
@@ -25,8 +27,15 @@ export interface ScoreBreakdown {
   bestScore?: number;
 }
 
+export interface MenuProgress {
+  highScore:number;totalRuns:number;victories:number;highestFloor:number;codex:readonly CodexEntry[];
+  floor:number;objective:ChapterObjective;
+}
 export interface EncountersUI {
-  showStealthModal: (title: string, choices: StealthChoice[]) => void;
+  showBusy: (text:string) => void;
+  hideBusy: () => void;
+  showStartMenu: (continuing: boolean, onPlay: () => void, onRestart: () => void, onSound: () => boolean, muted: boolean, progress: MenuProgress) => void;
+  showStealthModal: (title: string, choices: StealthChoice[], fate?: {threads:number;change:(enabled:boolean)=>void}) => void;
   showMimicQte: (onSuccess: () => void, onFailure: () => void) => void;
   showAetherRiftModal: (onRest: () => void, onSave: () => void, onLeave: () => void) => void;
   showVictoryModal: (breakdown: ScoreBreakdown, onNextFloor: () => void, onRestart: () => void) => void;
@@ -39,6 +48,13 @@ export function createEncountersUI(): EncountersUI {
   overlay.id = 'encounter-overlay';
   overlay.className = 'encounter-overlay hidden';
   document.body.appendChild(overlay);
+  overlay.addEventListener('keydown', (event) => {
+    if (event.key !== 'Tab' || !overlay.querySelector('.title-card')) return;
+    const controls = Array.from(overlay.querySelectorAll<HTMLButtonElement>('button:not([disabled])'));
+    const first = controls[0], last = controls[controls.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+  });
 
   // Стек уведомлений под статами персонажа (максимум 3)
   const notifStack = document.createElement('div');
@@ -94,19 +110,74 @@ export function createEncountersUI(): EncountersUI {
 
   return {
     showNotification: notify,
+    hideBusy: () => {if(overlay.querySelector('.busy-card'))overlay.classList.add('hidden');},
+    showBusy: (text:string) => {
+      overlay.replaceChildren();const card=document.createElement('div');card.className='encounter-card busy-card';card.setAttribute('role','status');card.setAttribute('aria-live','polite');
+      const title=document.createElement('div');title.className='enc-header';title.textContent=text;
+      const detail=document.createElement('p');detail.className='enc-desc';detail.textContent='Записываем пройденный путь. Время в криптах остановлено.';card.append(title,detail);overlay.append(card);overlay.classList.remove('hidden');
+    },
+    showStartMenu: (continuing, onPlay, onRestart, onSound, muted, progress) => {
+      overlay.innerHTML = `
+        <section class="title-card" role="dialog" aria-modal="true" aria-label="Rogue Destiny">
+          <div class="title-eyebrow">ЗАТОПЛЕННЫЕ КРИПТЫ · ГЛАВА I</div>
+          <h1 class="game-title">ROGUE<span>DESTINY</span></h1>
+          <p class="title-story">Ваши магические каналы сожжены. Чужие реликвии - последняя надежда пройти крипты и добраться до Стража Семени.</p>
+          <div class="title-rule"><b>Огонь даёт силу.</b> Посох охлаждает перегрев. Щит ловит момент. Ранец решает исход.</div>
+          <div class="title-actions">
+            <button id="title-play" class="action-btn btn-gold" type="button">${continuing ? 'Продолжить путь' : 'Войти в крипты'}</button>
+            ${continuing ? '<button id="title-restart" class="action-btn btn-secondary" type="button">Начать новый забег</button>' : ''}
+            <button id="title-sound" class="action-btn btn-secondary" type="button">Звук: ${muted ? 'выключен' : 'включён'}</button>
+            <button id="title-fullscreen" class="action-btn btn-secondary" type="button">На весь экран</button>
+          </div>
+          <div class="title-progress" aria-label="Память прошлых путей">
+            <div class="title-section-label">ПАМЯТЬ СТРАННИКА</div>
+            <div id="title-records" class="title-records"></div>
+            <div id="title-knowledge" class="title-knowledge"></div>
+            <p id="title-objective" class="title-objective"></p>
+          </div>
+          <div class="title-controls">
+            <div><b>ПК</b><span>WASD - движение · мышь - обзор<br>ЛКМ - посох · ПКМ - парирование / блок<br>Space - скачок · Q - магия · V - сброс жара<br>X - срыв Ядра за Нить · 1-4 - пояс<br>E - действие · Tab - ранец · Esc - пауза</span></div>
+            <div><b>ТЕЛЕФОН</b><span>Слева - движение, справа - камера.<br>Касание справа - атака посохом.<br>Скачок, щит, магия и ранец - кнопками.<br>Три этажа. Одна судьба.</span></div>
+          </div>
+          <p class="title-footnote">Ранец не останавливает время. Бинты, вода и пайки действуют за 3 с. Свитки расходуются. Разлом восстанавливает силы и стартовый камень.</p>
+        </section>`;
+      overlay.classList.remove('hidden');
+      const records=overlay.querySelector('#title-records')!;
+      for(const [label,value] of [['РЕКОРД',progress.highScore],['ПОПЫТКИ ЗАВЕРШЕНЫ',progress.totalRuns],['ПОБЕДЫ',progress.victories],['ГЛУБИНА',`${Math.min(3,progress.highestFloor)} / 3`]]) {
+        const entry=document.createElement('div'),caption=document.createElement('span'),number=document.createElement('b');
+        caption.textContent=String(label);number.textContent=String(value);entry.append(caption,number);records.append(entry);
+      }
+      const knowledge=overlay.querySelector('#title-knowledge')!;
+      if(!progress.codex.length) knowledge.textContent='Пока нет записей Кодекса. Знания, найденные в криптах, переживут новый забег.';
+      for(const key of progress.codex) {const chip=document.createElement('span');chip.textContent=CODEX[key].title;chip.title=CODEX[key].description;knowledge.append(chip);}
+      overlay.querySelector('#title-objective')!.textContent=`Этаж ${progress.floor}/3 · ${progress.objective.title}. ${progress.objective.detail}`;
+      const play = overlay.querySelector<HTMLButtonElement>('#title-play')!;
+      play.addEventListener('click', () => { overlay.classList.add('hidden'); onPlay(); });
+      overlay.querySelector('#title-restart')?.addEventListener('click', () => { overlay.classList.add('hidden'); onRestart(); });
+      overlay.querySelector('#title-fullscreen')!.addEventListener('click', () => {
+        if (document.fullscreenElement) { notify('Полный экран уже включён.'); return; }
+        const enter = document.documentElement.requestFullscreen;
+        if (enter) void enter.call(document.documentElement).catch(() => notify('Полный экран недоступен в этом браузере.'));
+        else notify('Полный экран недоступен в этом браузере.');
+      });
+      const sound = overlay.querySelector('#title-sound')!;
+      sound.addEventListener('click', () => { sound.textContent = onSound() ? 'Звук: выключен' : 'Звук: включён'; });
+      play.focus();
+    },
 
-    showStealthModal: (title, choices) => {
+    showStealthModal: (title, choices, fate) => {
       overlay.innerHTML = `
         <div class="encounter-card stealth-card">
           <div class="enc-header">🗡️ СЦЕНАРИЙ СКРЫТНОГО ДЕЙСТВИЯ</div>
           <div class="enc-title">${title}</div>
+          ${fate?`<label class="fate-reroll"><input id="stealth-fate-retry" type="checkbox" ${fate.threads>0?'':'disabled'}><span>Разрешить один переброс при провале · -1 активная Нить только после неудачи. Сейчас: ${fate.threads}.</span></label>`:''}
           <div class="enc-choices">
             ${choices
               .map(
                 (c, idx) => `
               <button class="choice-btn risk-${c.risk}" data-idx="${idx}">
                 <div class="btn-text">${c.text}</div>
-                <div class="btn-meta">Риск: ${c.risk.toUpperCase()} | Награда: ${c.reward}</div>
+                <div class="btn-meta">Риск: ${{low:'НИЗКИЙ',medium:'СРЕДНИЙ',high:'ВЫСОКИЙ'}[c.risk]} | Награда: ${c.reward}</div>
               </button>
             `,
               )
@@ -120,6 +191,7 @@ export function createEncountersUI(): EncountersUI {
         if (document.pointerLockElement) document.exitPointerLock();
       }, 20);
 
+      overlay.querySelector<HTMLInputElement>('#stealth-fate-retry')?.addEventListener('change',event=>fate?.change((event.currentTarget as HTMLInputElement).checked));
       overlay.querySelectorAll('.choice-btn').forEach((btn) => {
         btn.addEventListener('click', (e) => {
           const idx = Number((e.currentTarget as HTMLElement).dataset.idx);
@@ -267,7 +339,7 @@ export function createEncountersUI(): EncountersUI {
     showVictoryModal: (breakdown, onNextFloor, onRestart) => {
       overlay.innerHTML = `
         <div class="encounter-card victory-card">
-          <div class="enc-header gold-text">🏆 ТРИУМФ ВО ТЬМЕ: ДРЕВНИЙ ПОРТАЛ ОТКРЫТ</div>
+          <div class="enc-header gold-text">${breakdown.floor >= 3 ? '🌱 КРИПТЫ ОСВОБОЖДЕНЫ' : 'ДРЕВНИЙ ПОРТАЛ ОТКРЫТ'}</div>
           <div class="enc-desc">Опальный маг преодолел первородные заросли, одолел стражей и настроил резонанс древнего портала. Врата в глубины распахиваются!</div>
           
           <div class="score-ledger">
@@ -300,7 +372,7 @@ export function createEncountersUI(): EncountersUI {
           </div>
 
           <div class="modal-actions">
-            <button id="victory-next" class="action-btn btn-gold">🌀 Спуститься на Этаж ${breakdown.floor + 1}</button>
+            <button id="victory-next" class="action-btn btn-gold">${breakdown.floor >= 3 ? '✨ Новый забег' : `🌀 Спуститься на этаж ${breakdown.floor + 1}`}</button>
             <button id="victory-restart" class="action-btn btn-secondary">🔄 Начать новый забег (Сброс)</button>
           </div>
         </div>

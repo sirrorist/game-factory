@@ -12,7 +12,7 @@ import {
   removeItem,
   restoreItem,
 } from '../src/core/inventory.ts';
-import { ARM_LENGTH, STAFF_GRIP, STAFF_LENGTH, attackPose } from '../src/render/character.ts';
+import { ARM_LENGTH, STAFF_GRIP, STAFF_LENGTH, attackPose } from '../src/core/attack-pose.ts';
 import type { InventoryItem } from '../src/core/types.ts';
 
 function item(id: string, shape: { x: number; y: number }[]): InventoryItem {

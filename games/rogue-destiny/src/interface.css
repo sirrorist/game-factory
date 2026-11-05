@@ -1,0 +1,105 @@
+/* Дополнения кандидата 0.3.0 поверх исходных стилей игры. */
+.belt-field { display: grid; gap: 6px; margin: 10px 0; color: #b8c6d7; font-size: 12px; }
+.belt-field select { width: 100%; min-height: 40px; color: #d8e9ef; background: #111e2a; border: 1px solid #3c5366; border-radius: 6px; padding: 6px; }
+.craft-feedback { color: #9cb1bc; font-size: 11px; line-height: 1.6; margin-top: 8px; }
+.boss-panel { position: fixed; z-index: 30; left: 50%; bottom: 104px; transform: translateX(-50%); width: min(420px, 66vw); pointer-events: none; padding: 10px 16px; background: linear-gradient(90deg, #10141900, #101419eb 18%, #101419eb 82%, #10141900); }
+.boss-panel[hidden] { display: none; }
+.boss-name { color: #e3d6b8; text-align: center; font: 600 11px/1.5 var(--font-display); letter-spacing: 2px; margin-bottom: 7px; }
+.boss-track { background: #221d22; height: 7px; border: 1px solid #70574a; }
+.boss-fill { background: linear-gradient(90deg, #623132, #c26945); height: 100%; transition: width 150ms; }
+.title-card { width: min(760px, 94vw); max-height: 94dvh; overflow-y: auto; padding: clamp(22px, 5vh, 48px) clamp(22px, 5vw, 52px); border: 1px solid #63818a66; border-radius: 3px; background: radial-gradient(ellipse at 80% 0%, #284b5266, transparent 60%), linear-gradient(140deg, #101a22f5, #0a1019f8); box-shadow: 0 30px 120px #000b, inset 0 0 80px #122a3322; color: #c3d0d8; }
+.title-eyebrow { font: 600 10px/1.6 var(--font-display); letter-spacing: 3px; color: #9ab8b9; margin-bottom: 16px; }
+.game-title { font: 900 clamp(30px, 7vw, 62px)/1 var(--font-display); letter-spacing: -2px; color: #e2d6bb; text-shadow: 0 4px 25px #b6ad7840; margin-bottom: 22px; }
+.game-title span { display: block; color: #7fb2bd; letter-spacing: 7px; font-size: 0.7em; margin-top: 10px; }
+.title-story { max-width: 540px; font-size: 15px; line-height: 1.7; color: #a9bac6; }
+.title-rule { border-left: 2px solid #648d91; padding: 8px 14px; margin: 20px 0; font-size: 13px; line-height: 1.6; }
+.title-rule b { color: #dfc58e; }
+.title-actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 24px 0; }
+.title-actions .action-btn { flex: 1 1 170px; min-height: 46px; }
+.title-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; border-top: 1px solid #364955; padding-top: 20px; }
+.title-controls b { display: block; color: #88a9b9; letter-spacing: 2px; font-size: 10px; margin-bottom: 10px; }
+.title-controls span { font-size: 12px; line-height: 1.8; color: #95a7b5; }
+.title-footnote { margin-top: 20px; color: #7b929f; font-size: 11px; line-height: 1.6; }
+.healing-panel { position: fixed; z-index: 31; top: 18%; left: 50%; transform: translateX(-50%); width: min(220px, 38vw); background: #101d24e8; border: 1px solid #557969; border-radius: 5px; padding: 10px 14px; pointer-events: none; color: #9ed0ae; text-align: center; font-size: 10px; letter-spacing: 2px; }
+.healing-panel[hidden] { display: none; }
+.healing-track { height: 4px; background: #1a2b27; margin-top: 8px; }
+.healing-fill { height: 100%; background: #91cda9; }
+.grid-item.item-spoiled { filter: saturate(0.3); border-color: #987753; background-image: repeating-linear-gradient(135deg, #70502222 0px, #70502222 4px, transparent 4px, transparent 8px); }
+.core-caption { font-size: 9px; letter-spacing: 1px; color: #9c9cbd; display: flex; justify-content: space-between; }
+.core-caption span { color: #bab2e4; }
+body.core-distress::after { content: ''; position: fixed; inset: 0; z-index: 15; pointer-events: none; box-shadow: inset 0 0 110px #532d7166; }
+/* Семь действий занимают три ряда, ранец расположен выше. */
+body.touch-enabled { --touch-size: clamp(44px, 7dvh, 52px); }
+body.touch-enabled .touch-action-pad { grid-template-columns: repeat(3, var(--touch-size)); gap: 8px; }
+body.touch-enabled .touch-btn { width: var(--touch-size); height: var(--touch-size); }
+body.touch-enabled .touch-btn-inv { bottom: calc(48px + var(--touch-size) + var(--touch-size) + var(--touch-size) + var(--safe-b)); }
+body.touch-enabled .boss-panel { bottom: calc(210px + var(--safe-b)); width: min(340px, 44vw); }
+body.touch-enabled .healing-panel { top: auto; bottom: calc(260px + var(--safe-b)); width: min(180px, 35vw); }
+.inv-move-dock { display: none; }
+body.touch-enabled .inv-move-dock { position: fixed; z-index: 103; left: calc(10px + var(--safe-l)); bottom: calc(10px + var(--safe-b)); display: flex; gap: 5px; align-items: center; padding: 6px; background: #101d2af0; border: 1px solid #526875; border-radius: 8px; }
+.inv-move-dock span { font-size: 8px; color: #a2bbc7; letter-spacing: 1px; writing-mode: vertical-rl; }
+.inv-move-dock button { width: 44px; height: 44px; touch-action: none; color: #c5dce6; background: #213345; border: 1px solid #537081; border-radius: 5px; font-size: 16px; }
+.inv-move-dock button:last-child { font-size: 10px; }
+.inv-move-dock button.active { background: #36666c; }
+body.touch-enabled .inventory-modal { padding-bottom: calc(80px + var(--safe-b)); }
+@media (max-width: 480px) { .title-controls { grid-template-columns: 1fr; gap: 12px; } .title-eyebrow { letter-spacing: 1px; } }
+@media (max-height: 500px) {
+  .title-card { padding: 20px 28px; } .game-title { font-size: 32px; } .title-actions { margin: 14px 0; }
+  .boss-panel { padding: 5px 10px; } .boss-name { font-size: 9px; letter-spacing: 1px; }
+}
+@media (max-width: 520px) and (orientation: portrait) {
+  .inv-body { flex-direction: column; }
+  .inv-grid-board { --cell: clamp(42px, 15vw, 56px); }
+  .inv-sidebar { width: 100%; max-height: none; overflow: visible; }
+  .inventory-window { width: calc(100vw - 16px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+}
+
+.launch-error { position: fixed; inset: 0; z-index: 10000; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 20px; padding: 28px; background: #101822; color: #c6d7df; text-align: center; }
+.launch-error h1 { font-size: 26px; } .launch-error p { max-width: 440px; line-height: 1.7; }
+.launch-error button { min-height: 44px; padding: 12px 24px; color: #10222a; background: #b3c6c4; border: 0; border-radius: 5px; }
+
+.touch-btn-pause { position: absolute; right: calc(24px + var(--touch-size, 52px) + var(--safe-r)); bottom: calc(48px + var(--touch-size, 52px) + var(--touch-size, 52px) + var(--touch-size, 52px) + var(--safe-b)); }
+
+#inv-codex { color: #9fb2c1; font-size: 11px; line-height: 1.6; }
+.codex-record { display: grid; gap: 4px; padding: 9px 0; border-bottom: 1px solid #334453; }
+.codex-record strong { color: #d6c9a7; }
+
+.oracle-panel { position: fixed; z-index: 31; top: calc(16px + var(--safe-t, 0px)); left: 50%; transform: translateX(-50%); width: min(400px, 50vw); padding: 10px 14px; color: #eddbff; background: #20182ee8; border: 1px solid #9372a8; pointer-events: none; }
+.oracle-panel[hidden] { display: none; }
+.oracle-label { font-size: 11px; letter-spacing: 1px; text-align: center; margin-bottom: 7px; }
+.oracle-track { height: 5px; background: #382c45; }
+.oracle-fill { height: 100%; background: #b78ce2; transform-origin: left; }
+.oracle-panel.urgent { border-color: #eb926e; color: #ffd1b5; }
+.oracle-panel.urgent .oracle-fill { background: #eb926e; }
+body.touch-enabled .oracle-panel { top: calc(60px + var(--safe-t, 0px)); width: min(360px, 48vw); padding: 7px; }
+@media (max-width: 600px) and (orientation: portrait) { body.touch-enabled .oracle-panel { top: auto; bottom: calc(270px + var(--safe-b, 0px)); width: 76vw; } }
+
+.inventory-hazards { color: #dfb28e; font-size: 11px; line-height: 1.5; margin: 4px 0 10px; }
+.item-hazard { position: absolute; z-index: 3; bottom: 2px; left: 2px; max-width: calc(100% - 4px); overflow: hidden; pointer-events: none; padding: 2px; color: #ffe3c5; background: #552c21eb; font: 8px sans-serif; white-space: nowrap; }
+.item-hazard[hidden], .hazard-panel[hidden] { display: none; }
+.hazard-panel { position: fixed; z-index: 32; left: 50%; top: calc(12px + var(--safe-t, 0px)); transform: translateX(-50%); max-width: 43vw; padding: 8px 12px; border: 1px solid #b67d50; background: #382319ee; color: #f9d7b6; font-size: 11px; text-align: center; pointer-events: none; }
+body.touch-enabled .hazard-panel { top: auto; bottom: calc(240px + var(--safe-b, 0px)); }
+.chain-state { position: absolute; z-index: 3; left: 2px; right: 2px; bottom: 3px; pointer-events: none; background: #172a37ed; color: #b7d1e6; font: 8px sans-serif; text-align: center; padding: 3px 1px; }
+#touch-btn-meltdown { border-color: #aa9364; color: #f5d597; }
+#touch-btn-meltdown:disabled { opacity: 0.28; }
+.title-progress { border-top: 1px solid #364955; padding: 16px 0 12px; }
+.title-section-label { font-size: 9px; letter-spacing: 2px; color: #8ba4b4; margin-bottom: 10px; }
+.title-records { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.title-records div { display: flex; flex-direction: column; gap: 4px; }
+.title-records span { font-size: 8px; color: #91a2ab; }
+.title-records b { color: #d9c299; font-size: 18px; font-weight: 500; }
+.title-knowledge { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 14px; color: #829ba8; font-size: 10px; line-height: 1.5; }
+.title-knowledge span { padding: 3px 7px; border: 1px solid #4e6672; color: #aac7cc; }
+.title-objective { color: #b3c9d0; font-size: 11px; line-height: 1.6; margin-bottom: 4px; }
+.objective-line { font-size: 10px; line-height: 1.4; color: #d9c299; max-width: 160px; }
+body.touch-enabled .objective-line { max-width: 110px; font-size: 8px; }
+@media (max-width: 480px) { .title-records { grid-template-columns: repeat(2,1fr); } }
+.map-legend { max-width: 160px; color: #93a9b8; font-size: 8px; letter-spacing: 0.4px; }
+body.touch-enabled .map-legend { max-width: 110px; font-size: 7px; letter-spacing: 0; }
+.boss-panel.ordinary .boss-fill { background: linear-gradient(90deg,#465e68,#9bbec0); }
+.boss-panel.ordinary .boss-name { font-size: 10px; letter-spacing: 1px; color: #bfd2d2; }
+.fate-reroll { display: flex; align-items: flex-start; gap: 10px; min-height: 44px; margin: 12px 0; padding: 10px; border: 1px solid #796e52; color: #d6c69f; font-size: 11px; line-height: 1.6; cursor: pointer; }
+.fate-reroll input { width: 22px; height: 22px; flex: 0 0 22px; accent-color: #cfb77e; }

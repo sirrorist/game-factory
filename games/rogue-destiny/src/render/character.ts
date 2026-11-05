@@ -4,33 +4,16 @@
  * парирование, каст заклинаний и реакцию монстров на удары (stagger/knockback).
  */
 import * as THREE from 'three';
+import { createWardenModel } from './warden.ts';
+import type {EnemySenses} from '../core/perception.ts';
+import { enemyProfile, type SylvanKind } from '../core/enemies.ts';
 import { createCryptMaterials } from './materials.ts';
 
-export const ARM_LENGTH = 0.55;
-export const STAFF_LENGTH = 2.0;
-export const STAFF_GRIP = 0.35;
+import { ARM_LENGTH, STAFF_LENGTH, STAFF_GRIP, attackPose } from '../core/attack-pose.ts';
+
 const ATTACK_TIME = 0.32;
 const BUCKLER_REST = { x: -0.16, y: -0.2, z: 0.08 };
 const BUCKLER_REST_YAW = -1.2;
-
-/** Поза руки в момент t (0..1) удара посохом: плечо, наклон посоха в мире, увод к центру. */
-export function attackPose(t: number): { shoulder: number; staff: number; inward: number } {
-  const lerp = (a: number, b: number, p: number): number => a + (b - a) * p;
-  if (t < 0.3) {
-    // Замах: рука вверх, навершие уходит за плечо
-    const p = t / 0.3;
-    return { shoulder: lerp(-0.3, -2.6, p), staff: lerp(0, -0.6, p), inward: 0 };
-  }
-  if (t < 0.65) {
-    // Удар: рубящая дуга сверху вниз перед собой, навершие - вперёд и вниз
-    const p = (t - 0.3) / 0.35;
-    const e = 1 - (1 - p) * (1 - p);
-    return { shoulder: lerp(-2.6, -1.2, e), staff: lerp(-0.6, 1.9, e), inward: lerp(0, 0.3, e) };
-  }
-  // Возврат в стойку
-  const p = (t - 0.65) / 0.35;
-  return { shoulder: lerp(-1.2, -0.3, p), staff: lerp(1.9, 0, p), inward: lerp(0.3, 0, p) };
-}
 
 export interface Character3D {
   mesh: THREE.Group;
@@ -127,11 +110,10 @@ export function createPlayerCharacter(
   crystalMesh.position.y = STAFF_LENGTH - STAFF_GRIP + 0.05;
   staffGroup.add(crystalMesh);
 
-  // Динамический свет посоха. Тень от точечного света - шесть проходов рендера за кадр:
-  // на телефоне это ощутимо, поэтому тень - только на ПК.
+  // Тени от PointLight требуют шести проходов: посох только освещает окружение.
   const staffLight = new THREE.PointLight('#38bdf8', 2.0, 16, 1.8);
   staffLight.position.y = crystalMesh.position.y;
-  staffLight.castShadow = !lowPower;
+  staffLight.castShadow = false;
   staffGroup.add(staffLight);
 
   /** Поза руки: угол плеча (минус - рука вперёд), наклон посоха в мире и увод к центру. */
@@ -306,17 +288,24 @@ export interface EnemySylvan3D {
   id: string;
   hp: number;
   maxHp: number;
+  kind: SylvanKind;
+  name: string;
+  coreDamage: number;
+  isStaggered: boolean;
+  navigationTarget: {x:number;z:number};
   isAlive: boolean;
   aiState: 'patrol' | 'chase' | 'windup' | 'attack' | 'recover';
   stealthAvailable: boolean;
+  unblockable: boolean;
   markStealthUsed: () => void;
   distract: (offset: THREE.Vector3) => void;
-  takeHit: (damage: number, knockbackDir: THREE.Vector3) => void;
+  takeHit: (damage: number, knockbackDir: THREE.Vector3, react?: boolean) => void;
   update: (
     delta: number,
     playerPos: THREE.Vector3,
     detectionRadius: number,
     onAttack: (damage: number, attacker: EnemySylvan3D) => void,
+    senses?: EnemySenses,
   ) => void;
 }
 
@@ -325,9 +314,14 @@ export function createSylvanEnemy(
   startX: number,
   startZ: number,
   materials: ReturnType<typeof createCryptMaterials>,
+  isWarden = false,
+  level = 1,
 ): EnemySylvan3D {
   const group = new THREE.Group();
   group.position.set(startX, 0, startZ);
+
+  const profile=enemyProfile(id,level,isWarden);
+  const idleEyes=profile.kind==='stalker'?'#95b8bf':'#f59e0b';
 
   // Древесный торс
   const bodyGeo = new THREE.CylinderGeometry(0.3, 0.4, 1.3, 6);
@@ -354,7 +348,7 @@ export function createSylvanEnemy(
   group.add(hornR);
 
   // Светящиеся глаза (янтарные в покое, алые при агро/атаке)
-  const eyeMat = new THREE.MeshBasicMaterial({ color: '#f59e0b' });
+  const eyeMat = new THREE.MeshBasicMaterial({ color: idleEyes });
   const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.05, 4, 4), eyeMat);
   eyeL.position.set(-0.1, 1.75, 0.18);
   const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.05, 4, 4), eyeMat);
@@ -385,8 +379,31 @@ export function createSylvanEnemy(
   armRGroup.add(clawRMesh);
   group.add(armRGroup);
 
-  let hp = 40;
-  const maxHp = 40;
+  const balance = profile;
+  if(profile.kind==='stalker') {
+    group.scale.set(0.82,1.12,0.82);
+    const sporeGeo=new THREE.IcosahedronGeometry(0.18,0),sporeMaterial=new THREE.MeshToonMaterial({color:'#7c9f9e',gradientMap:materials.gradientMap});
+    for(let i=0;i<5;i++){const spore=new THREE.Mesh(sporeGeo,sporeMaterial);spore.position.set(Math.sin(i*2.4)*0.35,1.35+(i%2)*0.22,-0.25);group.add(spore);}
+    hornL.scale.y=hornR.scale.y=1.45;
+  } else if(profile.kind==='thorn') {
+    group.scale.set(1.12,1.1,1.12);
+    const plateGeo=new THREE.BoxGeometry(0.45,0.8,0.18),thornGeo=new THREE.ConeGeometry(0.1,0.65,5);
+    for(const side of [-1,1]) {
+      const plate=new THREE.Mesh(plateGeo,materials.roots);plate.position.set(side*0.23,1,0.34);plate.rotation.z=side*0.15;group.add(plate);
+      for(let i=0;i<3;i++){const thorn=new THREE.Mesh(thornGeo,materials.roots);thorn.position.set(side*(0.3+i*0.13),1.5+i*0.08,-0.1);thorn.rotation.z=side*(-0.4-i*0.25);group.add(thorn);}
+    }
+  }
+  const maxHp = balance.hp;
+  let hp = maxHp;
+  const warden = isWarden ? createWardenModel(materials) : null;
+  if (warden) {
+    group.scale.setScalar(1.65);
+    body.visible = head.visible = armLMesh.visible = armRMesh.visible = clawLMesh.visible = clawRMesh.visible = false;
+    hornL.position.y = hornR.position.y = 2.4;
+    group.add(warden.model);
+    const crest = new THREE.Mesh(new THREE.OctahedronGeometry(0.2, 0), materials.aetherCrystal);
+    crest.position.set(0, 2.4, 0); group.add(crest);
+  }
   let isAlive = true;
   let staggerTimer = 0;
   const knockbackVel = new THREE.Vector3();
@@ -398,24 +415,40 @@ export function createSylvanEnemy(
   let recoverTimer = 0;
   let patrolAngle = Math.random() * Math.PI * 2;
   const patrolCenter = new THREE.Vector3(startX, 0, startZ);
+  const lastKnownPlayer=new THREE.Vector3(startX,0,startZ);
+  const navigationTarget=new THREE.Vector3(startX,0,startZ);
 
-  let stealthAvailable = true;
+  let stealthAvailable = !isWarden;
+  let strikeCount = 0;
+  let slam = false;
+  const warning = new THREE.Mesh(
+    new THREE.RingGeometry(2.2, 2.45, 40),
+    new THREE.MeshBasicMaterial({ color: isWarden?'#f05252':'#c5a569', transparent: true, opacity: 0.65, side: THREE.DoubleSide, depthWrite: false }),
+  );
+  warning.rotation.x = -Math.PI / 2;
+  warning.position.y = 0.12;
+  warning.visible = false;
+  if (isWarden || profile.kind==='thorn') group.add(warning);
 
   const self: EnemySylvan3D = {
     mesh: group,
     id,
+    kind:profile.kind, name:profile.name, coreDamage:profile.coreDamage,
     get hp() {
       return hp;
     },
     get maxHp() {
       return maxHp;
     },
+    get navigationTarget() {return navigationTarget;},
+    get isStaggered() { return staggerTimer>0; },
     get isAlive() {
       return isAlive;
     },
     get aiState() {
       return aiState;
     },
+    get unblockable() { return isWarden && slam; },
     get stealthAvailable() {
       return stealthAvailable && isAlive && aiState === 'patrol';
     },
@@ -428,13 +461,17 @@ export function createSylvanEnemy(
       stealthAvailable = false;
       patrolCenter.copy(group.position);
     },
-    takeHit: (damage: number, knockbackDir: THREE.Vector3) => {
+    takeHit: (damage: number, knockbackDir: THREE.Vector3, react = true) => {
       if (!isAlive) return;
       hp -= damage;
-      staggerTimer = 0.28; // Стан / отшатывание
-      aiState = 'chase';
+      if (!react && hp > 0) return;
+      if(react&&knockbackDir.lengthSq()>0)lastKnownPlayer.copy(group.position).addScaledVector(knockbackDir,-2);
+      // Тяжёлый замах босса нельзя бесконечно сбивать частыми ударами.
+      const interrupt = !profile.resistsWindup || aiState !== 'windup';
+      staggerTimer = interrupt ? (isWarden ? 0.12 : 0.28) : 0;
+      if (interrupt) { aiState = 'chase'; warning.visible = false; }
       stealthAvailable = false;
-      knockbackVel.copy(knockbackDir).multiplyScalar(7.0);
+      knockbackVel.copy(knockbackDir).multiplyScalar(profile.knockback);
 
       // Вспышка урона на коре и отскок рук назад
       body.scale.set(1.25, 0.85, 1.25);
@@ -443,6 +480,7 @@ export function createSylvanEnemy(
 
       if (hp <= 0) {
         isAlive = false;
+        warning.visible = false;
         eyeMat.color.set('#1e293b'); // Глаза гаснут
         // Анимация падения побежденного Сильвана
         group.rotation.x = Math.PI / 2;
@@ -454,8 +492,14 @@ export function createSylvanEnemy(
       playerPos: THREE.Vector3,
       detectionRadius: number,
       onAttack: (damage: number, attacker: EnemySylvan3D) => void,
+      senses?: EnemySenses,
     ) => {
-      if (!isAlive) return;
+      if (!isAlive || senses?.active===false) return;
+      if (warden) {
+        warden.left.rotation.x = armLGroup.rotation.x;
+        warden.right.rotation.x = armRGroup.rotation.x;
+        warden.model.position.y = warden.baseY + (body.position.y - 0.9);
+      }
 
       // 1. Обработка стаггера / нокдауна
       if (staggerTimer > 0) {
@@ -467,11 +511,18 @@ export function createSylvanEnemy(
       }
 
       const dist = group.position.distanceTo(playerPos);
+      if(!senses||senses.see||senses.hear)lastKnownPlayer.copy(playerPos);
+      const chaseTarget=senses&&!senses.see&&!senses.hear?lastKnownPlayer:playerPos;
 
       // 2. Фаза подготовки удара (Windup / Телеграф)
       if (aiState === 'windup') {
         windupTimer -= delta;
-        group.lookAt(playerPos.x, 0, playerPos.z);
+        warning.visible = isWarden && slam || profile.kind==='thorn';
+        if (warning.visible) {
+          const material = warning.material as THREE.MeshBasicMaterial;
+          material.opacity = 0.35 + 0.3 * Math.abs(Math.sin(windupTimer * 12));
+        }
+        group.lookAt(chaseTarget.x, 0, chaseTarget.z);
         // Замах обеими когтистыми руками высоко над головой
         armLGroup.rotation.x = THREE.MathUtils.lerp(armLGroup.rotation.x, -2.2, delta * 12);
         armRGroup.rotation.x = THREE.MathUtils.lerp(armRGroup.rotation.x, -2.2, delta * 12);
@@ -502,12 +553,12 @@ export function createSylvanEnemy(
         body.rotation.x = 0.25;
 
         // Проверка попадания по игроку
-        if (dist <= 2.6) {
-          onAttack(16, self);
+        if (dist <= (isWarden ? slam ? 4.0 : 3.2 : profile.reach)) {
+          onAttack(slam ? balance.slam : balance.claw, self);
         }
-
+        warning.visible = false;
         aiState = 'recover';
-        recoverTimer = 0.55; // Восстановление после атаки
+        recoverTimer = isWarden ? slam ? 1.2 : 0.65 : profile.recover; // Восстановление после атаки
         return;
       }
 
@@ -528,18 +579,20 @@ export function createSylvanEnemy(
       if (aiState === 'chase') {
         eyeMat.color.set('#ef4444'); // Глаза горят алым
 
-        if (dist <= 2.1) {
+        if ((!senses||senses.see) && dist <= (isWarden ? 3.1 : profile.reach-0.5)) {
           // Игрок в зоне досягаемости: запуск телеграфа атаки
           aiState = 'windup';
-          windupTimer = 0.45; // 450 мс на реакцию и парирование игроком!
+          slam = isWarden && strikeCount++ % 2 === 1;
+          windupTimer = isWarden ? (slam ? 1.1 : 0.65) * (hp < maxHp / 2 ? 0.8 : 1) : profile.windup;
           return;
         }
 
-        if (dist <= detectionRadius * 1.6) {
+        if (group.position.distanceTo(chaseTarget) <= Math.max(detectionRadius*1.6,senses?.hear?14:0) && (!senses||senses.see||senses.hear||group.position.distanceTo(chaseTarget)>0.6)) {
+          navigationTarget.copy(chaseTarget);
           // Бег к магу
-          group.lookAt(playerPos.x, 0, playerPos.z);
-          const dir = new THREE.Vector3().subVectors(playerPos, group.position).normalize();
-          group.position.addScaledVector(dir, delta * 2.6);
+          group.lookAt(chaseTarget.x, 0, chaseTarget.z);
+          const dir = new THREE.Vector3().subVectors(chaseTarget, group.position).normalize();
+          group.position.addScaledVector(dir, delta * (isWarden ? hp < maxHp / 2 ? 3.1 : 2.2 : profile.speed));
 
           // Анимация шага руками
           const step = Math.sin(performance.now() * 0.009);
@@ -549,14 +602,14 @@ export function createSylvanEnemy(
         } else {
           // Игрок оторвался: возврат к патрулированию
           aiState = 'patrol';
-          eyeMat.color.set('#f59e0b');
+          eyeMat.color.set(idleEyes);
         }
         return;
       }
 
       // 6. Фаза патрулирования (Patrol)
       if (aiState === 'patrol') {
-        eyeMat.color.set('#f59e0b'); // Спокойный янтарный взор
+        eyeMat.color.set(idleEyes); // Спокойный янтарный взор
 
         // Вектор от Сильвана к магу
         const toPlayer = new THREE.Vector3().subVectors(playerPos, group.position);
@@ -568,9 +621,9 @@ export function createSylvanEnemy(
         const dot = forward.dot(toPlayer);
 
         // Тяжёлый доспех грохочет во все стороны. При лёгком/среднем весе со спины враг не видит
-        const isHeard = detectionRadius > 12.0 && dist <= detectionRadius;
-        const isSeenInFront = dist <= detectionRadius && dot > 0.05;
-        const isTooClose = dist <= 1.0; // Вплотную нельзя не заметить
+        const isHeard = senses?.hear ?? (detectionRadius > 12.0 && dist <= detectionRadius);
+        const isSeenInFront = senses?.see ?? (dist <= detectionRadius && dot > 0.05);
+        const isTooClose = (senses?.see??true) && dist <= 1.0; // Вплотную нельзя не заметить
 
         if (isHeard || isSeenInFront || isTooClose) {
           // Маг обнаружен!
@@ -584,7 +637,7 @@ export function createSylvanEnemy(
         patrolAngle += delta * 0.5;
         const targetX = patrolCenter.x + Math.cos(patrolAngle) * 3.0;
         const targetZ = patrolCenter.z + Math.sin(patrolAngle) * 3.0;
-        const targetPos = new THREE.Vector3(targetX, 0, targetZ);
+        const targetPos = new THREE.Vector3(targetX, 0, targetZ);navigationTarget.copy(targetPos);
 
         group.lookAt(targetPos.x, 0, targetPos.z);
         const dir = new THREE.Vector3().subVectors(targetPos, group.position);
