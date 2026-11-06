@@ -28,6 +28,8 @@ export class Drawer {
     this.#world.inert = true;
     this.#world.setAttribute('aria-hidden', 'true');
     this.#closeButton.addEventListener('click', () => options.dismiss());
+    // scroll не всплывает: ловим на захвате и у body, и у .panel-content.
+    this.#panel.addEventListener('scroll', () => this.#updateOverflow(), true);
     document.getElementById('drawer-shade')!.addEventListener('click', () => options.dismiss());
     document.addEventListener('keydown', event => {
       if (!this.blocking) return;
@@ -76,6 +78,21 @@ export class Drawer {
     const readable = Math.min(content.scrollHeight, Math.max(controlHeight, 6 * parseFloat(getComputedStyle(document.documentElement).fontSize)));
     // Если закреплённые действия вытесняют текст, прокручиваем содержимое вместе с ними.
     body.dataset.scroll = available + 1 < readable ? 'all' : 'content';
+    this.#updateOverflow();
+  }
+
+  // data-overflow у окна прокрутки: за каким краем есть скрытое продолжение (CSS затухает этот край).
+  #updateOverflow(): void {
+    const body = this.#panel.querySelector<HTMLElement>('#panel-body');
+    const content = body?.querySelector<HTMLElement>('.panel-content');
+    if (!body || !content) return;
+    const all = body.dataset.scroll === 'all', scroller = all ? body : content;
+    const max = scroller.scrollHeight - scroller.clientHeight;
+    // Порог 2 px - как у проверки чтения: прокрутка на пару пикселей не скрывает содержимое.
+    const top = max > 2 && scroller.scrollTop > 1, bottom = max > 2 && scroller.scrollTop < max - 1;
+    const value = top && bottom ? 'both' : top ? 'top' : bottom ? 'bottom' : 'none';
+    scroller.dataset.overflow = value;
+    (all ? content : body).dataset.overflow = 'none';
   }
 
   setOpen(open: boolean, animate = true): void {

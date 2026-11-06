@@ -25,7 +25,7 @@ const browser=await chromium.launch({headless:true});
 const sha=(bytes:Buffer|string)=>createHash('sha256').update(bytes).digest('hex');
 const report:{complete:boolean;referenceHub:boolean;packageHash:string;checks:unknown[];errors:string[];hashes:Record<string,string>}={complete:false,referenceHub:true,packageHash:registry.games[0].hash,checks:[],errors:[],hashes:{}};
 const key='gf-hub:bouquet-season:save:progress',localKey='gf:bouquet-season:save:progress';
-async function settled(frame:Frame){await frame.locator('#app[aria-busy="false"]').waitFor();await frame.locator('#drawer-layer[data-state="open"],#drawer-layer[data-state="closed"]').waitFor({state:'attached'});}
+async function settled(frame:Frame){await frame.locator('#app[aria-busy="false"]').waitFor();await frame.locator('#preloader').waitFor({state:'hidden'});await frame.locator('#drawer-layer[data-state="open"],#drawer-layer[data-state="closed"]').waitFor({state:'attached'});}
 async function press(frame:Frame,action:string,touch:boolean){await settled(frame);const element=frame.locator(`#panel [data-action="${action}"]`);await element.scrollIntoViewIfNeeded();if(touch)await element.tap();else await element.click();await settled(frame);}
 function readHttp(path:string):Promise<{status:number;csp:string}>{return new Promise((resolve,reject)=>{const req=request({hostname:'127.0.0.1',port:play.port,path,headers:{Host:`bouquet-season.play.localhost:${play.port}`}},res=>{res.resume();resolve({status:res.statusCode!,csp:String(res.headers['content-security-policy']??'')});});req.on('error',reject);req.end();});}
 try{

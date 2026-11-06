@@ -1,44 +1,73 @@
-:root { font-family: system-ui, sans-serif; color: #233e35; background: #d4e2ce; font-synthesis: none; color-scheme: light; }
+:root {
+  /* Тема «Гербарий»: писчая бумага, скотч, мягкие тени; кнопки - от крафта. */
+  --paper: #fcf8ee;
+  --kraft: #f3ead6;
+  --ink: #33403a;
+  --ink-soft: #5d6a61;
+  --coral: #c0573f;
+  --primary: #3f5d47;
+  --danger: #a8402c;
+  --line: #d9ccae;
+  --head: "Lora", Georgia, serif;
+  --body: "Manrope", system-ui, sans-serif;
+  --hand: "Caveat", cursive;
+  --card-shadow: 0 0.75rem 2rem #4a3f2a24, 0 0.125rem 0.25rem #4a3f2a1f;
+  --btn-shadow: 0.1875rem 0.1875rem 0 var(--ink);
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .22 0 0 0 0 .18 0 0 0 0 .1 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --paper-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .3 0 0 0 0 .25 0 0 0 0 .15 0 0 0 .2 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --tape: repeating-linear-gradient(-45deg, #eec2b2 0 0.5rem, #f6d7ca 0.5rem 1rem);
+  font-family: var(--body); color: var(--ink); background: #dfe6d0; font-synthesis: none; color-scheme: light;
+}
 * { box-sizing: border-box; }
 /* Общий масштаб как у хаба: Full HD ×1, QHD ×4/3, 4K ×2; внутри iframe свой rem. */
 html { font-size: max(100%, 0.8333333333vw); }
 html, body { height: 100%; }
 body { margin: 0; overflow: hidden; }
-button { font: inherit; min-height: 3rem; min-width: 3rem; padding: 0.625rem 1rem; border: 0.0625rem solid #a6b5a6; border-radius: 0.75rem; background: #fffdf7; color: #234e43; cursor: pointer; overflow-wrap: anywhere; }
-button:hover { background: #e6eee1; }
-button:focus-visible, #panel:focus-visible { outline: 0.1875rem solid #bb632e; outline-offset: -0.1875rem; }
-button:disabled { opacity: .5; cursor: wait; }
-button.primary { background: #295a49; color: white; border-color: #295a49; }
-button.danger { color: #8b3029; border-color: #b56a5f; }
+/* Кнопка от крафта: чернильный контур и сдвинутая тень, нажатие уходит вбок. */
+button { font: inherit; font-weight: 600; min-height: 3rem; min-width: 3rem; padding: 0.625rem 1rem; border: 0.125rem solid var(--ink); border-radius: 0.75rem; background: #fffdf7; color: var(--ink); box-shadow: var(--btn-shadow); cursor: pointer; overflow-wrap: anywhere; transition: transform .12s, box-shadow .12s; }
+button:hover:not(:disabled) { transform: translate(-0.0625rem, -0.0625rem); }
+button:active:not(:disabled) { transform: translate(0.125rem, 0.125rem); box-shadow: none; }
+button:focus-visible, #panel:focus-visible { outline: 0.1875rem solid var(--coral); outline-offset: -0.1875rem; }
+button:disabled { opacity: .45; box-shadow: none; cursor: wait; }
+button.primary { background: var(--grain), var(--primary); color: #fffaf0; }
+button.danger { color: var(--danger); }
 [hidden] { display: none !important; }
 #app, #world, main, .greenhouse, #stage { position: absolute; inset: 0; }
 #app { height: 100dvh; overflow: hidden; }
-#world { isolation: isolate; }
+/* Поле и его панели раскладываются по контейнеру в rem: при увеличенном тексте срабатывают те же
+   раскладки, что на экране поменьше. В обычном тексте rem = px/16 до Full HD, а QHD и 4K и так широкие. */
+#world { isolation: isolate; container: world / size; }
 header, footer { position: absolute; z-index: 1; left: max(1rem, env(safe-area-inset-left)); right: max(1rem, env(safe-area-inset-right)); display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; pointer-events: none; }
 header { top: max(0.75rem, env(safe-area-inset-top)); align-items: flex-start; }
 footer { bottom: max(0.75rem, env(safe-area-inset-bottom)); font-size: 0.75rem; }
-header > div, #storage-status { background: #fffdf0e8; padding: 0.75rem 1rem; border: 0.0625rem solid #bbcbb6; border-radius: 1rem; }
+header > div, #storage-status { position: relative; background: var(--paper-grain), var(--paper); padding: 0.75rem 1rem; border: 0.0625rem solid var(--line); border-radius: 0.875rem; box-shadow: var(--card-shadow); }
+/* Полоска скотча держит табличку мастерской. */
+header > div::before { content: ""; position: absolute; top: -0.625rem; left: 1.25rem; width: 4.5rem; height: 1.25rem; background: var(--tape); opacity: .88; transform: rotate(-4deg); box-shadow: 0 0.0625rem 0.125rem #0000001a; }
 header button, footer button { pointer-events: auto; }
-h1 { font-size: clamp(1.25rem, 2vw, 2rem); margin: 0.125rem 0 0; font-weight: 650; letter-spacing: -.03em; }
-h2 { font-size: clamp(1.5rem, 2vw, 2rem); font-weight: 550; line-height: 1.15; margin: 0 0 1rem; }
-#season-status { font-size: 0.8125rem; line-height: 1.4; margin: 0.375rem 0 0; }
+h1, h2, h3 { font-family: var(--head); }
+h1 { font-size: clamp(1.25rem, 2vw, 2rem); margin: 0.125rem 0 0; font-weight: 700; letter-spacing: -.01em; }
+h2 { font-size: clamp(1.5rem, 2vw, 2rem); font-weight: 700; line-height: 1.15; margin: 0 0 1rem; letter-spacing: -.01em; }
+#season-status { font-family: var(--body); font-size: 0.8125rem; font-weight: 600; line-height: 1.4; margin: 0.375rem 0 0; }
 p { line-height: 1.5; margin: 0.75rem 0; }
-.eyebrow { font-size: 0.6875rem; letter-spacing: .15em; font-weight: 650; }
-.greenhouse { overflow: hidden; background: #d4e2ce; }
+.eyebrow { font-size: 0.6875rem; letter-spacing: .15em; font-weight: 700; color: var(--ink-soft); }
+/* Поле лежит на бумажном фоне с зерном. Зерно - под канвой, а не поверх: смешивание
+   поверх кадра, который меняется каждый кадр, на 4K стоило около трети FPS. */
+.greenhouse { overflow: hidden; background: var(--paper-grain), radial-gradient(120% 95% at 55% 40%, #f4f0df 0%, #e2e8d2 52%, #c8d5b9 100%); }
 #stage { touch-action: none; }
 canvas { display: block; }
 .scene-caption { position: absolute; bottom: max(6.875rem, 15%); left: 8%; right: 8%; pointer-events: none; max-width: 43.75rem; }
 .scene-caption h2 { font-size: clamp(1.75rem, 4vw, 4rem); margin: 0.875rem 0; }
 .scene-caption p { max-width: 22.5rem; }
 #drawer-layer { position: absolute; inset: 0; z-index: 10; }
-#drawer-shade { position: absolute; inset: 0; background: #142f29a3; opacity: 0; touch-action: none; }
-#panel { position: absolute; inset: 0 auto 0 0; width: clamp(22.5rem, 33.333vw, 37.5rem); max-width: 92vw; display: flex; flex-direction: column; gap: 1rem; padding: max(1.25rem, env(safe-area-inset-top)) 1.5rem max(1.25rem, env(safe-area-inset-bottom)) max(1.5rem, env(safe-area-inset-left)); background: #fffdf6; border-radius: 0 1.5rem 1.5rem 0; box-shadow: 0.75rem 0 3rem #143e3426; overflow: hidden; transform: translateX(-100%); opacity: 0; }
+#drawer-shade { position: absolute; inset: 0; background: #2b33288c; opacity: 0; touch-action: none; }
+#panel { position: absolute; inset: 0 auto 0 0; width: clamp(22.5rem, 33.333vw, 37.5rem); max-width: 92vw; display: flex; flex-direction: column; gap: 1rem; padding: max(1.25rem, env(safe-area-inset-top)) 1.5rem max(1.25rem, env(safe-area-inset-bottom)) max(1.5rem, env(safe-area-inset-left)); background: repeating-linear-gradient(transparent 0 1.9375rem, #a9c0cc40 1.9375rem 2rem), var(--paper-grain), var(--paper); border: 0.0625rem solid var(--line); border-left: 0; border-radius: 0 1.5rem 1.5rem 0; box-shadow: 0.75rem 0 3rem #4a3f2a2e; overflow: hidden; transform: translateX(-100%); opacity: 0; }
 #drawer-layer[data-state="open"] #panel, #drawer-layer[data-state="opening"] #panel { transform: translateX(0); opacity: 1; }
 #drawer-layer[data-state="open"] #drawer-shade, #drawer-layer[data-state="opening"] #drawer-shade { opacity: 1; }
 #drawer-layer[data-state="closing"] #panel { pointer-events: none; }
 .drawer-tools { display: flex; justify-content: space-between; gap: 0.5rem; flex: none; }
 .drawer-tools button { padding-inline: 0.5rem; white-space: nowrap; }
-#panel-body { min-height: 0; display: flex; flex-direction: column; flex: 1; overflow: hidden; overscroll-behavior: contain; }
+/* Запас справа и снизу - под сдвинутую тень кнопок. */
+#panel-body { padding: 0 .25rem .25rem 0; min-height: 0; display: flex; flex-direction: column; flex: 1; overflow: hidden; overscroll-behavior: contain; }
 #panel-body[data-scroll="all"] { overflow-y: auto; }
 #panel-body[data-scroll="all"] > .panel-content { flex: none; overflow: visible; }
 .panel-content { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; overflow-wrap: anywhere; }
@@ -47,44 +76,53 @@ canvas { display: block; }
 .actions { display: grid; flex: none; gap: 0.625rem; margin-top: 1.25rem; }
 .menu-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .menu-actions button { padding-inline: 0.5rem; font-size: 0.875rem; }
-.stats { display: flex; flex-wrap: wrap; gap: 0.75rem; padding: 0.875rem 0; border-block: 0.0625rem solid #e0e2d5; margin: 1rem 0; }
+.stats { display: flex; flex-wrap: wrap; gap: 0.75rem; padding: 0.875rem 0; border-block: 0.125rem dotted color-mix(in srgb, var(--ink) 30%, transparent); margin: 1rem 0; }
 .stats span { flex: 1; min-width: 4.375rem; }
-.stats strong { display: block; font-size: 1.5rem; }
+.stats strong { display: block; font-family: var(--head); font-size: 1.5rem; }
 label { display: flex; align-items: center; min-height: 3rem; gap: 0.625rem; line-height: 1.4; }
-input { width: 1.375rem; height: 1.375rem; flex: none; accent-color: #295a49; }
+input { width: 1.375rem; height: 1.375rem; flex: none; accent-color: var(--primary); }
 .small { font-size: 0.8125rem; line-height: 1.5; }
-.warning { padding: 0.75rem; background: #fff0d6; border-radius: 0.75rem; color: #754015; }
-#debug { position: absolute; z-index: 20; bottom: max(5rem, calc(var(--field-debug-bottom, 0px) + .5rem), env(safe-area-inset-bottom)); right: max(0.75rem, env(safe-area-inset-right)); margin: 0; max-width: calc(100vw - 1.5rem); padding: 0.875rem; white-space: pre-wrap; background: #183b32f2; color: #fff; border-radius: 0.75rem; font-size: 0.75rem; pointer-events: none; }
+.warning { padding: 0.75rem; background: #fbe9d6; border-left: 0.25rem solid var(--coral); border-radius: 0.5rem; color: #6e3416; }
+#debug { font-family: ui-monospace, monospace; position: absolute; z-index: 20; bottom: max(5rem, calc(var(--field-debug-bottom, 0px) + .5rem), env(safe-area-inset-bottom)); right: max(0.75rem, env(safe-area-inset-right)); margin: 0; max-width: calc(100vw - 1.5rem); padding: 0.875rem; white-space: pre-wrap; background: #183b32f2; color: #fff; border-radius: 0.75rem; font-size: 0.75rem; pointer-events: none; }
 #notice:empty { display: none; }
 #notice { display: grid; gap: .5rem; margin: 0 0 .75rem; pointer-events: none; }
 #notice[data-dock="world"] { position: absolute; top: calc(var(--notice-top, 0px) + .5rem); right: max(.75rem, env(safe-area-inset-right)); z-index: 3; width: min(calc(100vw - 2rem), 30rem); }
-#notice .notice { margin: 0; border-radius: .75rem; background: #234e43; color: white; padding: .875rem; overflow-wrap: anywhere; }
+#notice .notice { margin: 0; border-radius: .75rem; background: var(--grain), var(--primary); color: #fffaf0; box-shadow: var(--card-shadow); padding: .875rem; overflow-wrap: anywhere; }
 .in-season footer { display: none; }
-#field-tools { position: absolute; z-index: 2; bottom: max(.75rem, env(safe-area-inset-bottom)); left: max(1rem, env(safe-area-inset-left)); right: max(1rem, env(safe-area-inset-right)); max-width: 40rem; margin-inline: auto; }
+#field-tools { position: absolute; z-index: 2; bottom: max(.75rem, env(safe-area-inset-bottom)); left: max(1rem, env(safe-area-inset-left)); right: max(1rem, env(safe-area-inset-right)); max-width: 60rem; margin-inline: auto; }
+/* «Каталог» и «Отмена» взаимоисключающие: видимых кнопок всегда пять. */
 .field-actions { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: .5rem; }
-.field-actions:has(#cancel-placement:not([hidden])) { grid-template-columns: repeat(6,minmax(0,1fr)); }
 .orders-list { display: grid; gap: .875rem; }
-.order-card { border: .0625rem solid #a6b5a6; border-radius: 1rem; padding: .875rem; background: #f4f4e8; }
+/* Карточка заказа - плотный крафт на писчем листе. */
+.order-card { border: .0625rem solid var(--line); border-radius: .875rem; padding: .875rem; background: var(--paper-grain), var(--kraft); box-shadow: 0 .25rem .75rem #4a3f2a1a; }
+/* Пометка от руки на принятом заказе. */
+.order-card .note { display: inline-block; font: 700 1.375rem/1 var(--hand); color: var(--coral); transform: rotate(-3deg); margin-bottom: .25rem; }
 .order-card h3 { font-size: 1.125rem; line-height: 1.3; margin: 0; overflow-wrap: anywhere; }
 .order-card button { width: 100%; }
 .order-deadline { font-size: .875rem; }
-.stock-status { font-size: .8125rem; line-height: 1.4; margin: 0 0 .375rem; padding: .375rem .75rem; border-radius: .75rem; background: #fffdf0ee; overflow-wrap: anywhere; }
+/* Запас слева, срезка справа: одна строка, цель касания кнопки не меньше 3rem. */
+.stock-row { display: flex; align-items: center; gap: .5rem; margin-bottom: .375rem; }
+.stock-status { flex: 1 1 0; min-width: 0; font-size: .8125rem; font-weight: 600; line-height: 1.4; margin: 0; padding: .375rem .75rem; border: .0625rem solid var(--line); border-radius: .75rem; background: var(--paper-grain), var(--paper); box-shadow: var(--card-shadow); overflow-wrap: break-word; }
 .plant-info { display: grid; gap: .375rem; margin: .5rem 0; }
 #panel .plant-info p { margin: 0; }
-.field-actions button { font-size: .875rem; padding-inline: .5rem; }
-.placement-hint { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .5rem; color: #294b3b; font-size: .8125rem; background: #fffdf0ee; border-radius: .75rem; padding-left: .75rem; min-height: 2rem; }
+/* Подписи поля переносятся по словам; слово рвётся, только если не влезает и одно. */
+.field-actions button { font-size: .875rem; padding-inline: .5rem; overflow-wrap: break-word; }
+#menu-button { flex: none; overflow-wrap: normal; white-space: nowrap; }
+.placement-hint { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .5rem; color: var(--ink); font-size: .8125rem; font-weight: 600; background: var(--paper-grain), var(--paper); border: .0625rem solid var(--line); border-radius: .75rem; box-shadow: var(--card-shadow); padding-left: .75rem; min-height: 2rem; }
 .placement-hint button { font-size: .8125rem; padding-inline: .75rem; flex-shrink: 0; white-space: nowrap; }
 /* При крупном тексте карточки переходят в одну колонку; максимум остаётся две. */
-.catalog-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,max(9rem,calc(50% - .3125rem))),1fr)); gap: .625rem; }
+.catalog-grid { padding: 0 .1875rem .1875rem 0; display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,max(9rem,calc(50% - .3125rem))),1fr)); gap: .625rem; }
 .catalog-grid button { text-align: left; padding: .75rem; }
 .catalog-grid strong, .catalog-grid span { display: block; }
 .catalog-grid span { font-size: .75rem; line-height: 1.4; margin-top: .375rem; }
-@media (max-height: 540px) and (orientation: landscape) {
+@container world (max-height: 33.75rem) and (orientation: landscape) {
   .in-season header > div { padding-block: .375rem; }
   .in-season h1 { display: none; }
   .in-season #season-status { margin: 0; min-height: 1.5rem; }
   #field-tools { bottom: max(.5rem, env(safe-area-inset-bottom)); }
   .placement-hint { min-height: 1.5rem; }
+}
+@media (max-height: 540px) and (orientation: landscape) {
   .catalog-note { display: none; }
   .catalog-grid button { padding: .5rem; }
   .catalog-grid span { margin-top: .125rem; }
@@ -96,13 +134,21 @@ input { width: 1.375rem; height: 1.375rem; flex: none; accent-color: #295a49; }
   #storage-status { max-width: 58%; padding: 0.5rem; }
   .scene-caption h2 { font-size: 1.875rem; }
 }
-@media (max-width: 540px) {
+@container world (max-width: 33.75rem) {
   .field-actions, .field-actions:has(#cancel-placement:not([hidden])) { grid-template-columns: repeat(2,minmax(0,1fr)); }
-  .field-actions:not(:has(#cancel-placement:not([hidden]))) > button:last-child { grid-column: 1 / -1; }
+  /* Нечётное число видимых кнопок (при посадке «Каталог» прячется, «Отмена» видна) - последняя на всю ширину. */
+  .field-actions > button:last-child:nth-child(odd of :not([hidden])) { grid-column: 1 / -1; }
+  /* Узко - панель поля не выше места под шапкой, остальное прокручивается; поля под тени кнопок. */
+  #field-tools { max-height: calc(100% - var(--notice-top, 0px) - .5rem); overflow-y: auto; overscroll-behavior: contain; padding: 0 .375rem .375rem .25rem; left: calc(max(1rem, env(safe-area-inset-left)) - .25rem); right: calc(max(1rem, env(safe-area-inset-right)) - .375rem); bottom: calc(max(.75rem, env(safe-area-inset-bottom)) - .375rem); }
 }
-@media (max-height: 540px) and (orientation: landscape) {
+@container world (max-height: 33.75rem) and (orientation: landscape) {
   header .eyebrow { display: none; }
   header { top: max(0.5rem, env(safe-area-inset-top)); }
+  .scene-caption { bottom: 5.9375rem; }
+  .scene-caption h2 { font-size: 1.625rem; }
+  .scene-caption p { display: none; }
+}
+@media (max-height: 540px) and (orientation: landscape) {
   #panel { gap: 0.5rem; padding-block: max(0.625rem, env(safe-area-inset-top)) max(0.625rem, env(safe-area-inset-bottom)); }
   #panel .eyebrow, .menu-intro, .settings-note { display: none; }
   #panel h2 { font-size: 1.5rem; margin-bottom: 0.5rem; }
@@ -111,9 +157,6 @@ input { width: 1.375rem; height: 1.375rem; flex: none; accent-color: #295a49; }
   #panel .actions { margin-top: 0.625rem; gap: 0.5rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #panel .actions button { font-size: 0.875rem; padding: 0.5rem; }
   #panel p { font-size: 0.875rem; line-height: 1.4; margin-block: 0.5rem; }
-  .scene-caption { bottom: 5.9375rem; }
-  .scene-caption h2 { font-size: 1.625rem; }
-  .scene-caption p { display: none; }
 }
 
 /* На коротком экране уход и модуль делят ширину, сохраняя действия под ними. */
@@ -131,3 +174,52 @@ input { width: 1.375rem; height: 1.375rem; flex: none; accent-color: #295a49; }
 
 .object-module-summary .order-card,
 #panel[data-screen="object-modules"] .order-card { padding: .5rem; }
+
+/* «Срезать готовые»: тёплая крафтовая кнопка со счётчиком, заметнее обычных. */
+.harvest-all { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 3rem; padding-inline: 1rem; font-size: .875rem; background: var(--paper-grain), #e9a23b; color: var(--ink); }
+.harvest-all svg { width: 1.25rem; height: 1.25rem; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.harvest-label { white-space: nowrap; overflow-wrap: normal; }
+.badge { display: inline-grid; place-items: center; min-width: 1.5rem; height: 1.5rem; padding: 0 .375rem; border-radius: 99rem; background: var(--ink); color: var(--paper); font-size: .8125rem; }
+/* На узком экране подпись уходит (имя остаётся в aria-label): запас не теснится, высота поля цела. */
+/* Очень узко (только при крупном тексте: телефон в 1× - 24,4rem): шапка - одна строка статуса,
+   запас - во всю ширину, срезка - под ним, табличка уступает место «Меню». */
+@container world (max-width: 20rem) {
+  header { flex-wrap: wrap; }
+  header > div { min-width: 0; flex: 1 1 100%; }
+  #menu-button { order: -1; margin-left: auto; }
+  .in-season header .eyebrow, .in-season header h1 { display: none; }
+  .in-season #season-status { margin: 0; }
+  .stock-row { flex-wrap: wrap; justify-content: flex-end; }
+  .stock-status { flex-basis: 100%; }
+  .placement-hint { flex-wrap: wrap; justify-content: flex-end; padding-block: .25rem; }
+  .field-actions, .field-actions:has(#cancel-placement:not([hidden])) { grid-template-columns: minmax(0,1fr); }
+}
+@container world (max-width: 33.75rem) { .harvest-label { display: none; } .harvest-all { padding-inline: .625rem; gap: .375rem; } }
+
+/* Содержимое окна прокрутки затухает у края, за которым есть продолжение. */
+#panel-body[data-scroll="content"] > .panel-content[data-overflow="top"], #panel-body[data-scroll="all"][data-overflow="top"] { -webkit-mask-image: linear-gradient(to bottom, transparent, #000 1.5rem); mask-image: linear-gradient(to bottom, transparent, #000 1.5rem); }
+#panel-body[data-scroll="content"] > .panel-content[data-overflow="bottom"], #panel-body[data-scroll="all"][data-overflow="bottom"] { -webkit-mask-image: linear-gradient(to top, transparent, #000 1.5rem); mask-image: linear-gradient(to top, transparent, #000 1.5rem); }
+#panel-body[data-scroll="content"] > .panel-content[data-overflow="both"], #panel-body[data-scroll="all"][data-overflow="both"] { -webkit-mask-image: linear-gradient(to bottom, transparent, #000 1.5rem, #000 calc(100% - 1.5rem), transparent); mask-image: linear-gradient(to bottom, transparent, #000 1.5rem, #000 calc(100% - 1.5rem), transparent); }
+
+/* Планшет и широкий телефон: панель не закрывает кнопку «Меню» (справа остаётся ~8rem). */
+@media (min-width: 600px) and (max-width: 900px) { #panel { width: min(92vw, calc(100vw - 8rem - env(safe-area-inset-right))); } }
+
+/* Короткий landscape: табличка шапки ужимается до одной строки статуса. */
+@container world (max-height: 33.75rem) and (orientation: landscape) {
+  header > div { padding-block: .25rem; }
+  header > div::before { top: -.5rem; height: 1rem; }
+  header h1 { display: none; }
+  #season-status { margin: 0; min-height: 1.5rem; display: flex; align-items: center; }
+  .stock-row { margin-bottom: .25rem; }
+}
+
+/* Короткий landscape: запас, подсказка и срезка в одну строку, действия под ними - поле не теряет высоту. */
+@container world (max-height: 33.75rem) and (orientation: landscape) and (min-width: 40.625rem) {
+  #field-tools { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; grid-template-areas: "stock hint harvest" "actions actions actions"; column-gap: .5rem; row-gap: .25rem; align-items: center; }
+  .stock-row { display: contents; }
+  .stock-status { grid-area: stock; }
+  .placement-hint { grid-area: hint; margin: 0; }
+  #harvest-button { grid-area: harvest; }
+  .field-actions { grid-area: actions; }
+}
+

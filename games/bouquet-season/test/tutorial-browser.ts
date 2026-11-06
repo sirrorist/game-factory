@@ -12,7 +12,7 @@ import {recordTutorial,tutorialTip} from '../src/core/tutorial.ts';
 import {encode} from '../src/core/saves.ts';
 import {checkPanelReading} from './panel-checks.ts';
 const root=resolve(import.meta.dirname,'../dist'),out=resolve(import.meta.dirname,process.env.BOUQUET_TUTORIAL??'../artifacts/object-modules-2026-11-05/tutorial-check');await mkdir(out,{recursive:true});
-const server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+(req.url==='/'?'/index.html':req.url!));if(!path.startsWith(root+'/'))throw Error();res.setHeader('Content-Type',({'.html':'text/html','.js':'text/javascript','.css':'text/css'} as Record<string,string>)[extname(path)]??'application/octet-stream');res.end(await readFile(path));}catch{res.writeHead(404).end();}});
+const server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+(req.url==='/'?'/index.html':req.url!));if(!path.startsWith(root+'/'))throw Error();res.setHeader('Content-Type',({'.html':'text/html','.js':'text/javascript','.css':'text/css','.woff2':'font/woff2'} as Record<string,string>)[extname(path)]??'application/octet-stream');res.end(await readFile(path));}catch{res.writeHead(404).end();}});
 await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));const addr=server.address();assert.ok(addr&&typeof addr==='object');const url=`http://127.0.0.1:${addr.port}`;
 const browser=await chromium.launch({headless:true}),key='gf:bouquet-season:save:progress';
 const report:{complete:boolean;profiles:any[];hashes:Record<string,string>;errors:string[]}={complete:false,profiles:[],hashes:{},errors:[]};
@@ -28,7 +28,7 @@ try{
  for(const profile of PROFILES){
   const context=await browser.newContext({viewport:{width:profile.width,height:profile.height},hasTouch:profile.touch,isMobile:profile.touch,deviceScaleFactor:profile.touch?3:2}),page=await context.newPage(),checks:any[]=[],errors:string[]=[];
   page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});await page.goto(url);
-  const settle=async()=>{await page.locator('html[data-gf-ready]').waitFor({state:'attached'});await page.locator('#app[aria-busy="false"]').waitFor();await page.locator('#drawer-layer[data-state="open"],#drawer-layer[data-state="closed"]').waitFor({state:'attached'});};
+  const settle=async()=>{await page.locator('html[data-gf-ready]').waitFor({state:'attached'});await page.locator('#app[aria-busy="false"]').waitFor();await page.locator('#preloader').waitFor({state:'hidden'});await page.locator('#drawer-layer[data-state="open"],#drawer-layer[data-state="closed"]').waitFor({state:'attached'});};
   const press=async(selector:string)=>{const b=page.locator(selector);await b.scrollIntoViewIfNeeded();if(profile.touch)await b.tap();else await b.click();await settle();};
   const shot=async(name:string)=>{const f=`${profile.id}-${name}.png`;await page.screenshot({path:resolve(out,f)});report.hashes[f]=await hash(resolve(out,f));};
   for(const item of [...states,{id:'shop-poor',state:{...newProfile(),profile:{...newProfile().profile,experience:600}}}]){

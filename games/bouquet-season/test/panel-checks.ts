@@ -21,7 +21,9 @@ export async function checkPanelReading(page: Page): Promise<unknown> {
         if (/auto|scroll|hidden|clip/.test(style.overflowX)) { left = Math.max(left, r.left); right = Math.min(right, r.right); }
         if (/auto|scroll|hidden|clip/.test(style.overflowY)) { top = Math.max(top, r.top); bottom = Math.min(bottom, r.bottom); }
       }
-      return bounds.left >= left - 1 && bounds.right <= right + 1 && bounds.top >= top - 1 && bounds.bottom <= bottom + 1;
+      // Допуск - на сдвиг кнопки под курсором (translate -0.0625rem): указатель мог остаться над ней.
+      const tolerance = 1 + font * 0.0625;
+      return bounds.left >= left - tolerance && bounds.right <= right + tolerance && bounds.top >= top - tolerance && bounds.bottom <= bottom + tolerance;
     }
     const paragraphs = Array.from(panel.querySelectorAll<HTMLElement>('#panel-body p, #panel-body label')).filter(p => p.getClientRects().length);
     for (const element of paragraphs) {
@@ -41,7 +43,7 @@ export async function checkPanelReading(page: Page): Promise<unknown> {
     for (const b of buttons) {
       b.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       const r = b.getBoundingClientRect();
-      if (!inside(b, r) || !b.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2))) errors.push(`Кнопка недостижима: ${b.textContent}`);
+      if (!inside(b, r) || !b.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2))) { const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); errors.push(`Кнопка недостижима: ${b.textContent} · в точке ${hit?.tagName}#${hit?.id}.${hit?.className}, rect=${[r.x, r.y, r.width, r.height].map(Math.round)}, внутри=${inside(b, r)}, scroll=${body.scrollTop}/${body.scrollHeight}/${body.clientHeight}, body=${Math.round(body.getBoundingClientRect().top)}..${Math.round(body.getBoundingClientRect().bottom)}, overflow=${body.dataset.overflow}`); }
       if (r.width < 3 * font - 1 || r.height < 3 * font - 1 || b.scrollWidth > b.clientWidth + 1 || b.scrollHeight > b.clientHeight + 1) errors.push(`Размер кнопки: ${b.textContent}`);
     }
     // Новые модульные карточки должны переносить подписи между словами, а не буквами.
@@ -56,8 +58,22 @@ export async function checkPanelReading(page: Page): Promise<unknown> {
       }
     }
     if (!body.clientHeight || !content.clientHeight) errors.push('Прокручиваемая область имеет нулевую высоту');
+    // Окно прокрутки не обрывает содержимое молча: у края с продолжением есть data-overflow и маска.
+    const scroller = body.dataset.scroll === 'all' ? body : content;
+    const scrollMax = scroller.scrollHeight - scroller.clientHeight;
+    const scrollTo = (value: number) => new Promise<void>(done => {
+      if (Math.abs(scroller.scrollTop - value) < 1) { done(); return; }
+      scroller.addEventListener('scroll', () => done(), { once: true }); scroller.scrollTop = value;
+    });
+    const masked = () => { const s = getComputedStyle(scroller); return (s.maskImage || s.webkitMaskImage || 'none') !== 'none'; };
+    if (scrollMax > 2) {
+      await scrollTo(0);
+      if (!/bottom|both/.test(scroller.dataset.overflow ?? '') || !masked()) errors.push(`Нижний край без затухания: overflow=${scroller.dataset.overflow}, маска=${masked()}`);
+      await scrollTo(scrollMax);
+      if (!/top|both/.test(scroller.dataset.overflow ?? '') || !masked()) errors.push(`Верхний край без затухания: overflow=${scroller.dataset.overflow}, маска=${masked()}`);
+    } else if (/top|bottom|both/.test(scroller.dataset.overflow ?? '')) errors.push(`Лишнее затухание без прокрутки: ${scroller.dataset.overflow}`);
     for (const e of [body, content, panel]) { e.scrollTop = 0; e.scrollLeft = 0; }
-    return { errors, font, mode: body.dataset.scroll, paragraphs: paragraphs.length, buttons: buttons.length, moduleWordsChecked, bodyHeight: body.clientHeight, contentHeight: content.clientHeight };
+    return { errors, scrollMax, overflow: scroller.dataset.overflow, font, mode: body.dataset.scroll, paragraphs: paragraphs.length, buttons: buttons.length, moduleWordsChecked, bodyHeight: body.clientHeight, contentHeight: content.clientHeight };
   });
   assert.deepEqual(result.errors, [], JSON.stringify(result));
   return result;

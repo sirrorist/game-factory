@@ -1,12 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fitField,toScreen,toWorld,zoomField,panField } from '../src/core/camera.ts';
+import { FIELD_TOP,FIELD_BOTTOM,fitField,toScreen,toWorld,zoomField,panField } from '../src/core/camera.ts';
 import { fieldCells,cellCorners } from '../src/core/field.ts';
 test('Обзор вмещает полный контур, преобразования обратимы на телефоне и 4K',()=>{
   for(const [width,height] of [[358,610],[800,235],[3760,1700]])for(const size of [19,37] as const){
     const rect={x:16,y:80,width:width!,height:height!};const view=fitField(rect,size);
     for(const c of fieldCells(size))for(const p of cellCorners(c)){
       const s=toScreen(view,p);assert.ok(s.x>=rect.x && s.x<=rect.x+rect.width && s.y>=rect.y && s.y<=rect.y+rect.height);
+      const top=toScreen(view,{x:p.x,y:p.y-FIELD_TOP}),bottom=toScreen(view,{x:p.x,y:p.y+FIELD_BOTTOM});
+      assert.ok(top.y>=rect.y-1e-6 && bottom.y<=rect.y+rect.height+1e-6,'цветы и грани клеток в кадре');
       const back=toWorld(view,s);assert.ok(Math.abs(back.x-p.x)<1e-8 && Math.abs(back.y-p.y)<1e-8);
     }
   }

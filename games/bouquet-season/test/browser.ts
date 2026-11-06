@@ -10,7 +10,7 @@ import { chromium, type Page, type Frame } from 'playwright';
 import { PROFILES } from '../../../tests/ui/core/profiles.ts';
 import { encode } from '../src/core/saves.ts';
 import { fitField, toScreen, zoomField, type FieldView } from '../src/core/camera.ts';
-import { cellCenter, fieldCells, sameCell } from '../src/core/field.ts';
+import { cellCenter, cellCorners, fieldCells, sameCell } from '../src/core/field.ts';
 import type { Cell } from '../src/core/field.ts';
 import { newProfile, startSeason, editLayout, enterGrowthDay, refreshStateOffers, installModule, isGameState, type GameState } from '../src/core/state.ts';
 import { checkPanelReading } from './panel-checks.ts';
@@ -20,7 +20,8 @@ import {startEvents} from '../src/core/events.ts';
 import {orderCandidates} from '../src/core/orders.ts';
 import { submitOrder,acceptOrder,chooseReward,closeDay } from '../src/core/calendar.ts';
 
-const root = resolve(import.meta.dirname, '../dist');
+// BOUQUET_DIST - отдельная сборка, чтобы параллельная пересборка dist не ломала прогон.
+const root = resolve(process.env.BOUQUET_DIST ?? resolve(import.meta.dirname, '../dist'));
 const output = resolve(import.meta.dirname, process.env.BOUQUET_ARTIFACTS ?? '../artifacts/object-modules-2026-11-05/after');
 await mkdir(output, { recursive: true });
 const server = createServer(async (request, response) => {
@@ -30,7 +31,7 @@ const server = createServer(async (request, response) => {
     const file = resolve(root, '.' + (path === '/' ? '/index.html' : path));
     if (!file.startsWith(root + '/')) { response.writeHead(403).end(); return; }
     const data = await readFile(file);
-    response.setHeader('Content-Type', ({ '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' } as Record<string, string>)[extname(file)] ?? 'application/octet-stream');
+    response.setHeader('Content-Type', ({ '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2':'font/woff2' } as Record<string, string>)[extname(file)] ?? 'application/octet-stream');
     response.end(data);
   } catch { response.writeHead(404).end(); }
 });
@@ -41,7 +42,7 @@ const url = `http://127.0.0.1:${address.port}`;
 const browser = await chromium.launch({ headless: true });
 const bundleHashes = Object.fromEntries(await Promise.all((await readdir(resolve(root, 'assets'))).map(async file => [file, createHash('sha256').update(await readFile(resolve(root, 'assets', file))).digest('hex')])));
 const hashFile = async (path: string): Promise<string> => createHash('sha256').update(await readFile(path)).digest('hex');
-const inputFiles = ['build/obfuscation.ts','build/release-check.ts','test/obfuscation.test.ts','test/release.test.ts','test/release-check.ts','src/core/shop.ts','src/core/tutorial.ts','src/shop-ui.ts','test/shop.test.ts','test/expansion.test.ts','test/tutorial.test.ts','test/full-season-browser.ts','src/core/effects.ts','src/core/events.ts','src/core/rewards.ts','src/core/progress.ts','test/effects.test.ts','test/effect-growth.test.ts','test/events.test.ts','test/rewards.test.ts','test/legacy-fixtures.ts','test/stage5-fixtures.ts','src/core/orders.ts', 'src/core/planner.ts', 'src/core/board.ts', 'src/core/calendar.ts', 'src/order-ui.ts', 'test/orders.test.ts', 'test/planner.test.ts', 'test/calendar.test.ts', 'test/order-fixtures.ts', 'src/notices.ts', 'test/panel-checks.ts', 'src/main.ts', 'src/drawer.ts', 'src/field-input.ts', 'src/touch-buttons.ts', 'src/core/field.ts', 'src/core/layout.ts', 'src/core/conditions.ts', 'src/core/growth.ts', 'src/core/garden.ts', 'src/core/camera.ts', 'src/scene.ts', 'src/style.css', 'src/core/state.ts', 'src/core/saves.ts', 'test/browser.ts', 'test/state.test.ts', 'test/saves.test.ts', 'test/field.test.ts', 'test/layout.test.ts', 'test/conditions.test.ts', 'test/camera.test.ts', 'test/growth.test.ts', 'test/garden.test.ts', 'test/season-growth.test.ts', 'game.json', 'index.html', 'vite.config.ts', 'package.json', 'tsconfig.json'];
+const inputFiles = ['build/obfuscation.ts','build/release-check.ts','test/obfuscation.test.ts','test/release.test.ts','test/release-check.ts','src/core/shop.ts','src/core/tutorial.ts','src/shop-ui.ts','test/shop.test.ts','test/expansion.test.ts','test/tutorial.test.ts','test/full-season-browser.ts','src/core/effects.ts','src/core/events.ts','src/core/rewards.ts','src/core/progress.ts','test/effects.test.ts','test/effect-growth.test.ts','test/events.test.ts','test/rewards.test.ts','test/legacy-fixtures.ts','test/stage5-fixtures.ts','src/core/orders.ts', 'src/core/planner.ts', 'src/core/board.ts', 'src/core/calendar.ts', 'src/order-ui.ts', 'test/orders.test.ts', 'test/planner.test.ts', 'test/calendar.test.ts', 'test/order-fixtures.ts', 'src/notices.ts', 'test/panel-checks.ts', 'src/main.ts', 'src/drawer.ts', 'src/field-input.ts', 'src/touch-buttons.ts', 'src/core/field.ts', 'src/core/layout.ts', 'src/core/conditions.ts', 'src/core/growth.ts', 'src/core/garden.ts', 'src/core/camera.ts', 'src/scene.ts', 'src/style.css', 'src/fonts/fonts.css', 'src/core/state.ts', 'src/core/saves.ts', 'test/browser.ts', 'test/state.test.ts', 'test/saves.test.ts', 'test/field.test.ts', 'test/layout.test.ts', 'test/conditions.test.ts', 'test/camera.test.ts', 'test/growth.test.ts', 'test/garden.test.ts', 'test/season-growth.test.ts', 'game.json', 'index.html', 'vite.config.ts', 'package.json', 'tsconfig.json'];
 const inputHashes = Object.fromEntries(await Promise.all(inputFiles.map(async file => [file, await hashFile(resolve(import.meta.dirname, '..', file))])));
 const report: { bundleHashes: Record<string, string>; htmlSha256: string; inputHashes: Record<string, string>; pngHashes: Record<string, string>; videos: Record<string, string>; profiles: unknown[]; scaleProbes: unknown[]; flows: string[]; errors: string[]; complete: boolean } = { bundleHashes, htmlSha256: await hashFile(resolve(root, 'index.html')), inputHashes, pngHashes: {}, videos: {}, profiles: [], scaleProbes: [], flows: [], errors: [], complete: false };
 const currentKey = 'gf:bouquet-season:save:progress';
@@ -54,6 +55,10 @@ async function ready(page: Page): Promise<void> {
 }
 async function settled(page: Page | Frame): Promise<void> {
   await page.locator('#drawer-layer[data-state="open"], #drawer-layer[data-state="closed"]').waitFor({ state: 'attached' });
+  // Появление поля длится около секунды; снимки и проверки - по вставшему полю.
+  await page.locator('canvas[data-intro="running"]').waitFor({ state: 'detached' });
+  // Заставка первой загрузки уходит после готовности и шрифтов.
+  await page.locator('#preloader').waitFor({ state: 'hidden' });
 }
 async function click(page: Page | Frame, action: string): Promise<void> {
   await settled(page);
@@ -188,7 +193,9 @@ function growthFixture():GameState{
   return state;
 }
 try {
-  const profileQueue=[...PROFILES];
+  // BOUQUET_PROFILES - быстрый прогон части профилей при разработке; приёмка - все семь.
+  const only=process.env.BOUQUET_PROFILES?.split(',');
+  const profileQueue=PROFILES.filter(p=>!only||only.includes(p.id));
   const workers=Math.max(1,Math.min(3,Number(process.env.BOUQUET_WORKERS??1)));
   await Promise.all(Array.from({length:workers},async()=>{
    while(profileQueue.length){
@@ -280,7 +287,7 @@ try {
       assert.ok(Math.abs(metrics.closeMinHeight - 48 * scale) < .02);
       assert.ok(Math.abs(metrics.panelPadding - (profile.width <= 900 ? 20 : 24) * scale) < .02);
       if (metrics.drawerOpen) {
-        const expectedWidth = profile.width <= 900 ? profile.width * .92 : Math.min(profile.width * .92, Math.max(360 * scale, Math.min(profile.width / 3, 600 * scale)));
+        const expectedWidth = profile.width <= 540 ? profile.width * .92 : profile.width <= 900 ? Math.min(profile.width * .92, profile.width - 8 * metrics.rootFont) : Math.min(profile.width * .92, Math.max(360 * scale, Math.min(profile.width / 3, 600 * scale)));
         assert.ok(Math.abs(metrics.panelWidth! - expectedWidth) < 1, `${profile.id}/${name}: неверная ширина панели`);
       }
       if (profile.width >= 1920) assert.ok(Math.abs(metrics.headingFont - 32 * scale) < .02);
@@ -294,6 +301,27 @@ try {
       assert.equal(metrics.worldBlocked, metrics.drawerOpen);
       assert.equal(metrics.touch, profile.touch);
       assert.equal(metrics.hudClipped,0,`${profile.id}/${name}: HUD обрезан или мелкий`);
+      // Раскладка шапки, панели и нижних действий: дефекты по снимкам style-1x.
+      const layout = await page.evaluate(() => {
+        const font = parseFloat(getComputedStyle(document.documentElement).fontSize);
+        const lines = (element: Element): number => { const range = document.createRange(); range.selectNodeContents(element); return new Set(Array.from(range.getClientRects(), r => Math.round(r.top))).size; };
+        const wrapped = Array.from(document.querySelectorAll<HTMLElement>('.field-actions button')).filter(b => b.getClientRects().length && lines(b) > 1).map(b => b.textContent);
+        const menu = document.getElementById('menu-button')!.getBoundingClientRect(), panel = document.getElementById('panel')!.getBoundingClientRect();
+        const open = document.getElementById('drawer-layer')!.dataset.state === 'open';
+        const overlap = open && menu.left < panel.right && menu.right > panel.left && menu.top < panel.bottom && menu.bottom > panel.top;
+        // Последняя видимая кнопка действий доходит до правого края сетки: в последнем ряду нет дыры.
+        const actions = document.querySelector('.field-actions')!, visible = Array.from(actions.querySelectorAll<HTMLElement>('button')).filter(b => b.getClientRects().length);
+        const hole = visible.length > 0 && Math.abs(visible.at(-1)!.getBoundingClientRect().right - actions.getBoundingClientRect().right) > 1;
+        // Сдвинутая тень правых карточек каталога помещается в окно прокрутки.
+        const content = document.querySelector('#panel .panel-content')?.getBoundingClientRect(), cards = Array.from(document.querySelectorAll('#panel .catalog-grid button'), b => b.getBoundingClientRect().right);
+        const shadowCut = !!content && cards.length > 0 && Math.max(...cards) + .1875 * font > content.right + .5;
+        return { wrapped, overlap, hole, shadowCut, headerHeight: document.querySelector('header > div')!.getBoundingClientRect().height / font };
+      });
+      assert.equal(layout.hole, false, `${profile.id}/${name}: в последнем ряду кнопок поля пустая ячейка`);
+      assert.equal(layout.shadowCut, false, `${profile.id}/${name}: тень карточки каталога обрезана`);
+      if (profile.width >= 1920) assert.deepEqual(layout.wrapped, [], `${profile.id}/${name}: подпись кнопки поля в несколько строк`);
+      if (profile.width >= 600 && metrics.drawerOpen) assert.equal(layout.overlap, false, `${profile.id}/${name}: панель закрывает кнопку «Меню»`);
+      if (profile.height <= 540 && profile.width > profile.height) assert.ok(layout.headerHeight <= 3.75, `${profile.id}/${name}: шапка ${layout.headerHeight.toFixed(2)}rem выше 3,75rem`);
       assert.equal(metrics.canvasPixels[0], metrics.canvasCss[0]);
       assert.equal(metrics.canvasPixels[1], metrics.canvasCss[1]);
       report.pngHashes[filename] = await hashFile(resolve(output, filename));
@@ -321,6 +349,39 @@ try {
           await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
           for (const element of document.querySelectorAll('#panel-body, .panel-content, #panel')) { element.scrollTop = 0; element.scrollLeft = 0; }
         });
+      }
+      // Поле при тексте 200%: слова подписей не рвутся, панель поля не заходит на шапку, «Меню» в экране.
+      if (!metrics.drawerOpen && await page.locator('#field-tools').isVisible()) {
+        const textStyle = await page.addStyleTag({ content: 'html { font-size: max(200%, 0.8333333333vw) !important; }' });
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        const field200 = await page.evaluate(() => {
+          const split: string[] = [];
+          for (const element of document.querySelectorAll('#field-tools button, #field-tools .stock-status, #placement-status, #menu-button, #season-status')) {
+            if (!element.getClientRects().length) continue;
+            const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+            for (let node = walker.nextNode(); node; node = walker.nextNode()) for (const match of node.textContent!.matchAll(/\S+/g)) {
+              const range = document.createRange(); range.setStart(node, match.index); range.setEnd(node, match.index + match[0].length);
+              if (new Set(Array.from(range.getClientRects(), r => Math.round(r.top))).size > 1) split.push(match[0]);
+            }
+          }
+          const header = Math.max(...Array.from(document.querySelectorAll('header > div, #menu-button'), element => element.getBoundingClientRect().bottom));
+          const menu = document.getElementById('menu-button')!.getBoundingClientRect();
+          return { split, tools: document.getElementById('field-tools')!.getBoundingClientRect().top, header, menu: menu.left >= 0 && menu.right <= innerWidth };
+        });
+        if (['workshop', 'full-field'].includes(name)) for (const end of [false, true]) {
+          if (end) await page.locator('#field-tools').evaluate(element => { element.scrollTop = element.scrollHeight; });
+          const enlarged = `${profile.id}-${name}-text200${end ? '-bottom' : ''}.png`;
+          await page.screenshot({ path: resolve(output, enlarged) });
+          report.pngHashes[enlarged] = await hashFile(resolve(output, enlarged));
+        }
+        await textStyle.evaluate(style => (style as HTMLStyleElement).remove());
+        await page.evaluate(async () => {
+          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          document.getElementById('field-tools')!.scrollTop = 0;
+        });
+        assert.deepEqual(field200.split, [], `${profile.id}/${name}: при тексте 200% слово разорвано`);
+        assert.ok(field200.tools >= field200.header, `${profile.id}/${name}: при тексте 200% панель поля заходит на шапку: ${JSON.stringify(field200)}`);
+        assert.equal(field200.menu, true, `${profile.id}/${name}: при тексте 200% «Меню» за краем`);
       }
     };
     await page.goto(url);
@@ -360,6 +421,8 @@ try {
     assert.deepEqual((await layout(page) as {objects:unknown[]}).objects,[]);
     await page.reload();await ready(page);await toolbar(page,'undo-button');
     assert.deepEqual((await layout(page) as {objects:unknown[]}).objects,[{kind:'carnation',q:-1,r:0,adaptation:1}]);
+    // Пиксельные проверки камеры и подсветки - на неподвижном поле: без покачивания и струй.
+    await page.emulateMedia({reducedMotion:'reduce'});
     if(!profile.touch)await keyboardCamera(page);
     await toolbar(page,'catalog-button');await click(page,'pick-lamp');
     const beforeCamera=await page.evaluate(key=>localStorage.getItem(key),currentKey);
@@ -438,15 +501,23 @@ try {
     const wheel=await page.evaluate(()=>(window as unknown as {__badgeWheel:{delta:number;anchor:{x:number;y:number}}}).__badgeWheel);
     const enlarged=zoomField(fit,Math.exp(-wheel.delta*.0015),wheel.anchor);
     assert.ok(enlarged.zoom>=1.5,'увеличение достаточно для чтения пикселя');
+    // Курсор уводим с клетки: подсветка наведения лежит поверх контура зоны.
+    await page.mouse.move(1,profile.height-1);
     await canvasHash(page);
-    const waterBadge=await page.locator('canvas').evaluate((canvas,{p,zoom})=>Array.from((canvas as HTMLCanvasElement).getContext('2d')!.getImageData(Math.round(p.x+19*zoom),Math.round(p.y+8*zoom),1,1).data),{p:toScreen(enlarged,cellCenter({q:0,r:1})),zoom:enlarged.zoom});
-    assert.deepEqual(waterBadge,[247,243,231,255],'значок полива рисуется поверх тени горшка');
+    // Свет и полив сразу - жёлто-голубая зебра контура. Точка - на голубом отрезке
+    // правой грани (второй из четырёх), между внешним и внутренним шестиугольником.
+    const zebra=(()=>{
+      const c=cellCenter({q:0,r:1}),k=cellCorners({q:0,r:1}),at=(i:number,t:number)=>({x:c.x+(k[i]!.x-c.x)*t,y:c.y+(k[i]!.y-c.y)*t});
+      const a=at(0,.765),b=at(1,.765);return toScreen(enlarged,{x:a.x+(b.x-a.x)*.375,y:a.y+(b.y-a.y)*.375});
+    })();
+    const waterBand=await page.locator('canvas').evaluate((canvas,p)=>Array.from((canvas as HTMLCanvasElement).getContext('2d')!.getImageData(Math.round(p.x),Math.round(p.y),1,1).data),zebra);
+    assert.deepEqual(waterBand,[79,159,176,255],'клетка со светом и поливом обведена жёлто-голубой зеброй');
     await toolbar(page,'overview-button');
     const sample=async()=>{
       await canvasHash(page);
       return page.locator('canvas').evaluate((canvas,{flower,zoom})=>{
         const context=(canvas as HTMLCanvasElement).getContext('2d')!;
-        const x=Math.round(flower.x-18*zoom),y=Math.round(flower.y-46*zoom),w=Math.ceil(36*zoom),h=Math.ceil(34*zoom);
+        const x=Math.round(flower.x-30*zoom),y=Math.round(flower.y-90*zoom),w=Math.ceil(60*zoom),h=Math.ceil(100*zoom);
         const pixels=context.getImageData(x,y,w,h).data;
         return Array.from(pixels);
       },{flower,zoom});
@@ -455,7 +526,7 @@ try {
     const flowerPixels:number[]=[];
     for(let i=0;i<petals.length;i+=4)if((petals[i]===205&&petals[i+1]===104&&petals[i+2]===118)
       || (petals[i]===247&&petals[i+1]===231&&petals[i+2]===167))flowerPixels.push(i);
-    assert.ok(flowerPixels.length>20,'выбраны реальные пиксели цветка');
+    assert.ok(flowerPixels.length>20,`выбраны реальные пиксели цветка: ${profile.id}, найдено ${flowerPixels.length}, zoom ${zoom}`);
     const deviceGround=await page.locator('canvas').evaluate((canvas,{p,zoom})=>Array.from((canvas as HTMLCanvasElement).getContext('2d')!.getImageData(Math.round(p.x+22*zoom),Math.round(p.y+8*zoom),1,1).data),{p:await fieldPoint(page,{q:1,r:0}),zoom});
     const hover=async(cell:Cell,name:string)=>{
       const p=await fieldPoint(page,cell);
@@ -477,6 +548,7 @@ try {
     };
     await hover({q:-1,r:0},'hover-flower');await hover({q:-1,r:-1},'hover-neighbor');
     await hover({q:0,r:0},'lamp-zone');await hover({q:1,r:0},'sprinkler-zone');
+    await page.emulateMedia({reducedMotion:'no-preference'});
     // ПКМ работает и при подключённой мыши на touch-профиле. Отмена не откатывает посадку.
     const copiesBeforeContext=await page.evaluate(([a,b])=>[localStorage.getItem(a!),localStorage.getItem(b!)],[currentKey,previousKey]);
     const initialObjects=(await layout(page) as {objects:unknown[]}).objects;
@@ -775,14 +847,21 @@ try {
     await page.setViewportSize({width:profile.width,height:profile.height});await page.waitForTimeout(150);
     await click(page,'continue');await toolbar(page,'overview-button');
     const noticeCopies=await page.evaluate(([a,b])=>[localStorage.getItem(a!),localStorage.getItem(b!)],[currentKey,previousKey]);
+    // Хеш канвы сравнивается до и после уведомлений - поле должно стоять неподвижно.
+    await page.emulateMedia({reducedMotion:'reduce'});
     const noticeField=await canvasHash(page);
-    await page.clock.install();
+    // Проверки времени - при остановленных часах, время двигает только fastForward: реальная длительность
+    // касаний и кликов в полной матрице доходила до секунд и съедала 6-секундный показ. На снимки часы
+    // идут: подменённый requestAnimationFrame при паузе не срабатывает.
+    await page.clock.install();await page.clock.pauseAt(await page.evaluate(()=>Date.now()+1000));
     for(let i=0;i<3;i++)await tapCell(page,{q:-2,r:0});
     assert.equal(await page.locator('#notice .notice').count(),1);
     assert.ok((await page.locator('#notice').textContent())!.endsWith('×3'));
-    await capture('notice-repeat-board');
     await page.clock.fastForward(5000);await tapCell(page,{q:-2,r:0});await page.clock.fastForward(1500);
     assert.ok((await page.locator('#notice').textContent())!.endsWith('×4'),'повтор продлевает показ ещё на 6 секунд');
+    await page.clock.resume();
+    // Снимок - после проверки времени: часы идут и в реальном времени, а снимок с проверкой чтения длится дольше секунды.
+    await capture('notice-repeat-board');
     await page.clock.fastForward(6500);assert.equal(await page.locator('#notice .notice').count(),0);
     await click(page,'menu');
     // Ошибки настоящего действия UI; подменён только недоступный в headless fullscreen.
@@ -795,6 +874,7 @@ try {
       await page.evaluate(message=>{(window as unknown as {noticeMessage:string}).noticeMessage=message;},message);
       await click(page,'fullscreen');
     };
+    await page.clock.pauseAt(await page.evaluate(()=>Date.now()+1000));
     for(const letter of ['A','B','C','D'])await fullscreenError(`Нет доступа к полному экрану (${letter}).`);
     assert.equal(await page.locator('#notice .notice').count(),3,'очередь ограничена тремя сообщениями');
     assert.ok(!(await page.locator('#notice').textContent())!.includes('(A)'),'самое старое сообщение вытесняется');
@@ -803,13 +883,18 @@ try {
     await click(page,'settings');await click(page,'menu');
     assert.equal(await page.locator('#panel .panel-content #notice').count(),1,'сообщения находятся внутри открытого меню');
     assert.equal(await page.locator('#notice .notice').count(),3,'перерисовка меню сохраняет очередь');
-    await capture('notice-queue');await click(page,'continue');await capture('notice-queue-closed-board');
+    await page.clock.resume();
+    await capture('notice-queue');await click(page,'continue');
+    // Положение - до снимка: часы идут и в реальном времени, снимок с проверкой чтения длится секунды.
     assert.equal(await page.locator('#app > #notice').getAttribute('data-dock'),'world');
-    assert.equal(await page.locator('#notice').evaluate(element=>element.getBoundingClientRect().top>=document.querySelector('header')!.getBoundingClientRect().bottom),true,'уведомления ниже верхней панели');
+    const noticeBox=await page.locator('#notice').evaluate(element=>({notice:element.getBoundingClientRect().top,header:document.querySelector('header')!.getBoundingClientRect().bottom,plate:document.querySelector('header > div')!.getBoundingClientRect().bottom,variable:document.getElementById('app')!.style.getPropertyValue('--notice-top')}));
+    assert.ok(noticeBox.notice>=noticeBox.header,`уведомления ниже верхней панели: ${JSON.stringify(noticeBox)}`);
+    await capture('notice-queue-closed-board');
     await page.clock.fastForward(6500);assert.equal(await page.locator('#notice .notice').count(),0);
     await capture('notice-cleared-board');
     assert.deepEqual(await page.evaluate(([a,b])=>[localStorage.getItem(a!),localStorage.getItem(b!)],[currentKey,previousKey]),noticeCopies,'уведомления не меняют сохранения');
     assert.equal(await canvasHash(page),noticeField,'уведомления не сдвигают игровое поле');
+    await page.emulateMedia({reducedMotion:'no-preference'});
     // Этап 4. Новые экраны; поздние ступени — отдельные валидные fixtures.
     // Обычный путь реально принимает заказ, растит, срезает и сдаёт до pending.
     const panelAction=async(name:string)=>{
@@ -831,7 +916,20 @@ try {
     await restoreWrites(page);await click(page,'retry-save');
     assert.equal((await savedState()).season!.day,2);assert.equal(await page.evaluate(key=>JSON.parse(localStorage.getItem(key)!).revision,currentKey),52);
     for(let day=3;day<=planted.finishDay;day++)await toolbar(page,'next-day-button');
-    await toolbar(page,'orders-button');await panelAction('harvest-all');await capture('orders-ready');
+    // Кнопка «Срезать готовые» живёт на панели поля: счётчик = число готовых растений в сохранении.
+    const ripeNow=(await savedState()).season!.garden.plants.filter(p=>p.yield&&p.wilt<3).length,stockSum=async()=>Object.values((await savedState()).season!.garden.stock).reduce((a,b)=>a+b,0);
+    const stockBefore=await stockSum();
+    assert.ok(ripeNow>0,'к дню сдачи есть готовые растения');
+    assert.equal(await page.locator('#harvest-count').textContent(),String(ripeNow),'счётчик равен числу готовых растений');
+    assert.equal(await page.locator('#harvest-button').isDisabled(),false,'кнопка срезки активна');
+    assert.equal(await page.locator('#harvest-button').getAttribute('aria-label'),`Срезать готовые: ${ripeNow}`);
+    const harvestBox=await page.locator('#harvest-button').boundingBox(),rootPx=await page.evaluate(()=>parseFloat(getComputedStyle(document.documentElement).fontSize));
+    assert.ok(harvestBox!.height>=3*rootPx-.5&&harvestBox!.width>=3*rootPx-.5&&harvestBox!.x>=0&&harvestBox!.x+harvestBox!.width<=profile.width,'кнопка срезки: цель ≥3rem и в экране');
+    await toolbar(page,'harvest-button');
+    assert.equal(await page.locator('#harvest-count').textContent(),'0','после срезки счётчик 0');
+    assert.equal(await page.locator('#harvest-button').isDisabled(),true,'после срезки кнопка выключена');
+    assert.ok(await stockSum()>stockBefore,'запас в сохранении вырос');
+    await toolbar(page,'orders-button');await capture('orders-ready');
     const deliver=page.locator(`[data-action="deliver-${firstId}"]`);
     assert.equal(await deliver.isDisabled(),false);
     await failWrites(page);

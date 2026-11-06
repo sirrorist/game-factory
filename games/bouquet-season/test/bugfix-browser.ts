@@ -19,7 +19,7 @@ const touchAction=process.argv.includes('--touch-action'),nativeTouch=process.ar
 const before=process.env.BOUQUET_BUGFIX_PHASE==='before',game=resolve(import.meta.dirname,'..');
 const root=before?resolve(game,'artifacts/bugfix-2026-11-05/before/dist'):resolve(game,'dist');
 const output=resolve(game,before?'artifacts/bugfix-2026-11-05':'artifacts/object-modules-2026-11-05',nativeTouch?'native-touch-experiment':touchAction?'touch-action-experiment':before?'reproduction':'targeted');await mkdir(output,{recursive:true});
-const server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+(req.url==='/'?'/index.html':req.url!));if(!path.startsWith(root+'/'))throw Error();res.setHeader('Content-Type',({'.html':'text/html','.js':'text/javascript','.css':'text/css'} as Record<string,string>)[extname(path)]??'application/octet-stream');res.end(await readFile(path));}catch{res.writeHead(404).end();}});
+const server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+(req.url==='/'?'/index.html':req.url!));if(!path.startsWith(root+'/'))throw Error();res.setHeader('Content-Type',({'.html':'text/html','.js':'text/javascript','.css':'text/css','.woff2':'font/woff2'} as Record<string,string>)[extname(path)]??'application/octet-stream');res.end(await readFile(path));}catch{res.writeHead(404).end();}});
 await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));const address=server.address();assert.ok(address&&typeof address==='object');const url=`http://127.0.0.1:${address.port}`;
 const browser=await chromium.launch({headless:true}),key='gf:bouquet-season:save:progress';
 const report:{complete:boolean;before:boolean;inputOnly:boolean;experiment:string|null;profiles:any[];hashes:Record<string,string>;errors:string[]}={complete:false,before,inputOnly,experiment:nativeTouch?'native-touch':touchAction?'touch-action':null,profiles:[],hashes:{},errors:[]};
@@ -38,7 +38,7 @@ try{
    },{capture:true,passive:true});
   },nativeTouch);
   const page=await context.newPage(),errors:string[]=[],checks:any[]=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});await page.goto(url);
-  const settle=async()=>{await page.locator('html[data-gf-ready]').waitFor({state:'attached'});await page.locator('#app[aria-busy="false"]').waitFor();await page.locator('#drawer-layer[data-state="open"],#drawer-layer[data-state="closed"]').waitFor({state:'attached'});};
+  const settle=async()=>{await page.locator('html[data-gf-ready]').waitFor({state:'attached'});await page.locator('#app[aria-busy="false"]').waitFor();await page.locator('#preloader').waitFor({state:'hidden'});await page.locator('#drawer-layer[data-state="open"],#drawer-layer[data-state="closed"]').waitFor({state:'attached'});};
   const press=async(selector:string)=>{const b=page.locator(selector);await b.scrollIntoViewIfNeeded();if(profile.touch)await b.tap();else await b.click();await settle();};
   const shot=async(name:string)=>{const file=`${profile.id}-${name}.png`;await page.screenshot({path:resolve(output,file)});report.hashes[file]=await hash(resolve(output,file));};
   const install=async(state:GameState)=>{const record=await encode(state,40);await page.evaluate(({key,record})=>{localStorage.clear();localStorage.setItem(key,JSON.stringify(record));},{key,record});await page.reload();await settle();if(touchAction)await page.addStyleTag({content:'button{touch-action:manipulation}'});};
@@ -64,7 +64,7 @@ try{
     const a=toScreen(fitField(rect),cellCenter({q:0,r:0})),b=toScreen(fitField(rect),cellCenter({q:1,r:0}));
     const cdp=await context.newCDPSession(page);await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{...a,id:1}]});
     for(let n=1;n<=6;n++)await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:a.x+(b.x-a.x)*n/6,y:a.y+(b.y-a.y)*n/6,id:1}]});
-    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await page.locator('#app[aria-busy="false"]').waitFor();
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await page.locator('#app[aria-busy="false"]').waitFor();await page.locator('#preloader').waitFor({state:'hidden'});
     const moved=await page.evaluate(key=>JSON.parse(JSON.parse(localStorage.getItem(key)!).payload),key);assert.equal(moved.season.layout.objects[0].q,1);const target=page.locator('#undo-button');assert.equal(await target.isEnabled(),true);
     const tapAt=await page.evaluate(()=>performance.now());
     if(input==='playwright'){await cdp.detach();await target.tap();}else{const box=await target.boundingBox();assert.ok(box);await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:box.x+box.width/2,y:box.y+box.height/2,id:1}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await cdp.detach();}

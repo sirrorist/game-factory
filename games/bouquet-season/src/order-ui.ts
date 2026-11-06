@@ -16,7 +16,7 @@ const button = (action: string, label: string, primary = false, unavailable = fa
 function orderCard(state: GameState, order: Order, active: boolean): string {
   const stock = state.season!.garden.stock;
   const ready = order.ingredients.every(i => stock[i.kind as PlantKind] >= i.count);
-  return `<article class="order-card" data-order="${order.id}"><h3>${orderTitle(order)}</h3>
+  return `<article class="order-card" data-order="${order.id}">${active ? '<span class="note" aria-hidden="true">в работе</span>' : ''}<h3>${orderTitle(order)}</h3>
     <p class="order-deadline">До конца дня ${order.deadline} · предложение дня ${order.appeared}</p>
     <p>${order.ingredients.map(i => `${flowerName(i.kind)}: <strong>${stock[i.kind as PlantKind]} / ${i.count}</strong>`).join('<br>')}</p>
     <p class="small">Награда: ${order.coins} монет · ${order.experience} опыта</p>
@@ -26,11 +26,10 @@ function orderCard(state: GameState, order: Order, active: boolean): string {
 
 export function boardMarkup(state: GameState): string {
   const s = state.season!, b = s.board;
-  const ripe = s.garden.plants.some(p => p.yield && p.wilt < 3);
   const empty = !b.active.length && !b.offers.length;
   const stalled = canSurrenderSeason(state);
   const description = b.active.length ? 'Срок не меняется при перезагрузке. Сдача доступна весь день дедлайна; просрочка — при его завершении.'
-    : empty ? 'Поиск пока не нашёл план выращивания в оставшийся срок. Это не доказательство невозможности: можно срезать готовые цветы и изменить расстановку. Бесплатного перехода дня нет.'
+    : empty ? 'Поиск пока не нашёл план выращивания в оставшийся срок. Это не доказательство невозможности: можно срезать готовые цветы (кнопка на поле) и изменить расстановку. Бесплатного перехода дня нет.'
       : stalled ? 'Для показанных карточек план в оставшийся срок больше не найден. Составы и сроки сохранены. Можно изменить расстановку, срезать готовые цветы или добровольно закончить сезон.'
       : 'Выберите один заказ. Для каждого найден план выращивания на доступном участке. Для выполнения потребуется подходящая расстановка и уход; результат зависит от ваших действий.';
   return `<h2>Доска заказов</h2><p class="small">День ${s.day} / 20 · репутация ${s.reputation} / 3 · основных выполнено ${b.completed.length} / 5 · мест занято ${b.active.length} / ${mainSlots(s.access)}</p>
@@ -38,7 +37,7 @@ export function boardMarkup(state: GameState): string {
     ${b.reason === 'expired' ? '<p class="warning">Предыдущий заказ просрочен: −1 репутация. Эта ступень остаётся незавершённой; новые сроки указаны на карточках.</p>' : ''}
     <p>${description}</p><div class="orders-list">${[...b.active.map(o => orderCard(state, o, true)), ...b.offers.map(o => orderCard(state, o, false))].join('')}</div>
     ${stalled ? '<p class="warning">Можно добровольно закончить сезон поражением. Старые накопления и весь опыт сохранятся; потеряется 25% дохода этого сезона с округлением вниз.</p>' : ''}
-    <div class="actions">${button('events','Просьбы, ярмарка и сюжет')}${button('modules','Сезонные улучшения')}${button('harvest-all', 'Срезать всё готовое', false, !ripe)}${stalled ? button('surrender-confirm', 'Закончить сезон…') : ''}${button('continue', 'К полю')}</div>`;
+    <div class="actions">${button('events','Просьбы, ярмарка и сюжет')}${button('modules','Сезонные улучшения')}${stalled ? button('surrender-confirm', 'Закончить сезон…') : ''}${button('continue', 'К полю')}</div>`;
 }
 
 export function pendingMarkup(state:GameState):string {

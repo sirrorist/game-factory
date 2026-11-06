@@ -15,7 +15,7 @@ import {fitField,toScreen} from '../src/core/camera.ts';
 import {cellCenter,type Cell} from '../src/core/field.ts';
 const root=resolve(import.meta.dirname,'../dist'),out=resolve(import.meta.dirname,process.env.BOUQUET_FULL_PLAY??'../artifacts/object-modules-2026-11-05/full-cycle');
 await mkdir(out,{recursive:true});
-const server=createServer(async(req,res)=>{try{const p=new URL(req.url!,'http://localhost').pathname,file=resolve(root,'.'+(p==='/'?'/index.html':p));if(!file.startsWith(root+'/'))throw Error();res.setHeader('Content-Type',({'.html':'text/html','.js':'text/javascript','.css':'text/css'} as Record<string,string>)[extname(file)]??'application/octet-stream');res.end(await readFile(file));}catch{res.writeHead(404).end();}});
+const server=createServer(async(req,res)=>{try{const p=new URL(req.url!,'http://localhost').pathname,file=resolve(root,'.'+(p==='/'?'/index.html':p));if(!file.startsWith(root+'/'))throw Error();res.setHeader('Content-Type',({'.html':'text/html','.js':'text/javascript','.css':'text/css','.woff2':'font/woff2'} as Record<string,string>)[extname(file)]??'application/octet-stream');res.end(await readFile(file));}catch{res.writeHead(404).end();}});
 await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));
 const address=server.address();assert.ok(address&&typeof address==='object');
 const url=`http://127.0.0.1:${address.port}`,key='gf:bouquet-season:save:progress';
@@ -27,7 +27,7 @@ try{
   const context=await browser.newContext({viewport:{width:profile.width,height:profile.height},hasTouch:profile.touch,isMobile:profile.touch,recordVideo:{dir:resolve(out,'video'),size:{width:profile.width,height:profile.height}}});
   await context.addInitScript(()=>{const original=crypto.getRandomValues.bind(crypto);crypto.getRandomValues=(array:any)=>array instanceof Uint32Array&&array.length===1?(array[0]=123,array):original(array);});
   const page=await context.newPage(),errors:string[]=[],trace:any[]=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
-  const settle=async()=>{await page.locator('#app[aria-busy="false"]').waitFor();await page.locator('#drawer-layer[data-state="open"],#drawer-layer[data-state="closed"]').waitFor({state:'attached'});};
+  const settle=async()=>{await page.locator('#app[aria-busy="false"]').waitFor();await page.locator('#preloader').waitFor({state:'hidden'});await page.locator('#drawer-layer[data-state="open"],#drawer-layer[data-state="closed"]').waitFor({state:'attached'});};
   const state=async():Promise<GameState>=>page.evaluate(key=>JSON.parse(JSON.parse(localStorage.getItem(key)!).payload),key);
   const revision=async()=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)!).revision as number,key);
   const press=async(action:string)=>{await settle();const panel=page.locator(`#panel [data-action="${action}"]`),element=await panel.count()?panel:page.locator(`#${action}`);await element.scrollIntoViewIfNeeded();if(profile.touch)await element.tap();else await element.click();await settle();};
@@ -53,7 +53,7 @@ try{
     await shot(`stage-${stage}-layout`);
     for(const day of plan.days){
       while((await state()).season!.day<day.day)await mutate('next-day-button');
-      current=await state();if(current.season!.garden.plants.some(p=>p.yield&&p.wilt<3)){await press('orders-button');await mutate('harvest-all');await press('continue');}
+      current=await state();if(current.season!.garden.plants.some(p=>p.yield&&p.wilt<3)){await mutate('harvest-button');}
       if(day.delivered.includes(20000)){await press('orders-button');await press('events');await shot('fair-ready');await mutate('fair-minimum');await shot('fair-done');await press('continue');}
       if(day.delivered.includes(order.id)){await press('orders-button');await mutate(`deliver-${order.id}`);}
     }
@@ -75,7 +75,7 @@ try{
   }
   await shot('new-species-planted');
   for(let day=0;day<4;day++)await mutate('next-day-button');
-  await press('orders-button');await mutate('harvest-all');
+  await mutate('harvest-button');
   const grown=await state();assert.ok(grown.season!.garden.stock.rose>=2);assert.ok(grown.season!.garden.stock.tulip>=2);await shot('new-species-harvested');
   assert.deepEqual(errors,[]);
   const video=page.video()!;await context.close();const file=await video.path();report.hashes[`video/${file.split('/').at(-1)}`]=await hash(file);

@@ -17,6 +17,7 @@ import { acceptOrder, submitOrder, closeDay, surrenderSeason, harvestAll, choose
 import { boardMarkup, pendingMarkup, resultMarkup, eventsMarkup, modulesMarkup, objectModulesMarkup } from './order-ui.ts';
 import { effectDefinition, moduleAt, hasGlobal, type EffectsState } from './core/effects.ts';
 import { flowerName, type Ingredient } from './core/orders.ts';
+import './fonts/fonts.css';
 import './style.css';
 
 const $ = (id: string): HTMLElement => document.getElementById(id)!;
@@ -61,12 +62,14 @@ async function main(): Promise<void> {
     return copies.current.status === 'valid' || (saves?.savedRevision ?? 0) > 0
       || (copies.current.status === 'missing' && copies.previous.status === 'missing');
   }
+  // Тот же признак готовности, что видит harvestAll: есть урожай и растение не завяло.
+  const ripeCount=(run?:GameState['season']):number=>run?run.garden.plants.filter(p=>p.yield&&p.wilt<3).length:0;
   function syncInput(): void {
     const run = saves?.state.season;
     const blocked = drawer.blocking || working || !!saves?.hasPending || !!run?.board.pending || !!run?.board.result;
     $('world').dataset.inputPaused = String(blocked);
     scene?.setInputBlocked(blocked);
-    for(const b of $('field-tools').querySelectorAll<HTMLButtonElement>('button')) b.disabled=blocked || !run || (b.id==='next-day-button'&&!run.board.active.length) || (b.id==='undo-button'&&!run.layout.undo);
+    for(const b of $('field-tools').querySelectorAll<HTMLButtonElement>('button')) b.disabled=blocked || !run || (b.id==='next-day-button'&&!run.board.active.length) || (b.id==='undo-button'&&!run.layout.undo) || (b.id==='harvest-button'&&!ripeCount(run));
   }
   function showWorkshop(): void {
     const s = saves?.state.season;
@@ -105,12 +108,14 @@ async function main(): Promise<void> {
     $('next-day-button').title=active?'Завершить текущий день: сначала сроки, затем рост следующего дня':'Для перехода дня нужен активный основной заказ';
     const stock=state?.season?.garden.stock;
     $('stock-status').textContent=stock&&run?`Срезано · ${openFlowers(run.access).map(k=>`${flowerName(k)}: ${stock[k]}`).join(' · ')}`:'';
+    const ripe=ripeCount(run);$('harvest-count').textContent=String(ripe);$('harvest-button').setAttribute('aria-label',`Срезать готовые: ${ripe}`);
     const tip=state&&tutorialTip(state);
     $('tutorial-button').hidden=!tip;
     $('tutorial-button').title=tip?.title??'';
     $('cancel-placement').hidden=!fieldTool;
     $('catalog-button').hidden=!!fieldTool;
-    scene?.setState(state??null,fieldTool);
+    // Выбранный объект приседает на поле, пока открыта его карточка.
+    scene?.setState(state??null,fieldTool,['object','object-modules','remove-confirm'].includes(screenName)?selected:null);
     let html = '';
     if (paused) {
       html = `<h2>Прогресс в памяти</h2><p class="warning">Запись не завершена. Новые действия приостановлены. Не закрывайте эту вкладку.</p><p>${escape(saves?.error ?? 'Сохраняем…')}</p><div class="actions">${button('retry-save', 'Повторить сохранение', 'primary')}</div>`;
@@ -371,6 +376,7 @@ async function main(): Promise<void> {
   $('menu-button').addEventListener('click', () => { void action('menu'); });
   $('catalog-button').addEventListener('click',()=>void action('catalog'));
   $('orders-button').addEventListener('click',()=>void action('orders'));
+  $('harvest-button').addEventListener('click',()=>void action('harvest-all'));
   $('overview-button').addEventListener('click',()=>{if(!working&&!drawer.blocking)scene?.overview();});
   $('undo-button').addEventListener('click',()=>void boardEdit({type:'undo'}));
   $('next-day-button').addEventListener('click',()=>void action('next-day'));
@@ -401,6 +407,7 @@ async function main(): Promise<void> {
   scene = new WorkshopScene({ready:() => {
     working = false;
     render();
+    hidePreloader();
     // После восстановления доступны либо поле, либо меню с готовыми обработчиками.
     requestAnimationFrame(() => sdk.ready());
   }, frame:(newFps, count) => { fps = newFps; objects = count; if (!$('debug').hidden) debug(); },
@@ -409,7 +416,8 @@ async function main(): Promise<void> {
       const top=document.querySelector('header')!.getBoundingClientRect().bottom+font*.5;
       const bottom=$('field-tools').hidden ? innerHeight-font : $('field-tools').getBoundingClientRect().top-font*.5;
       return {x:font,y:top,width:Math.max(1,innerWidth-font*2),height:Math.max(1,bottom-top)};
-    },tap:fieldTap,context:fieldContext,drop:(from,to)=>{
+    },reducedMotion:()=>!!saves?.state.settings.reducedMotion||matchMedia('(prefers-reduced-motion: reduce)').matches,
+    tap:fieldTap,context:fieldContext,drop:(from,to)=>{
       if(from)void boardEdit({type:'move',from,to});
       else if(fieldTool&&'kind'in fieldTool)void boardEdit({type:'place',kind:fieldTool.kind,to});
     },
@@ -417,7 +425,8 @@ async function main(): Promise<void> {
   new Phaser.Game({
     type: Phaser.CANVAS,
     parent: 'stage',
-    backgroundColor: '#d4e2ce',
+    // Фон и зерно бумаги - в CSS под канвой, поле рисуется поверх.
+    transparent: true,
     antialias: false,
     // Поле использует Pointer Events; параллельные legacy-драйверы Phaser не нужны.
     input: { mouse:false, touch:false, keyboard:false },
@@ -427,7 +436,19 @@ async function main(): Promise<void> {
   });
 }
 
+// Заставка уходит, когда мастерская готова и загружены шрифты темы.
+function hidePreloader(): void {
+  const preloader = $('preloader');
+  void document.fonts.ready.then(() => {
+    preloader.dataset.state = 'leaving';
+    const done = (): void => { preloader.hidden = true; };
+    if (getComputedStyle(preloader).transitionDuration.split(',').every(d => parseFloat(d) === 0)) done();
+    else { preloader.addEventListener('transitionend', done, { once: true }); setTimeout(done, 600); }
+  });
+}
+
 void main().catch(error => {
+  hidePreloader();
   $('panel').textContent = `Не удалось открыть мастерскую: ${error instanceof Error ? error.message : 'ошибка запуска'}. Перезагрузите страницу для повторной проверки.`;
   $('app').setAttribute('aria-busy', 'false');
 });

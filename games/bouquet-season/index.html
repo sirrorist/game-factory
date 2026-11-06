@@ -3,8 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#234e43">
+  <meta name="theme-color" content="#3f5d47">
   <title>Сезон букетов</title>
+  <!-- Стили заставки - прямо в документе: в dev Vite вставляет style.css из JS, только после
+       загрузки модуля, и до этого кнопки и заставка видны без оформления. -->
+  <style>
+    html { background: #dfe6d0; font-size: max(100%, 0.8333333333vw); }
+    #preloader { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; color: #33403a; font-family: "Manrope", system-ui, sans-serif; background: var(--paper-grain, none), radial-gradient(120% 95% at 55% 40%, #f4f0df 0%, #e2e8d2 52%, #c8d5b9 100%); transition: opacity .3s ease; }
+    #preloader[hidden] { display: none; }
+    #preloader[data-state="leaving"] { opacity: 0; pointer-events: none; }
+    .preloader-card { display: grid; justify-items: center; gap: .375rem; padding: 1.5rem 2.25rem; text-align: center; }
+    .preloader-card svg { width: 5rem; height: 5rem; margin-bottom: .5rem; }
+    .preloader-card .eyebrow { font-size: .6875rem; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; color: #5d6a61; }
+    .preloader-top { fill: #a8c98f; } .preloader-side { fill: #8a6a4a; }
+    .preloader-sprout { transform-origin: 32px 40px; animation: preloader-sway 1.6s ease-in-out infinite alternate; }
+    .preloader-card strong { font: 700 2rem/1.1 var(--head, "Lora", Georgia, serif); }
+    .preloader-note { font: 700 1.375rem/1 var(--hand, "Caveat", cursive); color: #c0573f; }
+    @keyframes preloader-sway { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
+    @media (prefers-reduced-motion: reduce) { #preloader { transition: none; } .preloader-sprout { animation: none; } }
+  </style>
 </head>
 <body>
   <div id="app" aria-busy="true">
@@ -12,7 +29,7 @@
       <main><section class="greenhouse" aria-label="Мастерская"><div id="stage"></div><div id="scene-caption" class="scene-caption"><span class="eyebrow">СЕЗОН БУКЕТОВ · 1.0.0</span><h2>Здесь начинается<br>ваша оранжерея</h2><p>Расставьте цветы, свет и полив на своём участке.</p></div></section></main>
       <header><div><span class="eyebrow">ЦВЕТОЧНАЯ МАСТЕРСКАЯ</span><h1>Сезон букетов</h1><h2 id="season-status">Мастерская · Между сезонами</h2></div><button id="menu-button" aria-controls="panel" aria-expanded="true" disabled>Меню</button></header>
       <footer><span id="storage-status">Подключение…</span><button id="debug-button" disabled>Диагностика · F3</button></footer>
-      <nav id="field-tools" aria-label="Управление участком" hidden><p id="stock-status" class="stock-status"></p><div class="placement-hint"><span id="placement-status" role="status"></span><button id="tutorial-button" hidden>Подсказка</button></div><div class="field-actions"><button id="catalog-button">Каталог</button><button id="cancel-placement" hidden>Отмена</button><button id="orders-button">Заказы</button><button id="undo-button" disabled>Отменить ход</button><button id="overview-button">Всё поле</button><button id="next-day-button" title="Для перехода дня нужен активный основной заказ" disabled>Следующий день</button></div></nav>
+      <nav id="field-tools" aria-label="Управление участком" hidden><div class="stock-row"><p id="stock-status" class="stock-status"></p><button id="harvest-button" class="harvest-all" aria-label="Срезать готовые: 0" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M8.6 7.5 20 18M8.6 16.5 20 6"/></svg><span class="harvest-label">Срезать готовые</span><span class="badge" id="harvest-count">0</span></button></div><div class="placement-hint"><span id="placement-status" role="status"></span><button id="tutorial-button" hidden>Подсказка</button></div><div class="field-actions"><button id="catalog-button">Каталог</button><button id="cancel-placement" hidden>Отмена</button><button id="orders-button">Заказы</button><button id="undo-button" disabled>Отменить ход</button><button id="overview-button">Всё поле</button><button id="next-day-button" title="Для перехода дня нужен активный основной заказ" disabled>Следующий день</button></div></nav>
     </div>
     <div id="drawer-layer" data-state="open">
       <div id="drawer-shade" aria-hidden="true"></div>
@@ -23,6 +40,8 @@
     </div>
     <pre id="debug" hidden aria-label="Диагностика"></pre>
     <div id="notice" role="status" aria-live="polite" aria-atomic="true" data-dock="panel"></div>
+    <!-- Заставка первой загрузки: закрывает кнопки без подписей, пока не готовы игра и шрифты. -->
+    <div id="preloader" aria-hidden="true"><div class="preloader-card"><svg viewBox="0 0 64 64"><path class="preloader-side" d="M8 38v8l24 14 24-14v-8L32 52z"/><path class="preloader-top" d="M32 10l24 14v14L32 52 8 38V24z"/><g class="preloader-sprout"><path d="M32 40V24" stroke="#4f7f46" stroke-width="2.6" fill="none" stroke-linecap="round"/><path d="M32 34c-6 0-9-3-10-7 6 0 9 3 10 7z" fill="#7fb069"/><path d="M32 30c5-1 8-4 9-8-6 0-8 4-9 8z" fill="#5b8f50"/><circle cx="32" cy="21" r="4.5" fill="#cd6876"/></g></svg><span class="eyebrow">Цветочная мастерская</span><strong>Сезон букетов</strong><span class="preloader-note">Открываем мастерскую…</span></div></div>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>
