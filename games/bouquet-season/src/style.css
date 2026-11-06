@@ -222,4 +222,3 @@ input { width: 1.375rem; height: 1.375rem; flex: none; accent-color: var(--prima
   #harvest-button { grid-area: harvest; }
   .field-actions { grid-area: actions; }
 }
-
