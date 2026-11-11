@@ -50,6 +50,8 @@
 
 ## Язык и код
 
+- Любой интерфейс проекта — по [`docs/UI-LAYOUT.md`](docs/UI-LAYOUT.md): масштаб
+  Full HD ×1, QHD ×4/3, 4K ×2 для текста, элементов управления и геометрии панелей.
 - **TypeScript**, исполняется Node напрямую (type stripping, Node ≥ 22.18). Отсюда:
   - только стираемый синтаксис: без `enum`, `namespace`, parameter properties
     (`erasableSyntaxOnly` в tsconfig это ловит);

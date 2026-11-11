@@ -14,7 +14,10 @@ import { buildData, close, freePort, gameVersion, launchBrowser, startHub, start
 
 import { hubUiSmoke } from './hub-ui.ts';
 
-const GAMES = ['k8s-at-home', 'phaser-2d', 'snake', 'superwalk', 'three-3d'] as const;
+const GAMES = ['bouquet-season', 'k8s-at-home', 'phaser-2d', 'snake', 'superwalk', 'three-3d'] as const;
+/** Игры на шаблоне: офлайн-архив и проба SDK через #mode/#best. У bouquet-season - offline: false
+ *  и своя разметка, её SDK проверяет собственный test/package-browser.ts. */
+const TEMPLATE_GAMES = GAMES.filter((id) => id !== 'bouquet-season');
 /** Игры до 1.0.0: гостю хаб их не показывает (D-060). Владельцу - auth.test.ts. */
 const PRERELEASE = ['rogue-destiny'] as const;
 
@@ -56,7 +59,7 @@ async function openGame(page: Page, id: string): Promise<Frame> {
   return game;
 }
 
-test('каталог показывает все игры с обложками и кнопкой "Скачать"', async () => {
+test('каталог показывает все игры с обложками, "Скачать" - у офлайн-игр', async () => {
   const page = await browser.newPage();
   const errors = trackErrors(page);
   await page.goto(`${hub.origin}/`);
@@ -64,7 +67,8 @@ test('каталог показывает все игры с обложками 
   assert.deepEqual([...ids].sort(), [...GAMES]);
   for (const id of GAMES) {
     const card = page.locator(`[data-game-id="${id}"]`);
-    assert.equal(await card.getByTestId('download').count(), 1, `${id}: нет кнопки "Скачать"`);
+    const archive = (TEMPLATE_GAMES as readonly string[]).includes(id) ? 1 : 0;
+    assert.equal(await card.getByTestId('download').count(), archive, `${id}: кнопка "Скачать" не по offline из game.json`);
     // Версия в адресе обложки - ключ её долгого кеша на сервере игр.
     const src = await card.locator('img').getAttribute('src');
     assert.equal(src, `http://play.localhost:${play.port}/covers/${id}?v=${gameVersion(id)}`);
@@ -96,7 +100,7 @@ test('из каталога в игру: клик по обложке откры
   await page.close();
 });
 
-for (const id of GAMES) {
+for (const id of TEMPLATE_GAMES) {
   test(`${id}: в хабе - сохранения и рекорд уходят в хаб и видны на странице`, async () => {
     const page = await browser.newPage();
     const errors = trackErrors(page);
@@ -241,7 +245,7 @@ test('неизвестная игра и мусор вместо id - 404', asyn
   }
 });
 
-for (const id of GAMES) {
+for (const id of TEMPLATE_GAMES) {
   test(`${id}: "Скачать" в хабе → архив → запуск через file://`, async () => {
     const context = await browser.newContext({ acceptDownloads: true });
     const page = await context.newPage();

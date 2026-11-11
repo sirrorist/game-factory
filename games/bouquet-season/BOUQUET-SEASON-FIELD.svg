@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="820" viewBox="0 0 1440 820" role="img" aria-labelledby="title desc">
+<title id="title">Предложение асимметричного поля «Сезон букетов»</title>
+<desc id="desc">Слева 19 стартовых клеток. Справа те же 19 клеток и 18 добавляемых при расширении. Контур принят для прототипа; игровой баланс ещё не проверен.</desc>
+<rect width="1440" height="820" fill="#f7f4ec"/>
+<text x="52" y="64" font-family="DejaVu Sans, sans-serif" font-size="36" fill="#273c34">Сезон букетов · компактное асимметричное поле</text>
+<text x="54" y="102" font-family="DejaVu Sans, sans-serif" font-size="20" fill="#61736a">Схема принята для прототипа. Игровой баланс ещё не проверен.</text>
+<rect x="52" y="132" width="646" height="546" rx="20" fill="#ffffff" stroke="#dddcd2" stroke-width="2"/>
+<text x="76" y="179" font-family="DejaVu Sans, sans-serif" font-size="26" fill="#273c34">Старт · 19 клеток</text>
+<polygon points="477.19,289.00 448.61,305.50 420.03,289.00 420.03,256.00 448.61,239.50 477.19,256.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (2, -2)</title></polygon>
+<polygon points="329.97,340.00 301.39,356.50 272.81,340.00 272.81,307.00 301.39,290.50 329.97,307.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (-1, -1)</title></polygon>
+<polygon points="388.86,340.00 360.28,356.50 331.70,340.00 331.70,307.00 360.28,290.50 388.86,307.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (0, -1)</title></polygon>
+<polygon points="447.75,340.00 419.17,356.50 390.59,340.00 390.59,307.00 419.17,290.50 447.75,307.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (1, -1)</title></polygon>
+<polygon points="506.64,340.00 478.06,356.50 449.48,340.00 449.48,307.00 478.06,290.50 506.64,307.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (2, -1)</title></polygon>
+<polygon points="300.52,391.00 271.94,407.50 243.36,391.00 243.36,358.00 271.94,341.50 300.52,358.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (-2, 0)</title></polygon>
+<polygon points="359.41,391.00 330.83,407.50 302.25,391.00 302.25,358.00 330.83,341.50 359.41,358.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (-1, 0)</title></polygon>
+<polygon points="418.30,391.00 389.72,407.50 361.14,391.00 361.14,358.00 389.72,341.50 418.30,358.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (0, 0)</title></polygon>
+<polygon points="477.19,391.00 448.61,407.50 420.03,391.00 420.03,358.00 448.61,341.50 477.19,358.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (1, 0)</title></polygon>
+<polygon points="536.08,391.00 507.50,407.50 478.92,391.00 478.92,358.00 507.50,341.50 536.08,358.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (2, 0)</title></polygon>
+<polygon points="271.08,442.00 242.50,458.50 213.92,442.00 213.92,409.00 242.50,392.50 271.08,409.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (-3, 1)</title></polygon>
+<polygon points="329.97,442.00 301.39,458.50 272.81,442.00 272.81,409.00 301.39,392.50 329.97,409.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (-2, 1)</title></polygon>
+<polygon points="388.86,442.00 360.28,458.50 331.70,442.00 331.70,409.00 360.28,392.50 388.86,409.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (-1, 1)</title></polygon>
+<polygon points="447.75,442.00 419.17,458.50 390.59,442.00 390.59,409.00 419.17,392.50 447.75,409.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (0, 1)</title></polygon>
+<polygon points="506.64,442.00 478.06,458.50 449.48,442.00 449.48,409.00 478.06,392.50 506.64,409.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (1, 1)</title></polygon>
+<polygon points="300.52,493.00 271.94,509.50 243.36,493.00 243.36,460.00 271.94,443.50 300.52,460.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (-3, 2)</title></polygon>
+<polygon points="359.41,493.00 330.83,509.50 302.25,493.00 302.25,460.00 330.83,443.50 359.41,460.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (-2, 2)</title></polygon>
+<polygon points="418.30,493.00 389.72,509.50 361.14,493.00 361.14,460.00 389.72,443.50 418.30,460.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (-1, 2)</title></polygon>
+<polygon points="477.19,493.00 448.61,509.50 420.03,493.00 420.03,460.00 448.61,443.50 477.19,460.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (0, 2)</title></polygon>
+<text x="76" y="648" font-family="DejaVu Sans, sans-serif" font-size="18" fill="#61736a">Стартовый участок</text>
+<rect x="742" y="132" width="646" height="546" rx="20" fill="#ffffff" stroke="#dddcd2" stroke-width="2"/>
+<text x="766" y="179" font-family="DejaVu Sans, sans-serif" font-size="26" fill="#273c34">Расширение · 37 клеток</text>
+<polygon points="1137.75,238.00 1109.17,254.50 1080.59,238.00 1080.59,205.00 1109.17,188.50 1137.75,205.00" fill="#f1d08c" stroke="#9a7434" stroke-width="2"><title>Клетка (2, -3)</title></polygon>
+<polygon points="1196.64,238.00 1168.06,254.50 1139.48,238.00 1139.48,205.00 1168.06,188.50 1196.64,205.00" fill="#f1d08c" stroke="#9a7434" stroke-width="2"><title>Клетка (3, -3)</title></polygon>
+<polygon points="990.52,289.00 961.94,305.50 933.36,289.00 933.36,256.00 961.94,239.50 990.52,256.00" fill="#f1d08c" stroke="#9a7434" stroke-width="2"><title>Клетка (-1, -2)</title></polygon>
+<polygon points="1167.19,289.00 1138.61,305.50 1110.03,289.00 1110.03,256.00 1138.61,239.50 1167.19,256.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (2, -2)</title></polygon>
+<polygon points="1226.08,289.00 1197.50,305.50 1168.92,289.00 1168.92,256.00 1197.50,239.50 1226.08,256.00" fill="#f1d08c" stroke="#9a7434" stroke-width="2"><title>Клетка (3, -2)</title></polygon>
+<polygon points="961.08,340.00 932.50,356.50 903.92,340.00 903.92,307.00 932.50,290.50 961.08,307.00" fill="#f1d08c" stroke="#9a7434" stroke-width="2"><title>Клетка (-2, -1)</title></polygon>
+<polygon points="1019.97,340.00 991.39,356.50 962.81,340.00 962.81,307.00 991.39,290.50 1019.97,307.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (-1, -1)</title></polygon>
+<polygon points="1078.86,340.00 1050.28,356.50 1021.70,340.00 1021.70,307.00 1050.28,290.50 1078.86,307.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (0, -1)</title></polygon>
+<polygon points="1137.75,340.00 1109.17,356.50 1080.59,340.00 1080.59,307.00 1109.17,290.50 1137.75,307.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (1, -1)</title></polygon>
+<polygon points="1196.64,340.00 1168.06,356.50 1139.48,340.00 1139.48,307.00 1168.06,290.50 1196.64,307.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (2, -1)</title></polygon>
+<polygon points="1255.53,340.00 1226.95,356.50 1198.37,340.00 1198.37,307.00 1226.95,290.50 1255.53,307.00" fill="#f1d08c" stroke="#9a7434" stroke-width="2"><title>Клетка (3, -1)</title></polygon>
+<polygon points="931.63,391.00 903.05,407.50 874.47,391.00 874.47,358.00 903.05,341.50 931.63,358.00" fill="#f1d08c" stroke="#9a7434" stroke-width="2"><title>Клетка (-3, 0)</title></polygon>
+<polygon points="990.52,391.00 961.94,407.50 933.36,391.00 933.36,358.00 961.94,341.50 990.52,358.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (-2, 0)</title></polygon>
+<polygon points="1049.41,391.00 1020.83,407.50 992.25,391.00 992.25,358.00 1020.83,341.50 1049.41,358.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (-1, 0)</title></polygon>
+<polygon points="1108.30,391.00 1079.72,407.50 1051.14,391.00 1051.14,358.00 1079.72,341.50 1108.30,358.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (0, 0)</title></polygon>
+<polygon points="1167.19,391.00 1138.61,407.50 1110.03,391.00 1110.03,358.00 1138.61,341.50 1167.19,358.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (1, 0)</title></polygon>
+<polygon points="1226.08,391.00 1197.50,407.50 1168.92,391.00 1168.92,358.00 1197.50,341.50 1226.08,358.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (2, 0)</title></polygon>
+<polygon points="1284.97,391.00 1256.39,407.50 1227.81,391.00 1227.81,358.00 1256.39,341.50 1284.97,358.00" fill="#f1d08c" stroke="#9a7434" stroke-width="2"><title>Клетка (3, 0)</title></polygon>
+<polygon points="902.19,442.00 873.61,458.50 845.03,442.00 845.03,409.00 873.61,392.50 902.19,409.00" fill="#f1d08c" stroke="#9a7434" stroke-width="2"><title>Клетка (-4, 1)</title></polygon>
+<polygon points="961.08,442.00 932.50,458.50 903.92,442.00 903.92,409.00 932.50,392.50 961.08,409.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (-3, 1)</title></polygon>
+<polygon points="1019.97,442.00 991.39,458.50 962.81,442.00 962.81,409.00 991.39,392.50 1019.97,409.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (-2, 1)</title></polygon>
+<polygon points="1078.86,442.00 1050.28,458.50 1021.70,442.00 1021.70,409.00 1050.28,392.50 1078.86,409.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (-1, 1)</title></polygon>
+<polygon points="1137.75,442.00 1109.17,458.50 1080.59,442.00 1080.59,409.00 1109.17,392.50 1137.75,409.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (0, 1)</title></polygon>
+<polygon points="1196.64,442.00 1168.06,458.50 1139.48,442.00 1139.48,409.00 1168.06,392.50 1196.64,409.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (1, 1)</title></polygon>
+<polygon points="1255.53,442.00 1226.95,458.50 1198.37,442.00 1198.37,409.00 1226.95,392.50 1255.53,409.00" fill="#f1d08c" stroke="#9a7434" stroke-width="2"><title>Клетка (2, 1)</title></polygon>
+<polygon points="931.63,493.00 903.05,509.50 874.47,493.00 874.47,460.00 903.05,443.50 931.63,460.00" fill="#f1d08c" stroke="#9a7434" stroke-width="2"><title>Клетка (-4, 2)</title></polygon>
+<polygon points="990.52,493.00 961.94,509.50 933.36,493.00 933.36,460.00 961.94,443.50 990.52,460.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (-3, 2)</title></polygon>
+<polygon points="1049.41,493.00 1020.83,509.50 992.25,493.00 992.25,460.00 1020.83,443.50 1049.41,460.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (-2, 2)</title></polygon>
+<polygon points="1108.30,493.00 1079.72,509.50 1051.14,493.00 1051.14,460.00 1079.72,443.50 1108.30,460.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (-1, 2)</title></polygon>
+<polygon points="1167.19,493.00 1138.61,509.50 1110.03,493.00 1110.03,460.00 1138.61,443.50 1167.19,460.00" fill="#8bc2a5" stroke="#346a50" stroke-width="2"><title>Клетка (0, 2)</title></polygon>
+<polygon points="1226.08,493.00 1197.50,509.50 1168.92,493.00 1168.92,460.00 1197.50,443.50 1226.08,460.00" fill="#f1d08c" stroke="#9a7434" stroke-width="2"><title>Клетка (1, 2)</title></polygon>
+<polygon points="961.08,544.00 932.50,560.50 903.92,544.00 903.92,511.00 932.50,494.50 961.08,511.00" fill="#f1d08c" stroke="#9a7434" stroke-width="2"><title>Клетка (-4, 3)</title></polygon>
+<polygon points="1019.97,544.00 991.39,560.50 962.81,544.00 962.81,511.00 991.39,494.50 1019.97,511.00" fill="#f1d08c" stroke="#9a7434" stroke-width="2"><title>Клетка (-3, 3)</title></polygon>
+<polygon points="1078.86,544.00 1050.28,560.50 1021.70,544.00 1021.70,511.00 1050.28,494.50 1078.86,511.00" fill="#f1d08c" stroke="#9a7434" stroke-width="2"><title>Клетка (-2, 3)</title></polygon>
+<polygon points="1137.75,544.00 1109.17,560.50 1080.59,544.00 1080.59,511.00 1109.17,494.50 1137.75,511.00" fill="#f1d08c" stroke="#9a7434" stroke-width="2"><title>Клетка (-1, 3)</title></polygon>
+<polygon points="1196.64,544.00 1168.06,560.50 1139.48,544.00 1139.48,511.00 1168.06,494.50 1196.64,511.00" fill="#f1d08c" stroke="#9a7434" stroke-width="2"><title>Клетка (0, 3)</title></polygon>
+<polygon points="1049.41,595.00 1020.83,611.50 992.25,595.00 992.25,562.00 1020.83,545.50 1049.41,562.00" fill="#f1d08c" stroke="#9a7434" stroke-width="2"><title>Клетка (-3, 4)</title></polygon>
+<text x="766" y="648" font-family="DejaVu Sans, sans-serif" font-size="18" fill="#61736a">+18 клеток · стартовый участок сохраняется</text>
+<rect x="55" y="708" width="23" height="23" rx="3" fill="#8bc2a5" stroke="#346a50" stroke-width="2"/>
+<text x="90" y="724" font-family="DejaVu Sans, sans-serif" font-size="20" fill="#273c34">19 стартовых клеток</text>
+<rect x="442" y="708" width="23" height="23" rx="3" fill="#f1d08c" stroke="#9a7434" stroke-width="2"/>
+<text x="477" y="724" font-family="DejaVu Sans, sans-serif" font-size="20" fill="#273c34">18 новых клеток</text>
+<text x="54" y="774" font-family="DejaVu Sans, sans-serif" font-size="20" fill="#61736a">Один связный участок. Баланс растений, устройств и заказов на нём ещё не проверен.</text>
+</svg>
