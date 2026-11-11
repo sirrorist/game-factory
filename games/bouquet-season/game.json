@@ -10,5 +10,6 @@
   "entry": "index.html",
   "offline": false,
   "permissions": ["saves", "fullscreen", "orientation-lock"],
-  "tags": ["strategy", "flowers"]
+  "tags": ["strategy", "flowers"],
+  "cover": "cover.webp"
 }
