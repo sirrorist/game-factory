@@ -36,7 +36,7 @@ git log --oneline origin/main..origin/dev  # что ещё не выложено
 
 ## 3. Сверить с реальностью
 
-На сервере, без Docker и root (П-036):
+Локально, без прод-Docker и root (П-036):
 
 ```
 pnpm typecheck && pnpm test     # число - сравнить с "Хэндовер" в STATE
