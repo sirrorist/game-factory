@@ -90,7 +90,7 @@ jobs:
           NEXT_TELEMETRY_DISABLED: "1"
 
       - name: Chromium для e2e
-        run: pnpm exec playwright install chromium
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: e2e и browser smoke UI хаба
         run: pnpm test:e2e
