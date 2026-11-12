@@ -61,7 +61,9 @@ export async function hubUiSmoke(browser: Browser, origin: string) {
     const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
     try {
       await page.goto(origin); await page.evaluate(() => document.fonts.ready);
-      await page.waitForTimeout(80);
+      // Теги перемеряются асинхронно (ResizeObserver, fonts.ready): на медленном CI 80 мс не хватало.
+      // Ждём, пока раскладка устоится; настоящий дефект за 5 с не уйдёт и покраснит проверку ниже.
+      await page.waitForFunction(`(${catalogGeometry})().issues.length === 0`, undefined, { timeout: 5000 }).catch(() => {});
       const geometry = await page.evaluate(catalogGeometry);
       assert.deepEqual(geometry.issues, []); assert.ok(geometry.cards.length >= 4);
       assert.deepEqual(await page.locator('.gf-catalog .gf-card__desc').evaluateAll(nodes => nodes.map(e => getComputedStyle(e).webkitLineClamp)), Array(geometry.cards.length).fill('3'));
