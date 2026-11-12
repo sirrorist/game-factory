@@ -1,3 +1,4 @@
+import { ru } from './i18n/ru.ts';
 import {fieldSize} from './core/shop.ts';
 import * as Phaser from 'phaser';
 import { cellAt, cellCenter, cellCorners, fieldCells, sameCell, type Cell, type FieldSize, type Point } from './core/field.ts';
@@ -107,7 +108,7 @@ export class WorkshopScene extends Phaser.Scene {
     this.#glow=this.add.graphics().setDepth(2.5).setBlendMode(Phaser.BlendModes.ADD);
     this.#marks=this.add.graphics().setDepth(4);
     this.#fxLayer=this.add.graphics().setDepth(5);
-    const canvas=this.game.canvas;canvas.tabIndex=0;canvas.setAttribute('aria-label','Поле оранжереи: 19 клеток');canvas.dataset.intro='done';
+    const canvas=this.game.canvas;canvas.tabIndex=0;canvas.setAttribute('aria-label',ru.field.canvasLabel(19));canvas.dataset.intro='done';
     this.#controls=new FieldInput(canvas,{
       active:()=>!this.#blocked && !!this.#state?.season,
       cell:p=>this.#view?cellAt(toWorld(this.#view,p),this.#size()):null,
@@ -125,7 +126,7 @@ export class WorkshopScene extends Phaser.Scene {
   setState(state:GameState|null,tool:FieldTool,selected:Cell|null=null): void {
     const newSeason=state?.season?.number!==this.#state?.season?.number;
     this.#state=state;this.#tool=tool;this.#selected=selected;
-    this.game?.canvas?.setAttribute('aria-label',`Поле оранжереи: ${this.#size()} клеток`);
+    this.game?.canvas?.setAttribute('aria-label',ru.field.canvasLabel(this.#size()));
     if(!this.#overlay)return;
     if(newSeason&&state?.season)this.#startIntro();
     if(newSeason||!this.#view){this.#controls?.cancel();this.#view=fitField(this.#options.viewport(),this.#size());}

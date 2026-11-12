@@ -2,7 +2,7 @@
   "$schema": "../../packages/manifest/game.schema.json",
   "id": "bouquet-season",
   "title": "Сезон букетов",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Цветочная мастерская: спокойная пространственная стратегия с конечными сезонами.",
   "kind": "static",
   "toolchain": "vite-ts",
@@ -11,5 +11,5 @@
   "offline": false,
   "permissions": ["saves", "fullscreen", "orientation-lock"],
   "tags": ["strategy", "flowers"],
-  "cover": "cover.webp"
+  "cover": "cover.svg"
 }

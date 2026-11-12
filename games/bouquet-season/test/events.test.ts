@@ -9,6 +9,8 @@ import {storySteps} from '../src/core/progress.ts';
 import {encode,decode,SaveSession,type StoragePort} from '../src/core/saves.ts';
 import {orderCandidates} from '../src/core/orders.ts';
 import {legacyState} from './legacy-fixtures.ts';
+import { ru } from '../src/i18n/ru.ts';
+import { msg } from './ru-match.ts';
 
 test('Два разных шаблона и окна сохранены; занятое место откладывает срок, поздняя карточка проверяет запас',()=>{
   for(let seed=1;seed<=50;seed++){
@@ -30,23 +32,23 @@ test('Добровольная конкуренция предупреждает
   const r=s.season!.events.requests[0]!;r.template='U1';r.status='offer';r.card=urgentCandidates(r,20)[0]!;
   assert.equal(urgentRisk(s,r.id),true);
   s=acceptUrgent(s,r.id);assert.equal(s.season!.events.requests[0]!.status,'active');
-  const risks=spendingRisk(s,r.card.ingredients,r.card.id);assert.equal(risks[0]!.name,'Основной заказ 1');
-  assert.throws(()=>submitUrgent(s,r.id),/Подтвердите/);
+  const risks=spendingRisk(s,r.card.ingredients,r.card.id);assert.equal(risks[0]!.name,ru.orders.titles.targetMain(1));
+  assert.throws(()=>submitUrgent(s,r.id),msg(ru.errors.spendRisk));
   const next=submitUrgent(s,r.id,true);assert.equal(next.season!.garden.stock.carnation,0);assert.equal(eventIncome(next.season!.events),27);
   assert.equal(next.profile.progress.urgent,1);assert.equal(next.season!.board.active.length,1);assert.ok(isGameState(next));
-  assert.throws(()=>submitUrgent(next,r.id),/активной/);
+  assert.throws(()=>submitUrgent(next,r.id),msg(ru.errors.urgentNoneActive));
 });
 
 test('Ярмарка: окно, точный расход, бонус один раз, pending U3/ярмарки сохраняет основной и его срок',()=>{
   let s=readyOrderFixture(2,6);s.season!.garden.stock={carnation:100,chrysanthemum:100,rose:0,tulip:0,gerbera:0,lily:0};
-  assert.throws(()=>submitFair({...s,season:{...s.season!,day:5}}),/недоступна/);
+  assert.throws(()=>submitFair({...s,season:{...s.season!,day:5}}),msg(ru.errors.fairUnavailable));
   const order=structuredClone(s.season!.board.active);
   s=submitFair(s,false,true);assert.equal(s.season!.garden.stock.carnation,92);assert.equal(s.profile.experience,38);
-  assert.throws(()=>submitFair(s),/недоступна/);
+  assert.throws(()=>submitFair(s),msg(ru.errors.fairUnavailable));
   s=submitFair(s,true,true);assert.equal(s.season!.garden.stock.chrysanthemum,86);assert.equal(s.season!.board.pending!.source,'fair');
   assert.deepEqual(s.season!.board.active,order);assert.ok(isGameState(s));
   s=chooseReward(s,1);assert.deepEqual(s.season!.board.active,order);assert.equal(eventIncome(s.season!.events),84);
-  assert.throws(()=>submitFair(s,true),/недоступна/);
+  assert.throws(()=>submitFair(s,true),msg(ru.errors.fairUnavailable));
   const r=s.season!.events.requests[0]!;r.template='U3';r.status='offer';r.card=urgentCandidates(r,6)[0]!;
   s=acceptUrgent(s,r.id);s=submitUrgent(s,r.id,true);assert.equal(s.season!.board.pending!.source,'urgent');assert.deepEqual(s.season!.board.active,order);assert.ok(isGameState(s));
 });
@@ -65,7 +67,7 @@ test('Выбор/установка/перенос модуля: запись и
   const port:StoragePort={mode:'standalone',gameId:'bouquet-season',persistent:true,load:async()=>stored,save:async(key,value)=>{if(key==='progress'&&fail)throw Error('Отказ');stored=value;}};
   const session=new SaveSession(port,s,record,null);assert.equal(await session.act(value=>chooseReward(value,1)),false);
   const chosen=structuredClone(session.state);assert.equal(await session.act(value=>chooseReward(value,0)),false);fail=false;assert.equal(await session.retry(),true);assert.deepEqual(session.state,chosen);assert.equal(session.savedRevision,2);
-  assert.throws(()=>chooseReward(session.state,0),/Нет ожидающего/);
+  assert.throws(()=>chooseReward(session.state,0),msg(ru.errors.noPendingChoice));
   s=editLayout(session.state,{type:'place',kind:'carnation',to:{q:0,r:0}});
   s.season!.effects.globals=[];s.season!.effects.modules=[{id:1,effect:'P6',at:null}];s.season!.effects.nextId=2;s.season!.effects.undo=[{id:1,at:null}];
   s=installModule(s,1,{q:0,r:0});assert.equal(s.season!.layout.undo,null);assert.ok(isGameState(s));
@@ -136,6 +138,6 @@ test('Просьба не обещает будущий рост при пуст
   s.season!.layout.undo=null;s.season!.garden.undo=null;s.season!.effects.undo=null;
   s.season!.events.requests=[{id:1,day:3,template:'U2',status:'active',card:urgentCandidates({id:1,template:'U2'},14)[0]!,delivered:null},{id:2,day:8,template:'U1',status:'waiting',card:null,delivered:null}];
   assert.ok(isGameState(s));s=closeDay(s);assert.equal(s.season!.day,18);assert.equal(s.season!.board.offers.length,0);assert.equal(s.season!.events.requests[1]!.status,'waiting');assert.ok(isGameState(s));
-  const stale=structuredClone(s),r=stale.season!.events.requests[1]!;r.status='offer';r.card=urgentCandidates(r,18)[0]!;assert.throws(()=>acceptUrgent(stale,2),/основной заказ/);
+  const stale=structuredClone(s),r=stale.season!.events.requests[1]!;r.status='offer';r.card=urgentCandidates(r,18)[0]!;assert.throws(()=>acceptUrgent(stale,2),msg(ru.errors.urgentNeedMain));
   s.season!.garden.stock.carnation=9;s=refreshStateOffers(s);assert.equal(s.season!.events.requests[1]!.status,'offer');s=acceptUrgent(s,2);s=submitUrgent(s,2);assert.equal(s.season!.events.requests[1]!.status,'done');assert.ok(isGameState(s));
 });

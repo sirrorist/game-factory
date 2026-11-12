@@ -5,6 +5,8 @@ import assert from 'node:assert/strict';
 import { newProfile, startSeason, editLayout, enterGrowthDay, refreshStateOffers, harvest, isGameState, type GameState } from '../src/core/state.ts';
 import { newPlant } from '../src/core/growth.ts';
 import { encode, decode, readCopies, SaveSession, CURRENT_KEY, PREVIOUS_KEY, type StoragePort } from '../src/core/saves.ts';
+import { ru } from '../src/i18n/ru.ts';
+import { msg } from './ru-match.ts';
 
 function prepared(): GameState {
   let state=startSeason(newProfile(),123);
@@ -38,7 +40,7 @@ test('Срезка увеличивает только запас вида, на
   assert.deepEqual(next.season!.garden.plants[0],newPlant({q:0,r:0}));
   assert.equal(next.season!.layout.undo,null);assert.equal(next.season!.garden.undo,null);
   assert.deepEqual(next.profile,state.profile);assert.equal(state.season!.garden.stock.carnation,0);
-  assert.throws(()=>harvest(next,{q:0,r:0}),/готовое/);
+  assert.throws(()=>harvest(next,{q:0,r:0}),msg(ru.errors.cutOnlyReady));
   assert.throws(()=>harvest({...state,season:{...state.season!,garden:{...state.season!.garden,stock:{carnation:Number.MAX_SAFE_INTEGER,chrysanthemum:0,rose:0,tulip:0,gerbera:0,lily:0}}}},{q:0,r:0}),/число/);
 });
 test('Запись дня и срезки: отказ сохраняет один результат, повтор не растит и не собирает второй раз',async()=>{

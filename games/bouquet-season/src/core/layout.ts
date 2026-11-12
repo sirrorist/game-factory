@@ -1,14 +1,15 @@
+import { ru } from '../i18n/ru.ts';
 import { hasCell, sameCell, type Cell, type FieldSize } from './field.ts';
 
 export const CATALOG = [
-  { kind: 'carnation', name: 'Гвоздика', care: 'Нужен полив · свет ускоряет рост', color: 0xcd6876 },
-  { kind: 'chrysanthemum', name: 'Хризантема', care: 'Нужен свет · полив ускоряет рост', color: 0xe7bb52 },
-  { kind: 'rose', name: 'Роза', care: 'Нужен полив · свет ускоряет рост', color: 0xbe4e64 },
-  { kind: 'tulip', name: 'Тюльпан', care: 'Нужен свет · полив ускоряет рост', color: 0xe69354 },
-  { kind: 'gerbera', name: 'Гербера', care: 'Нужен свет · полив ускоряет рост', color: 0xe46c4a },
-  { kind: 'lily', name: 'Лилия', care: 'Нужен полив · свет ускоряет рост', color: 0xf5ead5 },
-  { kind: 'lamp', name: 'Лампа', care: 'Свет на шести соседних клетках', color: 0xeac66b },
-  { kind: 'sprinkler', name: 'Поливатель', care: 'Полив на шести соседних клетках', color: 0x639fa7 },
+  { kind: 'carnation', name: ru.field.names.carnation, care: ru.field.care.waterFirst, color: 0xcd6876 },
+  { kind: 'chrysanthemum', name: ru.field.names.chrysanthemum, care: ru.field.care.lightFirst, color: 0xe7bb52 },
+  { kind: 'rose', name: ru.field.names.rose, care: ru.field.care.waterFirst, color: 0xbe4e64 },
+  { kind: 'tulip', name: ru.field.names.tulip, care: ru.field.care.lightFirst, color: 0xe69354 },
+  { kind: 'gerbera', name: ru.field.names.gerbera, care: ru.field.care.lightFirst, color: 0xe46c4a },
+  { kind: 'lily', name: ru.field.names.lily, care: ru.field.care.waterFirst, color: 0xf5ead5 },
+  { kind: 'lamp', name: ru.field.names.lamp, care: ru.field.care.lamp, color: 0xeac66b },
+  { kind: 'sprinkler', name: ru.field.names.sprinkler, care: ru.field.care.sprinkler, color: 0x639fa7 },
 ] as const;
 export type ObjectKind = typeof CATALOG[number]['kind'];
 export type PlantKind = Exclude<ObjectKind,'lamp'|'sprinkler'>;
@@ -34,17 +35,17 @@ export function isObjects(value: unknown, size:FieldSize = 19, open:readonly Obj
 export function changeLayout(layout: Layout, command: LayoutCommand, size:FieldSize = 19): Layout {
   if (command.type === 'undo') return layout.undo ? { objects: structuredClone(layout.undo), undo: null } : layout;
   if (command.type !== 'remove') {
-    if (!hasCell(size,command.to)) throw new Error('Эта клетка за пределами участка.');
+    if (!hasCell(size,command.to)) throw new Error(ru.errors.cellOutside);
     if (command.type === 'move' && sameCell(command.from,command.to)) return layout;
-    if (layout.objects.some(o => sameCell(o,command.to))) throw new Error('Клетка уже занята.');
+    if (layout.objects.some(o => sameCell(o,command.to))) throw new Error(ru.errors.cellBusy);
   }
   let objects: PlacedObject[];
   if (command.type === 'place') {
-    if (!CATALOG.some(c => c.kind === command.kind)) throw new Error('Объект ещё не открыт.');
+    if (!CATALOG.some(c => c.kind === command.kind)) throw new Error(ru.errors.objectNotOpen);
     objects = [...layout.objects,{ kind: command.kind,q:command.to.q,r:command.to.r,adaptation:0 }];
   } else {
     const source = layout.objects.find(o => sameCell(o,command.from));
-    if (!source) throw new Error('Объект не найден.');
+    if (!source) throw new Error(ru.errors.objectNotFound);
     objects = command.type === 'remove' ? layout.objects.filter(o => o !== source)
       : layout.objects.map(o => o === source ? { ...o,q:command.to.q,r:command.to.r,adaptation:isPlant(o.kind) ? 1 : 0 } : o);
   }

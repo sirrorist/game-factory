@@ -1,3 +1,4 @@
+import { ru } from '../i18n/ru.ts';
 import type { GameState } from './state.ts';
 import { isPlant, waterPlant } from './layout.ts';
 import { plantConditions } from './conditions.ts';
@@ -6,12 +7,12 @@ import { livingObjects } from './growth.ts';
 import { fieldSize } from './shop.ts';
 
 export const TUTORIAL = [
-  {id:'accept',title:'Выберите настоящий заказ',text:'На доске выберите состав и срок, затем примите заказ. Только активный основной заказ разрешает менять день.',action:'orders',label:'Открыть доску'},
-  {id:'plant',title:'Посадите нужные цветы',text:'Откройте каталог и поставьте растения из состава заказа на свободные клетки. Размещение бесплатно; выбранный предмет можно ставить несколько раз. ПКМ отменяет посадку, на телефоне — «Отмена».',action:'catalog',label:'Открыть каталог'},
-  {id:'care',title:'Обеспечьте уход',text:'Обязательный уход указан в каталоге: полив или свет. Поставьте нужное устройство рядом с растением. Значки у горшка показывают действующие условия. Сосед своего вида ускоряет рост, другого — даёт +1 урожай за весь цикл.',action:'catalog',label:'Выбрать устройство'},
-  {id:'day',title:'Дайте растениям вырасти',text:'Нажмите «Следующий день» на поле. Растения растут только при смене дня, автоматически время не идёт. Следите за сроком заказа и репутацией.',action:'continue',label:'К полю'},
-  {id:'cut',title:'Срежьте готовые цветы',text:'Когда шкала заполнится, откройте растение и нажмите «Срезать» или используйте «Срезать всё готовое» на доске. При хорошем уходе урожай готов через 2–4 дня роста. Цветы попадут в общий запас, растение останется для следующего цикла.',action:'orders',label:'Открыть доску'},
-  {id:'submit',title:'Соберите букет',text:'Накопите в запасе весь состав и нажмите «Сдать заказ» на его карточке. Если цветов мало, продолжайте выращивание и срезку до срока. После сдачи выберите одно сезонное улучшение.',action:'orders',label:'Проверить состав'},
+  {id:'accept',title:ru.tutorial.tips.accept.title,text:ru.tutorial.tips.accept.text,action:'orders',label:ru.tutorial.tips.accept.label},
+  {id:'plant',title:ru.tutorial.tips.plant.title,text:ru.tutorial.tips.plant.text,action:'catalog',label:ru.tutorial.tips.plant.label},
+  {id:'care',title:ru.tutorial.tips.care.title,text:ru.tutorial.tips.care.text,action:'catalog',label:ru.tutorial.tips.care.label},
+  {id:'day',title:ru.tutorial.tips.day.title,text:ru.tutorial.tips.day.text,action:'continue',label:ru.tutorial.tips.day.label},
+  {id:'cut',title:ru.tutorial.tips.cut.title,text:ru.tutorial.tips.cut.text,action:'orders',label:ru.tutorial.tips.cut.label},
+  {id:'submit',title:ru.tutorial.tips.submit.title,text:ru.tutorial.tips.submit.text,action:'orders',label:ru.tutorial.tips.submit.label},
 ] as const;
 // История дополняется и при выключенных подсказках: включение не повторяет уже освоенное.
 export function recordTutorial(state:GameState):GameState {

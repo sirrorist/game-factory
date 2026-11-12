@@ -1,3 +1,4 @@
+import { ru } from '../i18n/ru.ts';
 import { isGameState, readState, type GameState } from './state.ts';
 
 export const CURRENT_KEY = 'progress';
@@ -23,7 +24,7 @@ export type Copy = { status: 'missing' } | { status: 'invalid'; reason: string }
 
 const bytes = (value: unknown): number => new TextEncoder().encode(JSON.stringify(value)).byteLength;
 async function hash(payload: string): Promise<string> {
-  if (!globalThis.crypto?.subtle) throw new Error('Для проверки сохранений нужен защищённый контекст браузера (HTTPS или localhost).');
+  if (!globalThis.crypto?.subtle) throw new Error(ru.saves.errors.secureContext);
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(payload));
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 }
@@ -31,11 +32,11 @@ async function hash(payload: string): Promise<string> {
 export async function encode(state: GameState, revision: number, savedAt = new Date().toISOString()): Promise<SaveRecord> {
   if (!isGameState(state) || !Number.isSafeInteger(revision) || revision < 1
     || !Number.isFinite(Date.parse(savedAt)) || new Date(savedAt).toISOString() !== savedAt) {
-    throw new Error('Данные сохранения не прошли проверку.');
+    throw new Error(ru.saves.errors.verifyFailed);
   }
   const payload = JSON.stringify(state);
   const record: SaveRecord = { schemaVersion: 6, revision, savedAt, payload, sha256: await hash(payload) };
-  if (bytes(record) > MAX_SAVE_BYTES) throw new Error('Сохранение превышает 64 КБ.');
+  if (bytes(record) > MAX_SAVE_BYTES) throw new Error(ru.saves.errors.tooBig);
   return record;
 }
 
@@ -54,7 +55,7 @@ export async function decode(value: unknown): Promise<Copy> {
     if (!state) throw new Error();
     return { status: 'valid', record: r, state };
   } catch {
-    return { status: 'invalid', reason: 'Копия повреждена или имеет неподдерживаемую схему.' };
+    return { status: 'invalid', reason: ru.saves.errors.invalidCopy };
   }
 }
 
@@ -62,7 +63,7 @@ export async function decode(value: unknown): Promise<Copy> {
 export async function readCopies(storage: StoragePort): Promise<{ current: Copy; previous: Copy }> {
   const read = async (key: string): Promise<Copy> => {
     try { return await decode(await storage.load(key)); }
-    catch { return { status: 'unavailable', reason: 'Не удалось прочитать хранилище.' }; }
+    catch { return { status: 'unavailable', reason: ru.saves.errors.readFailed }; }
   };
   const [current, previous] = await Promise.all([read(CURRENT_KEY), read(PREVIOUS_KEY)]);
   return { current, previous };
@@ -90,11 +91,11 @@ export class SaveSession {
   get backup(): SaveRecord | null { return this.#previous; }
   get savedRevision(): number { return this.#current?.revision ?? 0; }
   rebind(storage: StoragePort): void {
-    if (this.busy) throw new Error('Дождитесь завершения записи.');
+    if (this.busy) throw new Error(ru.saves.errors.busy);
     if (storage === this.#storage) return;
     // SDK хаба закрепляет origin и родительское окно. Его нельзя заменять при повторе записи.
     if (this.#storage.mode === 'hub' || storage.mode !== this.#storage.mode || storage.gameId !== this.#storage.gameId) {
-      throw new Error('Исходное хранилище не подтверждено. Прогресс остаётся в памяти; повторите сохранение.');
+      throw new Error(ru.saves.errors.originUnconfirmed);
     }
     this.#storage = storage;
   }
@@ -129,7 +130,7 @@ export class SaveSession {
     this.busy = true;
     this.error = null;
     try {
-      if (!this.#storage.persistent) throw new Error('Постоянное хранение недоступно. Проверьте доступ ещё раз.');
+      if (!this.#storage.persistent) throw new Error(ru.saves.errors.notPersistent);
       pending.record ??= await encode(pending.next, this.#revision + 1);
       if (pending.rotate) await this.#storage.save(PREVIOUS_KEY, pending.rotate);
       await this.#storage.save(CURRENT_KEY, pending.record);
@@ -139,7 +140,7 @@ export class SaveSession {
       this.#pending = null;
       return true;
     } catch (error) {
-      this.error = error instanceof Error ? error.message : 'Не удалось записать прогресс.';
+      this.error = error instanceof Error ? error.message : ru.saves.errors.writeFailed;
       return false;
     } finally { this.busy = false; }
   }

@@ -9,6 +9,8 @@ import { orderCandidates, type Order } from '../src/core/orders.ts';
 import { boardIncome, boardExperience } from '../src/core/board.ts';
 import { findProductionPlan } from '../src/core/planner.ts';
 import { encode, decode, SaveSession, CURRENT_KEY, PREVIOUS_KEY, type StoragePort } from '../src/core/saves.ts';
+import { ru } from '../src/i18n/ru.ts';
+import { msg } from './ru-match.ts';
 
 // Поздние ступени — независимая подготовка сохранения. В игре пропуска выбора нет.
 function fixture(completed = 0, day = 1): GameState {
@@ -32,15 +34,15 @@ test('Стабильные предложения и RNG, позднее при�
   const first = startSeason(newProfile(), 123), copy = structuredClone(first);
   assert.equal(refreshStateOffers(first), first); assert.deepEqual(first, copy);
   const s = fixture(0, 6); s.season!.board.offers = [card(1, 1)]; s.season!.board.nextId = 21;
-  assert.throws(() => acceptOrder(s, 20), /план не найден/);
+  assert.throws(() => acceptOrder(s, 20), msg(ru.errors.jointPlanMissing));
   assert.deepEqual(s.season!.board.offers[0], card(1, 1));
   s.season!.garden.stock={carnation:16,chrysanthemum:8,rose:0,tulip:0,gerbera:0,lily:0};
   const accepted = acceptOrder(s, 20);
   assert.equal(accepted.season!.board.active[0]!.deadline, 6);
   assert.equal(accepted.season!.board.offers.length, 0);
   assert.equal(accepted.season!.rng, s.season!.rng); assert.ok(isGameState(accepted));
-  assert.throws(() => acceptOrder(accepted, 20), /занято/);
-  assert.throws(() => closeDay(first), /активный/);
+  assert.throws(() => acceptOrder(accepted, 20), msg(ru.errors.mainSlotBusy));
+  assert.throws(() => closeDay(first), msg(ru.errors.dayNeedsOrder));
   const placed = editLayout(first, { type: 'place', kind: 'lamp', to: { q: 0, r: 0 } });
   const acceptedPlaced = acceptOrder(placed, placed.season!.board.offers[0]!.id);
   assert.ok(placed.season!.layout.undo); assert.ok(placed.season!.garden.undo);
@@ -55,7 +57,7 @@ test('Обычная сдача расходует точный состав о�
   assert.equal(boardIncome(next.season!.board), 16);
   assert.equal(next.season!.board.pending?.orderId,20);assert.equal(next.season!.board.pending?.stage,1);assert.equal(next.season!.board.pending?.options.length,3);
   assert.ok(isGameState(next)); assert.equal(next.season!.board.offers.length, 0);
-  for (const action of [() => submitOrder(next, 20), () => closeDay(next), () => harvest(next, { q: 0, r: 0 }), () => editLayout(next, { type: 'place', kind: 'lamp', to: { q: 0, r: 0 } })]) assert.throws(action, /выбор/);
+  for (const action of [() => submitOrder(next, 20), () => closeDay(next), () => harvest(next, { q: 0, r: 0 }), () => editLayout(next, { type: 'place', kind: 'lamp', to: { q: 0, r: 0 } })]) assert.throws(action, msg(ru.errors.finishChoiceFirst));
   assert.deepEqual(startSeason(next, 99), next);
 });
 
@@ -98,7 +100,7 @@ test('Финал на дне 20 — немедленная победа, ито�
   assert.equal(win.season!.day, 20); assert.equal(win.season!.board.result!.outcome, 'win');
   assert.equal(win.season!.board.result!.income, 296); assert.equal(win.profile.coins, 396); assert.equal(win.profile.experience, 196);
   assert.equal(closeDay(win), win); assert.equal(surrenderSeason(win), win);
-  assert.throws(() => submitOrder(win, 20), /завершён/);
+  assert.throws(() => submitOrder(win, 20), msg(ru.errors.seasonFinished));
   const next = startSeason(win, 99); assert.equal(next.season!.number, 2); assert.equal(next.season!.day, 1);
   assert.equal(next.profile.coins, 396); assert.equal(next.profile.experience, 196); assert.equal(next.season!.board.completed.length, 0); assert.ok(isGameState(next));
 });
@@ -119,15 +121,15 @@ test('Конец дня 20 без финала: без роста 21, потер
 test('Пустая доска не означает автоматического поражения и не даёт бесплатного дня', () => {
   const s = refreshStateOffers(fixture(0, 20));
   assert.equal(s.season!.board.offers.length, 0); assert.equal(s.season!.board.result, null);
-  assert.throws(() => closeDay(s), /активный/);
+  assert.throws(() => closeDay(s), msg(ru.errors.dayNeedsOrder));
   const end = surrenderSeason(s); assert.ok(isGameState(end)); assert.equal(end.season!.board.result!.reason, 'surrender');
-  const normal = startSeason(newProfile(), 123); assert.throws(() => surrenderSeason(normal), /ни для одного/);
+  const normal = startSeason(newProfile(), 123); assert.throws(() => surrenderSeason(normal), msg(ru.errors.surrenderUnavailable));
 });
 
 test('Сохранённые предложения без найденного плана не запирают сезон и не обновляются', () => {
   const s = unprovenOffersFixture(), before = structuredClone(s);
   assert.ok(isGameState(s)); assert.ok(s.season!.board.offers.length);
-  for (const order of s.season!.board.offers) assert.throws(() => acceptOrder(s, order.id), /план не найден/);
+  for (const order of s.season!.board.offers) assert.throws(() => acceptOrder(s, order.id), msg(ru.errors.jointPlanMissing));
   assert.equal(refreshStateOffers(s), s); assert.deepEqual(s, before);
   assert.equal(canSurrenderSeason(s), true);
   const lost = surrenderSeason(s); assert.ok(isGameState(lost)); assert.equal(lost.season!.board.result!.reason, 'surrender');

@@ -11,6 +11,7 @@ import {acceptOrder,closeDay,harvestAll} from '../src/core/calendar.ts';
 import {recordTutorial,tutorialTip} from '../src/core/tutorial.ts';
 import {encode} from '../src/core/saves.ts';
 import {checkPanelReading} from './panel-checks.ts';
+import { ru } from '../src/i18n/ru.ts';
 const root=resolve(import.meta.dirname,'../dist'),out=resolve(import.meta.dirname,process.env.BOUQUET_TUTORIAL??'../artifacts/object-modules-2026-11-05/tutorial-check');await mkdir(out,{recursive:true});
 const server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+(req.url==='/'?'/index.html':req.url!));if(!path.startsWith(root+'/'))throw Error();res.setHeader('Content-Type',({'.html':'text/html','.js':'text/javascript','.css':'text/css','.woff2':'font/woff2'} as Record<string,string>)[extname(path)]??'application/octet-stream');res.end(await readFile(path));}catch{res.writeHead(404).end();}});
 await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));const addr=server.address();assert.ok(addr&&typeof addr==='object');const url=`http://127.0.0.1:${addr.port}`;
@@ -34,9 +35,9 @@ try{
   for(const item of [...states,{id:'shop-poor',state:{...newProfile(),profile:{...newProfile().profile,experience:600}}}]){
    const record=await encode(item.state,40);await page.evaluate(({key,record})=>{localStorage.clear();localStorage.setItem(key,JSON.stringify(record));},{key,record});await page.reload();await settle();
    if(item.id==='shop-poor')await press('[data-action="shop"]');else await press('#tutorial-button');
-   const title=item.id==='shop-poor'?'Развитие мастерской':`Подсказка: ${tutorialTip(item.state)!.title}`;
+   const title=item.id==='shop-poor'?ru.shop.screen.title:`Подсказка: ${tutorialTip(item.state)!.title}`;
    assert.equal(await page.locator('#panel-title').textContent(),title);checks.push({id:item.id,text:1,...await checkPanelReading(page) as object});await shot(item.id);
-   if(item.id==='shop-poor'){assert.equal(await page.locator('[data-action="buy-rose"]').isDisabled(),true);assert.ok((await page.locator('[data-purchase="rose"]').textContent())!.includes('Не хватает 60 монет'));}
+   if(item.id==='shop-poor'){assert.equal(await page.locator('[data-action="buy-rose"]').isDisabled(),true);assert.ok((await page.locator('[data-purchase="rose"]').textContent())!.includes(ru.shop.screen.notEnough(60)));}
    const style=await page.addStyleTag({content:'html{font-size:max(200%,0.8333333333vw)!important}'});checks.push({id:item.id,text:2,...await checkPanelReading(page) as object});await shot(`${item.id}-text200`);
    await page.evaluate(()=>{const b=document.getElementById('panel-body')!,c=b.querySelector<HTMLElement>('.panel-content')!,scroll=b.dataset.scroll==='all'?b:c;scroll.scrollTop=scroll.scrollHeight;});await shot(`${item.id}-text200-bottom`);await style.evaluate(s=>(s as HTMLStyleElement).remove());
    await page.setViewportSize({width:profile.height,height:profile.width});checks.push({id:item.id,rotated:true,...await checkPanelReading(page) as object});await page.setViewportSize({width:profile.width,height:profile.height});
