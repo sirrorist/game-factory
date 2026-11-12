@@ -427,7 +427,7 @@ try {
     assert.ok(await page.locator('[data-action="start"]').isEnabled());
     await capture('menu');
     assert.equal(await page.locator('.controls-help').isVisible(),true,'управление доступно в обычном меню');
-    assert.ok((await page.locator('.controls-help').textContent())!.includes(profile.touch?ru.ui.hud.controlsTouch:ru.ui.hud.controlsMouse));
+    assert.ok((await page.locator('.controls-help').textContent())!.includes((profile.touch?ru.ui.hud.controlsTouch:ru.ui.hud.controlsMouse).replace(/<[^>]+>/g,'')));
     await click(page, 'start');
     assert.equal(await page.locator('#next-day-button').isDisabled(),true,'без активного заказа день заблокирован');
     assert.equal(await page.locator('#stock-status').textContent(),ru.field.stockLine(`${ru.field.stockItem(ru.field.flowersPlural.carnation,0)} · ${ru.field.stockItem(ru.field.flowersPlural.chrysanthemum,0)}`));
