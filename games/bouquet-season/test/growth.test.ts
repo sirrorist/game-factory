@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { newPlant, growDay, cutPlant, type PlantState } from '../src/core/growth.ts';
 import { isPlant, type ObjectKind, type PlacedObject } from '../src/core/layout.ts';
 import { sameCell } from '../src/core/field.ts';
+import { ru } from '../src/i18n/ru.ts';
+import { msg } from './ru-match.ts';
 
 const object=(kind:ObjectKind,q=0,r=0):PlacedObject=>({kind,q,r,adaptation:0});
 const garden=(objects:PlacedObject[])=>({objects,plants:objects.filter(o=>isPlant(o.kind)).map(newPlant)});
@@ -54,7 +56,7 @@ test('Три подряд плохих дня: предупреждение, о�
   const ready=days(garden([object('carnation'),object('sprinkler',1,0)]),4);
   const dry={...ready,objects:ready.objects.filter(o=>o.kind!=='sprinkler')};
   assert.equal(first(days(dry,2)).yield,2);assert.equal(first(days(dry,3)).yield,0);
-  assert.throws(()=>cutPlant(dead.objects,dead.plants,{q:0,r:0}),/живое/);
+  assert.throws(()=>cutPlant(dead.objects,dead.plants,{q:0,r:0}),msg(ru.errors.cutOnlyReady));
 });
 test('Исправление условий занимает один день без роста, сохраняет прогресс и разрывает плохую серию',()=>{
   const healthy=days(garden([object('carnation'),object('sprinkler',1,0)]),1);
@@ -91,7 +93,7 @@ test('Срезка фиксированного урожая сохраняет 
   assert.equal(cut.amount,2);assert.equal(cut.kind,'carnation');assert.equal(first(cut).wilt,1);
   assert.equal(first(cut).growth,0);assert.equal(first(cut).growthDays,0);assert.equal(first(cut).yield,0);
   assert.equal(first(bad).yield,2);
-  assert.throws(()=>cutPlant(bad.objects,cut.plants,{q:0,r:0}),/готовое/);
+  assert.throws(()=>cutPlant(bad.objects,cut.plants,{q:0,r:0}),msg(ru.errors.cutOnlyReady));
   const recovered=days({objects:ready.objects,plants:cut.plants},1);
   assert.equal(first(recovered).growth,0);
   assert.equal(first(days(recovered,4)).yield,2);

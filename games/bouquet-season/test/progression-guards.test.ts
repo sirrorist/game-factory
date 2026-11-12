@@ -6,11 +6,13 @@ import {acceptOrder,submitOrder,chooseReward,closeDay} from '../src/core/calenda
 import {orderCandidates} from '../src/core/orders.ts';
 import {startEvents} from '../src/core/events.ts';
 import {decode,encode} from '../src/core/saves.ts';
+import { ru } from '../src/i18n/ru.ts';
+import { msg } from './ru-match.ts';
 test('Принятие второго заказа повторно проверяет общий запас обоих; один стебель не расходуется дважды',()=>{
   let s=newProfile();s.profile.coins=120;s.profile.experience=180;s=purchase(s,'main-slot');s=startSeason(s,123);
   const run=s.season!;run.day=20;run.status='growing';run.events=startEvents(123,20).events;run.garden.stock.carnation=14;
   run.board.active=[{...orderCandidates(1,20)[0]!,id:100}];run.board.offers=[{...orderCandidates(2,20)[0]!,id:101}];run.board.nextId=102;
-  assert.ok(isGameState(s));const original=structuredClone(s);assert.throws(()=>acceptOrder(s,101),/Совместный/);assert.deepEqual(s,original);
+  assert.ok(isGameState(s));const original=structuredClone(s);assert.throws(()=>acceptOrder(s,101),msg(ru.errors.jointPlanMissing));assert.deepEqual(s,original);
 });
 test('Неверные открытия/слоты/контур/счётчики отвергаются с правильным хешем, а не по повреждённой оболочке',async()=>{
   const s=startSeason(newProfile(),123);

@@ -1,19 +1,20 @@
+import { ru } from '../i18n/ru.ts';
 import { neighbors, sameCell, hasCell, type Cell, type FieldSize } from './field.ts';
 import { CATALOG, isPlant, type ObjectKind, type PlacedObject, type LayoutCommand, type Layout } from './layout.ts';
 
 export const EFFECTS = [
-  { id: 'P1', name: 'Смена предпочтений', category: 'plant', form: 'global', text: 'Обязательный и дополнительный уход выбранного вида меняются местами.' },
-  { id: 'P2', name: 'Свет от соседей', category: 'plant', form: 'global', text: 'Живой сосед того же вида в прямом свете передаёт свет на один шаг.' },
-  { id: 'P3', name: 'Вода от соседей', category: 'plant', form: 'global', text: 'Живой сосед того же вида в прямой зоне поливателя передаёт полив на один шаг.' },
-  { id: 'P4', name: 'Смешанная клумба', category: 'plant', form: 'module', text: 'Бонус скорости +50% даёт сосед другого вида вместо своего.' },
-  { id: 'P5', name: 'Подпорка у устройства', category: 'plant', form: 'module', text: 'Модуль и соседнее устройство весь цикл дают обычный бонус урожая +1 вместо другого вида.' },
-  { id: 'P6', name: 'Минилампа', category: 'plant', form: 'module', text: 'Свет непосредственно своему растению. Передача соседу требует «Света от соседей».' },
-  { id: 'E1', name: 'Дальний свет', category: 'device', form: 'global', text: 'Лампы дополнительно освещают две клетки на расстоянии 2 по оси q.' },
-  { id: 'E2', name: 'Дальний полив', category: 'device', form: 'global', text: 'Поливатели дополнительно поливают две клетки на расстоянии 2 по оси r.' },
-  { id: 'E3', name: 'Парная установка', category: 'device', form: 'global', text: 'Выбранный тип устройства заимствует собственную зону соседнего устройства другого типа, без цепочек.' },
-  { id: 'E4', name: 'Двойной уход', category: 'device', form: 'module', text: 'В собственной зоне устройства есть и свет, и полив.' },
-  { id: 'E5', name: 'Кольцевая насадка', category: 'device', form: 'module', text: 'Собственная зона — 12 клеток второго кольца, без ближайших шести.' },
-  { id: 'E6', name: 'Лепестковая насадка', category: 'device', form: 'module', text: 'Собственная зона — ближайшие шесть клеток и шесть углов второго кольца.' },
+  { id: 'P1', name: ru.effects.items.P1.name, category: 'plant', form: 'global', text: ru.effects.items.P1.text },
+  { id: 'P2', name: ru.effects.items.P2.name, category: 'plant', form: 'global', text: ru.effects.items.P2.text },
+  { id: 'P3', name: ru.effects.items.P3.name, category: 'plant', form: 'global', text: ru.effects.items.P3.text },
+  { id: 'P4', name: ru.effects.items.P4.name, category: 'plant', form: 'module', text: ru.effects.items.P4.text },
+  { id: 'P5', name: ru.effects.items.P5.name, category: 'plant', form: 'module', text: ru.effects.items.P5.text },
+  { id: 'P6', name: ru.effects.items.P6.name, category: 'plant', form: 'module', text: ru.effects.items.P6.text },
+  { id: 'E1', name: ru.effects.items.E1.name, category: 'device', form: 'global', text: ru.effects.items.E1.text },
+  { id: 'E2', name: ru.effects.items.E2.name, category: 'device', form: 'global', text: ru.effects.items.E2.text },
+  { id: 'E3', name: ru.effects.items.E3.name, category: 'device', form: 'global', text: ru.effects.items.E3.text },
+  { id: 'E4', name: ru.effects.items.E4.name, category: 'device', form: 'module', text: ru.effects.items.E4.text },
+  { id: 'E5', name: ru.effects.items.E5.name, category: 'device', form: 'module', text: ru.effects.items.E5.text },
+  { id: 'E6', name: ru.effects.items.E6.name, category: 'device', form: 'module', text: ru.effects.items.E6.text },
 ] as const;
 export type EffectId = typeof EFFECTS[number]['id'];
 export type ModuleId = 'P4' | 'P5' | 'P6' | 'E4' | 'E5' | 'E6';

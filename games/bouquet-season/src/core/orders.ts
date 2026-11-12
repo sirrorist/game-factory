@@ -1,3 +1,4 @@
+import { ru } from '../i18n/ru.ts';
 import type { PlantKind } from './layout.ts';
 
 export type FlowerKind = PlantKind | 'rose' | 'tulip' | 'gerbera' | 'lily';
@@ -23,7 +24,7 @@ export const RECIPES: ReadonlyArray<{ id: string; kinds: readonly FlowerKind[] }
 ];
 export const BASE_VOLUMES = [8, 14, 20, 26, 32] as const;
 export const OPEN_FLOWERS: readonly PlantKind[] = ['carnation', 'chrysanthemum'];
-export const flowerName = (kind: FlowerKind): string => ({ carnation: 'Гвоздики', chrysanthemum: 'Хризантемы', rose: 'Розы', tulip: 'Тюльпаны', gerbera: 'Герберы', lily: 'Лилии' })[kind];
+export const flowerName = (kind: FlowerKind): string => ru.field.flowersPlural[kind];
 
 // Метод наибольших остатков; равенство решается порядком ингредиентов рецепта.
 export function portions(total: number, weights: readonly number[]): number[] {
@@ -69,6 +70,6 @@ export function nextRandom(seed: number): number {
 }
 
 export function orderTitle(order: Pick<Order, 'stage' | 'format'>): string {
-  return order.stage === 6 ? (order.format === 'showcase' ? 'Витрина мастерской' : 'Городская выставка')
-    : `Ступень ${order.stage} · ${order.format === 'gift' ? 'Подарочный букет' : 'Поставка цветов'}`;
+  return order.stage === 6 ? (order.format === 'showcase' ? ru.orders.titles.showcase : ru.orders.titles.cityExpo)
+    : ru.orders.titles.stage(order.stage, order.format === 'gift');
 }

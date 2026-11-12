@@ -3,13 +3,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { startSeason, newProfile, editLayout, isGameState } from '../src/core/state.ts';
 import { encode, decode, SaveSession, type StoragePort } from '../src/core/saves.ts';
+import { ru } from '../src/i18n/ru.ts';
+import { msg } from './ru-match.ts';
 
 test('Размещение не меняет исходник, запрещает занятую клетку/вырез и поддерживает один шаг отмены', () => {
   const first = startSeason(newProfile(),123);
   const placed = editLayout(first,{type:'place',kind:'carnation',to:{q:0,r:0}});
   assert.deepEqual(first.season!.layout,{objects:[],undo:null});
-  assert.throws(() => editLayout(placed,{type:'place',kind:'lamp',to:{q:0,r:0}}),/занята/);
-  assert.throws(() => editLayout(placed,{type:'place',kind:'lamp',to:{q:0,r:-2}}),/предел/);
+  assert.throws(() => editLayout(placed,{type:'place',kind:'lamp',to:{q:0,r:0}}),msg(ru.errors.cellBusy));
+  assert.throws(() => editLayout(placed,{type:'place',kind:'lamp',to:{q:0,r:-2}}),msg(ru.errors.cellOutside));
   const moved = editLayout(placed,{type:'move',from:{q:0,r:0},to:{q:1,r:0}});
   assert.equal(moved.season!.layout.objects[0]!.adaptation,1);
   assert.deepEqual(editLayout(moved,{type:'undo'}).season!.layout.objects,placed.season!.layout.objects);

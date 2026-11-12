@@ -1,3 +1,4 @@
+import { ru } from '../i18n/ru.ts';
 import { neighbors, sameCell, type Cell, type FieldSize } from './field.ts';
 import { isPlant, waterPlant, type PlantKind, type PlacedObject } from './layout.ts';
 import { plantConditions } from './conditions.ts';
@@ -22,7 +23,7 @@ export function growDay(objects: readonly PlacedObject[], plants: readonly Plant
   const living=livingObjects(objects,plants);
   const next=plants.map(plant=>{
     const object=objects.find(o=>sameCell(o,plant));
-    if(!object || !isPlant(object.kind))throw Error('Растение не найдено на поле.');
+    if(!object || !isPlant(object.kind))throw Error(ru.errors.plantNotOnField);
     if(plant.wilt===3)return {...plant};
     const conditions=plantConditions(living,plant,fx,size)!;
     const waterRequired = waterPlant(object.kind) !== hasGlobal(fx, 'P1', object.kind);
@@ -53,8 +54,8 @@ export function cutPlant(objects: readonly PlacedObject[], plants: readonly Plan
 } {
   const object=objects.find(o=>sameCell(o,cell));
   const plant=plants.find(p=>sameCell(p,cell));
-  if(!object || !isPlant(object.kind) || !plant)throw Error('Растение не найдено.');
-  if(plant.wilt===3 || plant.yield===0)throw Error('Срезать можно только готовое живое растение.');
+  if(!object || !isPlant(object.kind) || !plant)throw Error(ru.errors.plantNotFound);
+  if(plant.wilt===3 || plant.yield===0)throw Error(ru.errors.cutOnlyReady);
   return {kind:object.kind,amount:plant.yield,plants:plants.map(p=>p===plant?{
     ...p,growth:0,growthDays:0,bonus:true,supportBonus:true,yield:0,
   }:{...p})};

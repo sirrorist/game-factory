@@ -11,12 +11,13 @@ import { isGameState } from '../src/core/state.ts';
 import { fitField, toScreen } from '../src/core/camera.ts';
 import { cellCenter } from '../src/core/field.ts';
 import { moduleFixture } from './stage5-fixtures.ts';
+import { ru } from '../src/i18n/ru.ts';
 
 const data=resolve(process.argv[2]??'/tmp/gf-bouquet-release-20261105');
 const out=resolve(import.meta.dirname,'../artifacts/object-modules-2026-11-05/package-check');
 await mkdir(out,{recursive:true});
 const registry=JSON.parse(await readFile(resolve(data,'registry.json'),'utf8'));
-assert.equal(registry.games.length,1);assert.equal(registry.games[0].version,'1.0.0');
+assert.equal(registry.games.length,1);assert.equal(registry.games[0].version,'1.0.1');
 let gameOrigin='';
 const hub=mockHub(()=>({gameId:'bouquet-season',gameOrigin}));
 const hubPort=await listen(hub),hubOrigin=`http://localhost:${hubPort}`;
@@ -67,7 +68,7 @@ try{
   const context=await browser.newContext({viewport:{width:1920,height:1080}}),page=await context.newPage(),errors:string[]=[];
   page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
   await page.goto(gameOrigin);await page.locator('html[data-gf-ready]').waitFor({state:'attached'});await settled(page.mainFrame());await press(page.mainFrame(),'start',false);
-  assert.ok(await page.evaluate(key=>localStorage.getItem(key),localKey));assert.ok((await page.locator('#storage-status').textContent())!.startsWith('Самостоятельный запуск'));assert.deepEqual(errors,[]);
+  assert.ok(await page.evaluate(key=>localStorage.getItem(key),localKey));assert.ok((await page.locator('#storage-status').textContent())!.startsWith(ru.saves.status.hostStandalone));assert.deepEqual(errors,[]);
   report.checks.push({case:'standalone-packaged-start',errors});await context.close();report.complete=true;
 }catch(error){report.errors.push(error instanceof Error?error.stack??error.message:String(error));process.exitCode=1;}
 finally{await browser.close();await close(play.server);await close(hub);report.hashes['test/package-browser.ts']=sha(await readFile(import.meta.filename));report.hashes['game.json']=sha(await readFile(resolve(import.meta.dirname,'../game.json')));await writeFile(resolve(out,'report.json'),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report,null,2));}

@@ -19,6 +19,7 @@ import {moduleFixture,eventFixture,moduleRewardFixture,noCalendarRequestFixture}
 import {startEvents} from '../src/core/events.ts';
 import {orderCandidates} from '../src/core/orders.ts';
 import { submitOrder,acceptOrder,chooseReward,closeDay } from '../src/core/calendar.ts';
+import { ru } from '../src/i18n/ru.ts';
 
 // BOUQUET_DIST - отдельная сборка, чтобы параллельная пересборка dist не ломала прогон.
 const root = resolve(process.env.BOUQUET_DIST ?? resolve(import.meta.dirname, '../dist'));
@@ -240,30 +241,30 @@ try {
       const key = KEY_STATES.has(name);
       if (!full && !key) return;
       await settled(page);
-      const headings: Record<string, string> = { menu: 'Ваша мастерская', workshop: 'День 1 · Подготовка', settings: 'Настройки', recovery: 'Восстановление', 'restore-confirm': 'Восстановить копию?', 'save-error': 'Прогресс в памяти', 'corrupt-current': 'Восстановление', 'restore-save-error': 'Прогресс в памяти', 'corrupt-both': 'Восстановление', 'reset-confirm': 'Создать новый профиль?', nonpersistent: 'Нужно постоянное хранение', 'nonpersistent-recovery': 'Нужно постоянное хранение', f3: 'Ваша мастерская', equipped:'День 1 · Подготовка', catalog:'Каталог', object:'Гвоздика', 'remove-confirm':'Удалить растение?', placed:'День 1 · Подготовка', moved:'День 1 · Подготовка', 'placement-error':'Прогресс в памяти', 'undo-reloaded':'День 1 · Подготовка', 'camera-gesture':'День 1 · Подготовка', 'menu-closed': 'Мастерская · Между сезонами', 'reduced-motion': 'Настройки' };
-      headings['conditions-card']='Гвоздика';headings['context-catalog']='Каталог';
-      if(name.endsWith('-card'))headings[name]='Гвоздика';
-      headings['harvest-save-error']='Прогресс в памяти';
-      headings['notice-queue']='Ваша мастерская';
-      for(const name of ['orders-offers','orders-active','orders-ready','orders-final-offers','orders-final-active','orders-empty','orders-unproven'])headings[name]='Доска заказов';
-      headings['orders-pending']='Выберите улучшение';headings['orders-five-pending']='Выберите улучшение';
-      headings['orders-victory']='Сезон завершён: победа';
-      for(const name of ['orders-calendar-loss','orders-reputation-loss','orders-surrendered'])headings[name]='Сезон завершён: поражение';
-      headings['orders-surrender-confirm']='Закончить сезон поражением?';
-      for(const n of ['orders-events','orders-events-active','orders-fair-minimum','orders-fair-bonus-done','orders-event-waiting','orders-event-late','orders-event-no-calendar','orders-story-complete'])headings[n]='Просьбы и ярмарка';
-      for(const n of ['orders-modules','orders-module-installed','orders-module-detached','orders-effects-empty'])headings[n]='Сезонные улучшения';
-      headings['orders-module-target']='Установить модуль';headings['orders-p1-catalog']='Каталог';headings['orders-p1-object']='Гвоздика';
-      for(const n of ['orders-module-choice','orders-urgent-reward','orders-fair-reward'])headings[n]='Выберите улучшение';
-      headings['orders-choice-error']='Прогресс в памяти';
-      headings['orders-spend-confirm']='Потратить общий запас?';
-      headings['orders-day-error']='Прогресс в памяти';headings['orders-submit-error']='Прогресс в памяти';
-      Object.assign(headings,{'orders-shop-locked':'Развитие мастерской','orders-shop-funded':'Развитие мастерской','orders-shop-rose':'Развитие мастерской','orders-shop-all':'Развитие мастерской','orders-shop-season':'Развитие мастерской','orders-buy-error':'Прогресс в памяти','orders-expanded-catalog':'Каталог','orders-rose-card':'Роза','orders-tulip-card':'Тюльпан','orders-gerbera-card':'Гербера','orders-lily-card':'Лилия','orders-parallel':'Доска заказов','orders-parallel-pending':'Выберите улучшение','orders-parallel-resume':'Доска заказов','orders-existing-offers-pending':'Выберите улучшение','orders-existing-offers-resume':'Доска заказов','orders-two-events':'Просьбы и ярмарка','orders-tutorial-accept':'Подсказка: Выберите настоящий заказ','orders-tutorial-care':'Подсказка: Обеспечьте уход','orders-tutorial-cut':'Подсказка: Срежьте готовые цветы'});
+      const headings: Record<string, string> = { menu: ru.ui.menu.title, workshop: ru.ui.hud.dayHeading(1, true), settings: ru.ui.settings.title, recovery: ru.saves.recovery.title, 'restore-confirm': ru.saves.restore.title, 'save-error': ru.saves.pending.title, 'corrupt-current': ru.saves.recovery.title, 'restore-save-error': ru.saves.pending.title, 'corrupt-both': ru.saves.recovery.title, 'reset-confirm': ru.saves.reset.title, nonpersistent: ru.saves.nonPersistent.title, 'nonpersistent-recovery': ru.saves.nonPersistent.title, f3: ru.ui.menu.title, equipped:ru.ui.hud.dayHeading(1, true), catalog:ru.field.catalog.title, object:ru.field.names.carnation, 'remove-confirm':ru.field.remove.title, placed:ru.ui.hud.dayHeading(1, true), moved:ru.ui.hud.dayHeading(1, true), 'placement-error':ru.saves.pending.title, 'undo-reloaded':ru.ui.hud.dayHeading(1, true), 'camera-gesture':ru.ui.hud.dayHeading(1, true), 'menu-closed': ru.ui.hud.seasonBetween, 'reduced-motion': ru.ui.settings.title };
+      headings['conditions-card']=ru.field.names.carnation;headings['context-catalog']=ru.field.catalog.title;
+      if(name.endsWith('-card'))headings[name]=ru.field.names.carnation;
+      headings['harvest-save-error']=ru.saves.pending.title;
+      headings['notice-queue']=ru.ui.menu.title;
+      for(const name of ['orders-offers','orders-active','orders-ready','orders-final-offers','orders-final-active','orders-empty','orders-unproven'])headings[name]=ru.orders.board.title;
+      headings['orders-pending']=ru.orders.reward.title;headings['orders-five-pending']=ru.orders.reward.title;
+      headings['orders-victory']=ru.orders.result.win;
+      for(const name of ['orders-calendar-loss','orders-reputation-loss','orders-surrendered'])headings[name]=ru.orders.result.loss;
+      headings['orders-surrender-confirm']=ru.orders.surrender.title;
+      for(const n of ['orders-events','orders-events-active','orders-fair-minimum','orders-fair-bonus-done','orders-event-waiting','orders-event-late','orders-event-no-calendar','orders-story-complete'])headings[n]=ru.ui.common.eventsAndFair;
+      for(const n of ['orders-modules','orders-module-installed','orders-module-detached','orders-effects-empty'])headings[n]=ru.effects.list.title;
+      headings['orders-module-target']=ru.effects.attach.title;headings['orders-p1-catalog']=ru.field.catalog.title;headings['orders-p1-object']=ru.field.names.carnation;
+      for(const n of ['orders-module-choice','orders-urgent-reward','orders-fair-reward'])headings[n]=ru.orders.reward.title;
+      headings['orders-choice-error']=ru.saves.pending.title;
+      headings['orders-spend-confirm']=ru.orders.spend.title;
+      headings['orders-day-error']=ru.saves.pending.title;headings['orders-submit-error']=ru.saves.pending.title;
+      Object.assign(headings,{'orders-shop-locked':ru.shop.screen.title,'orders-shop-funded':ru.shop.screen.title,'orders-shop-rose':ru.shop.screen.title,'orders-shop-all':ru.shop.screen.title,'orders-shop-season':ru.shop.screen.title,'orders-buy-error':ru.saves.pending.title,'orders-expanded-catalog':ru.field.catalog.title,'orders-rose-card':ru.field.names.rose,'orders-tulip-card':ru.field.names.tulip,'orders-gerbera-card':ru.field.names.gerbera,'orders-lily-card':ru.field.names.lily,'orders-parallel':ru.orders.board.title,'orders-parallel-pending':ru.orders.reward.title,'orders-parallel-resume':ru.orders.board.title,'orders-existing-offers-pending':ru.orders.reward.title,'orders-existing-offers-resume':ru.orders.board.title,'orders-two-events':ru.ui.common.eventsAndFair,'orders-tutorial-accept':ru.tutorial.panelTitle(ru.tutorial.tips.accept.title),'orders-tutorial-care':ru.tutorial.panelTitle(ru.tutorial.tips.care.title),'orders-tutorial-cut':ru.tutorial.panelTitle(ru.tutorial.tips.cut.title)});
       const closed=await page.locator('#drawer-layer').getAttribute('data-state')==='closed';
-      Object.assign(headings,{'orders-object-module-card':'Гвоздика','orders-object-module-free':'Модуль: Гвоздика','orders-object-module-occupied':'Модуль: Гвоздика','orders-object-module-empty':'Модуль: Гвоздика','orders-object-module-transfer':'Модуль: Гвоздика','orders-object-module-device':'Модуль: Лампа','orders-object-module-device-installed':'Лампа','orders-object-module-installed':'Гвоздика','orders-object-module-error':'Прогресс в памяти','orders-object-module-retried':'Гвоздика'});
+      Object.assign(headings,{'orders-object-module-card':ru.field.names.carnation,'orders-object-module-free':ru.effects.object.title(ru.field.names.carnation),'orders-object-module-occupied':ru.effects.object.title(ru.field.names.carnation),'orders-object-module-empty':ru.effects.object.title(ru.field.names.carnation),'orders-object-module-transfer':ru.effects.object.title(ru.field.names.carnation),'orders-object-module-device':ru.effects.object.title(ru.field.names.lamp),'orders-object-module-device-installed':ru.field.names.lamp,'orders-object-module-installed':ru.field.names.carnation,'orders-object-module-error':ru.saves.pending.title,'orders-object-module-retried':ru.field.names.carnation});
       const normalReading = !closed && name.startsWith('orders-') ? await checkPanelReading(page) : null;
       assert.equal(closed,name.endsWith('-board') || ['workshop','placed','moved','undo-reloaded','camera-gesture','zone-preview','equipped','full-field','field-f3','menu-closed','hover-flower','hover-neighbor','lamp-zone','sprinkler-zone','right-cancel','context-placed'].includes(name),`${profile.id}/${name}: неверно открыта/закрыта панель`);
       if(closed){
-        const expected=name==='menu-closed'?'Мастерская · Между сезонами':name.endsWith('-board')?`День ${expectedDay} · ${expectedDay===1?'Подготовка':'Выращивание'}`:'День 1 · Подготовка';
+        const expected=name==='menu-closed'?ru.ui.hud.seasonBetween:name.endsWith('-board')?ru.ui.hud.dayHeading(expectedDay, expectedDay===1):ru.ui.hud.dayHeading(1, true);
         assert.ok((await page.locator('#season-status').textContent())?.startsWith(expected),`${profile.id}/${name}: не тот экран поля`);
       }else assert.equal(await page.getByRole('heading', { name: headings[name], exact: true }).count(), 1, `${profile.id}/${name}: не тот экран`);
       const metrics = await page.evaluate(() => {
@@ -426,10 +427,10 @@ try {
     assert.ok(await page.locator('[data-action="start"]').isEnabled());
     await capture('menu');
     assert.equal(await page.locator('.controls-help').isVisible(),true,'управление доступно в обычном меню');
-    assert.ok((await page.locator('.controls-help').textContent())!.includes(profile.touch?'двумя пальцами':'WASD'));
+    assert.ok((await page.locator('.controls-help').textContent())!.includes(profile.touch?ru.ui.hud.controlsTouch:ru.ui.hud.controlsMouse));
     await click(page, 'start');
     assert.equal(await page.locator('#next-day-button').isDisabled(),true,'без активного заказа день заблокирован');
-    assert.equal(await page.locator('#stock-status').textContent(),'Срезано · Гвоздики: 0 · Хризантемы: 0');
+    assert.equal(await page.locator('#stock-status').textContent(),ru.field.stockLine(`${ru.field.stockItem(ru.field.flowersPlural.carnation,0)} · ${ru.field.stockItem(ru.field.flowersPlural.chrysanthemum,0)}`));
     await capture('workshop');
     await toolbar(page,'catalog-button');await capture('catalog');
     await click(page,'pick-carnation');
@@ -514,11 +515,11 @@ try {
     assert.equal((await layout(page) as {objects:unknown[]}).objects.length,4);
     await toolbar(page,'cancel-placement');
     await tapCell(page,{q:-1,r:0});
-    assert.ok((await page.locator('.plant-conditions').textContent())!.includes('Свет: есть · 💧 Полив: нет'));
-    assert.ok((await page.locator('.panel-content').textContent())!.includes('Адаптация · 1 день'));
+    assert.ok((await page.locator('.plant-conditions').textContent())!.includes(ru.field.card.conditionsLine(true,false)));
+    assert.ok((await page.locator('.panel-content').textContent())!.includes(ru.field.card.healthAdaptation));
     await capture('conditions-card');await click(page,'continue');
     await tapCell(page,{q:0,r:1});
-    assert.ok((await page.locator('.plant-conditions').textContent())!.includes('Свет: есть · 💧 Полив: есть'));
+    assert.ok((await page.locator('.plant-conditions').textContent())!.includes(ru.field.card.conditionsLine(true,true)));
     await click(page,'continue');
     // Подсветка собственной и верхней соседней клетки не меняет ни одного пикселя лепестков.
     const flower=await fieldPoint(page,{q:-1,r:0}),next=await fieldPoint(page,{q:0,r:0});
@@ -596,7 +597,7 @@ try {
     await capture('right-cancel');
     assert.equal(await page.locator('#drawer-layer').getAttribute('data-state'),'closed');
     await rightEmpty();await capture('context-catalog');
-    assert.ok((await page.locator('.catalog-note').textContent())!.includes('на выбранную клетку'));
+    assert.ok((await page.locator('.catalog-note').textContent())!.includes(ru.field.catalog.noteTarget));
     await page.keyboard.press('Escape');await settled(page);
     assert.deepEqual(await page.evaluate(([a,b])=>[localStorage.getItem(a!),localStorage.getItem(b!)],[currentKey,previousKey]),copiesBeforeContext);
     await page.mouse.click(flower.x,flower.y,{button:'right'});await settled(page);
@@ -642,7 +643,7 @@ try {
     const beforeRotation=await page.evaluate(key=>localStorage.getItem(key),currentKey);
     await page.setViewportSize({width:profile.height,height:profile.width});await page.waitForTimeout(150);
     await toolbar(page,'overview-button');await tapCell(page,{q:-1,r:0});
-    await page.getByRole('heading',{name:'Гвоздика',exact:true}).waitFor();await click(page,'continue');
+    await page.getByRole('heading',{name:ru.field.names.carnation,exact:true}).waitFor();await click(page,'continue');
     assert.equal(await page.evaluate(key=>localStorage.getItem(key),currentKey),beforeRotation,'поворот и выбор объекта не меняют расстановку');
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     await page.setViewportSize({width:profile.width,height:profile.height});await page.waitForTimeout(150);
@@ -650,7 +651,7 @@ try {
     assert.ok(original);
     await page.reload();
     await ready(page);
-    await page.getByRole('heading', { name: 'День 1 · Подготовка' }).waitFor();
+    await page.getByRole('heading', { name: ru.ui.hud.dayHeading(1, true) }).waitFor();
     assert.equal(await page.evaluate(key => localStorage.getItem(key), currentKey), original);
     await click(page, 'menu');
     await click(page, 'settings');
@@ -703,7 +704,7 @@ try {
     await capture('restore-save-error');
     await restoreWrites(page);
     await click(page, 'retry-save');
-    await page.getByRole('heading', { name: 'День 1 · Подготовка' }).waitFor();
+    await page.getByRole('heading', { name: ru.ui.hud.dayHeading(1, true) }).waitFor();
     // Обе копии повреждены: до явного подтверждения ничего не записывается.
     await page.evaluate(([a, b]) => { localStorage.setItem(a!, '{сломано'); localStorage.setItem(b!, '{сломано'); }, [currentKey, previousKey]);
     await page.reload(); await ready(page);
@@ -714,7 +715,7 @@ try {
     await click(page, 'reset-confirm');
     await capture('reset-confirm');
     await page.keyboard.press('Escape'); await settled(page);
-    await page.getByRole('heading', { name: 'Восстановление', exact: true }).waitFor();
+    await page.getByRole('heading', { name: ru.saves.recovery.title, exact: true }).waitFor();
     assert.equal(await page.evaluate(key => localStorage.getItem(key), currentKey), '{сломано');
     assert.equal(await page.evaluate(key => localStorage.getItem(key), previousKey), '{сломано');
     await click(page, 'reset-confirm');
@@ -802,7 +803,7 @@ try {
     assert.equal(await page.locator('#panel').evaluate(element => element.getAnimations().filter(a => a.playState === 'running').length), 0);
     await page.setViewportSize({ width: profile.height, height: profile.width });
     await page.waitForTimeout(150);
-    await page.getByRole('heading', { name: 'Ваша мастерская' }).waitFor();
+    await page.getByRole('heading', { name: ru.ui.menu.title }).waitFor();
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     assert.ok(Math.abs(await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).fontSize)) - 16 * Math.max(1, profile.height / 1920)) < .02, 'масштаб после resize');
     await page.setViewportSize({width:profile.width,height:profile.height});
@@ -872,11 +873,11 @@ try {
     if(full){
     const ripe=enterGrowthDay(stageOne);
     await install(stageOne);await capture('growth-board');await tapCell(page,{q:0,r:0});await capture('growth-card');
-    assert.ok((await page.locator('.plant-growth').textContent())!.includes('Рост: 2 / 4'));
+    assert.ok((await page.locator('.plant-growth').textContent())!.includes(ru.field.card.growthLine(2,0).split(' · ')[0]));
     assert.equal(await page.locator('[data-action="harvest"]').isDisabled(),true);
     await install(ripe);await capture('ready-board');
     await dragCell(page,{q:0,r:0},{q:1,r:-1});await tapCell(page,{q:1,r:-1});await capture('grown-moved-card');
-    assert.ok((await page.locator('.plant-growth').textContent())!.includes('Готово к срезке: 3'));
+    assert.ok((await page.locator('.plant-growth').textContent())!.includes(ru.field.card.phaseReady(3)));
     const movedCrop=(await savedState()).season!.garden.plants.find(p=>sameCell(p,{q:1,r:-1}))!;
     assert.equal(movedCrop.growth,8);assert.equal(movedCrop.yield,3);
     await click(page,'continue');await page.reload();await ready(page);await toolbar(page,'undo-button');
@@ -887,7 +888,7 @@ try {
     assert.equal(await page.locator('#undo-button').isDisabled(),true);
     await click(page,'continue');await capture('harvested-board');await page.reload();await ready(page);
     assert.equal((await savedState()).season!.garden.stock.carnation,3);
-    assert.ok((await page.locator('#stock-status').textContent())!.includes('Гвоздики: 3'));
+    assert.ok((await page.locator('#stock-status').textContent())!.includes(ru.field.stockItem(ru.field.flowersPlural.carnation,3)));
     await install(ripe);await tapCell(page,{q:0,r:0});await failWrites(page);await click(page,'harvest');await capture('harvest-save-error');
     assert.equal((await savedState()).season!.garden.stock.carnation,0,'ошибка не подтверждает запись запаса');
     await restoreWrites(page);await click(page,'retry-save');await capture('harvest-retried-card');
@@ -906,19 +907,19 @@ try {
     for(const [board,card] of [['wilt-warning-board','wilt-warning-card'],['wilt-danger-board','wilt-danger-card'],['dead-board','dead-card']] as const){
       dry=enterGrowthDay(dry);await install(dry);await capture(board);await tapCell(page,{q:0,r:0});await capture(card);
       assert.equal(await page.locator('[data-action="harvest"]').isDisabled(),true);
-      assert.ok((await page.locator('.plant-health').textContent())!.includes(card==='dead-card'?'не восстановится':`${dry.season!.garden.plants[0]!.wilt} из 3`));
+      assert.ok((await page.locator('.plant-health').textContent())!.includes(card==='dead-card'?ru.field.card.healthDead:ru.field.card.healthWilting(dry.season!.garden.plants[0]!.wilt)));
       if(card==='dead-card'){
-        assert.ok((await page.locator('.plant-growth').textContent())!.includes('Урожай потерян. Срезка недоступна.'));
-        assert.ok(!(await page.locator('.plant-growth').textContent())!.includes('Срезка: 2'));
+        assert.ok((await page.locator('.plant-growth').textContent())!.includes(ru.field.card.yieldLost));
+        assert.ok(!(await page.locator('.plant-growth').textContent())!.includes(ru.field.card.cutLine('x').split('x')[0]));
       }
     }
     const damaged=enterGrowthDay(editLayout(startSeason(newProfile(),44),{type:'place',kind:'carnation',to:{q:0,r:0}}));
     const recovered=enterGrowthDay(editLayout(damaged,{type:'place',kind:'sprinkler',to:{q:1,r:0}}));
     await install(recovered);await capture('recovery-board');await tapCell(page,{q:0,r:0});await capture('recovery-card');
-    assert.ok((await page.locator('.plant-health').textContent())!.includes('Восстановление'));
+    assert.ok((await page.locator('.plant-health').textContent())!.includes(ru.saves.recovery.title));
     const adapted=editLayout(stageOne,{type:'move',from:{q:0,r:0},to:{q:1,r:-1}});
     await install(adapted);await capture('adaptation-board');await tapCell(page,{q:1,r:-1});await capture('adaptation-card');
-    assert.ok((await page.locator('.plant-health').textContent())!.includes('Адаптация'));
+    assert.ok((await page.locator('.plant-health').textContent())!.includes(ru.field.card.healthAdaptation));
     let ripeWilt=editLayout(ripe,{type:'remove',from:{q:1,r:0}});ripeWilt=enterGrowthDay(enterGrowthDay(ripeWilt));
     await install(ripeWilt);await capture('ripe-wilt-board');await tapCell(page,{q:0,r:0});await capture('ripe-wilt-card');
     assert.equal(await page.locator('[data-action="harvest"]').isEnabled(),true);await click(page,'harvest');
@@ -1008,7 +1009,7 @@ try {
     assert.ok(ripeNow>0,'к дню сдачи есть готовые растения');
     assert.equal(await page.locator('#harvest-count').textContent(),String(ripeNow),'счётчик равен числу готовых растений');
     assert.equal(await page.locator('#harvest-button').isDisabled(),false,'кнопка срезки активна');
-    assert.equal(await page.locator('#harvest-button').getAttribute('aria-label'),`Срезать готовые: ${ripeNow}`);
+    assert.equal(await page.locator('#harvest-button').getAttribute('aria-label'),ru.field.harvestAria(ripeNow));
     const harvestBox=await page.locator('#harvest-button').boundingBox(),rootPx=await page.evaluate(()=>parseFloat(getComputedStyle(document.documentElement).fontSize));
     assert.ok(harvestBox!.height>=3*rootPx-.5&&harvestBox!.width>=3*rootPx-.5&&harvestBox!.x>=0&&harvestBox!.x+harvestBox!.width<=profile.width,'кнопка срезки: цель ≥3rem и в экране');
     await toolbar(page,'harvest-button');
@@ -1020,7 +1021,7 @@ try {
     assert.equal(await deliver.isDisabled(),false);
     await failWrites(page);
     await deliver.evaluate(button=>{button.dispatchEvent(new MouseEvent('click',{bubbles:true}));button.dispatchEvent(new MouseEvent('click',{bubbles:true}));});
-    await page.getByRole('heading',{name:'Прогресс в памяти',exact:true}).waitFor();await capture('orders-submit-error');
+    await page.getByRole('heading',{name:ru.saves.pending.title,exact:true}).waitFor();await capture('orders-submit-error');
     await restoreWrites(page);await click(page,'retry-save');await capture('orders-pending');
     let pendingState=await savedState();assert.ok(pendingState.season!.board.pending);
     assert.equal(pendingState.profile.experience,planted.state.season!.board.offers[0]!.experience);
@@ -1066,7 +1067,7 @@ try {
     assert.equal((await savedState()).season!.board.pending,null);assert.equal((await savedState()).season!.effects.modules.length,1);
     await toolbar(page,'orders-button');await panelAction('modules');await capture('orders-modules');
     await panelAction('module-1');await capture('orders-module-target');
-    assert.ok((await page.locator('.panel-content').textContent())!.includes('Сначала разместите'));
+    assert.ok((await page.locator('.panel-content').textContent())!.includes(ru.effects.attach.noTargets));
     await panelAction('continue');await toolbar(page,'catalog-button');await click(page,'pick-carnation');await tapCell(page,{q:0,r:0});
     await toolbar(page,'orders-button');await panelAction('modules');await panelAction('module-1');await panelAction('attach-0,0');await capture('orders-module-installed');
     await page.reload();await ready(page);assert.deepEqual((await savedState()).season!.effects.modules[0]!.at,{q:0,r:0});
@@ -1076,9 +1077,9 @@ try {
     await toolbar(page,'orders-button');await panelAction('modules');await panelAction('detach-1');await capture('orders-module-detached');
     assert.equal((await savedState()).season!.effects.modules[0]!.at,null);
     await install(moduleFixture());await toolbar(page,'catalog-button');await capture('orders-p1-catalog');
-    assert.ok((await page.locator('[data-action="pick-carnation"]').textContent())!.includes('Нужен свет'));
+    assert.ok((await page.locator('[data-action="pick-carnation"]').textContent())!.includes(ru.field.care.lightFirst));
     await panelAction('continue');await tapCell(page,{q:0,r:0});await capture('orders-p1-object');
-    assert.ok((await page.locator('.plant-info').textContent())!.includes('Нужен свет'));await panelAction('continue');
+    assert.ok((await page.locator('.plant-info').textContent())!.includes(ru.field.care.lightFirst));await panelAction('continue');
     await toolbar(page,'orders-button');await panelAction('modules');await panelAction('module-2');await panelAction('attach-0,-1');
     await panelAction('continue');await page.mouse.move((await fieldPoint(page,{q:0,r:-1})).x,(await fieldPoint(page,{q:0,r:-1})).y);await capture('module-zone-board');
     await install(eventFixture());await toolbar(page,'orders-button');await panelAction('events');await capture('orders-events');
@@ -1106,14 +1107,14 @@ try {
     await panelAction('object-detach');assert.equal((await savedState()).season!.effects.modules[0]!.at,null);
     assert.equal(await page.locator('[data-action="object-module-3"]').isEnabled(),true);await panelAction('object-module-3');
     assert.deepEqual((await savedState()).season!.effects.modules[2]!.at,{q:0,r:0});
-    await page.reload();await ready(page);await tapCell(page,{q:0,r:0});assert.ok((await page.locator('.panel-content').textContent())!.includes('Смешанная клумба'));
+    await page.reload();await ready(page);await tapCell(page,{q:0,r:0});assert.ok((await page.locator('.panel-content').textContent())!.includes(ru.effects.items.P4.name));
     const sourceModule=installModule(moduleFixture(),1,{q:-1,r:0});await install(sourceModule);await tapCell(page,{q:0,r:0});await panelAction('object-modules');await capture('orders-object-module-transfer');
-    assert.ok((await page.locator('.panel-content').textContent())!.includes('прежний объект останется без модуля'));
+    assert.ok((await page.locator('.panel-content').textContent())!.includes(ru.effects.object.location('','').split('. ')[1]!));
     await panelAction('object-module-1');assert.deepEqual((await savedState()).season!.effects.modules[0]!.at,{q:0,r:0});
     await install(moduleFixture());await tapCell(page,{q:0,r:-1});await panelAction('object-modules');await capture('orders-object-module-device');
     assert.equal(await page.locator('[data-action="object-module-1"]').count(),0,'растительный модуль не предлагается лампе');
     await panelAction('object-module-2');await capture('orders-object-module-device-installed');assert.deepEqual((await savedState()).season!.effects.modules[1]!.at,{q:0,r:-1});
-    await page.reload();await ready(page);await tapCell(page,{q:0,r:-1});assert.ok((await page.locator('.panel-content').textContent())!.includes('Кольцевая насадка'));
+    await page.reload();await ready(page);await tapCell(page,{q:0,r:-1});assert.ok((await page.locator('.panel-content').textContent())!.includes(ru.effects.items.E5.name));
     const emptyModules=moduleFixture();emptyModules.season!.effects.modules=[];assert.ok(isGameState(emptyModules));
     await install(emptyModules);await tapCell(page,{q:0,r:0});await panelAction('object-modules');await capture('orders-object-module-empty');
     assert.equal(await page.locator('[data-action^="object-module-"]').count(),0);
@@ -1152,7 +1153,7 @@ try {
     for(const item of PURCHASES.filter(p=>p.id!=='rose'))await panelAction(`buy-${item.id}`);
     await capture('orders-shop-all');assert.equal((await savedState()).profile.coins,220);
     await panelAction('start');await capture('expanded-board');
-    assert.equal(await page.locator('canvas').getAttribute('aria-label'),'Поле оранжереи: 37 клеток');
+    assert.equal(await page.locator('canvas').getAttribute('aria-label'),ru.field.canvasLabel(37));
     await toolbar(page,'catalog-button');await capture('orders-expanded-catalog');
     assert.equal(await page.locator('.catalog-grid button').count(),8);
     await panelAction('continue');await click(page,'menu');await panelAction('shop');await capture('orders-shop-season');
@@ -1343,7 +1344,7 @@ try {
     state.failSave = true;
   });
   await click(iframe, 'start');
-  await frame.getByRole('heading', { name: 'Прогресс в памяти' }).waitFor();
+  await frame.getByRole('heading', { name: ru.saves.pending.title }).waitFor();
   await click(iframe, 'retry-save');
   assert.equal(await frame.locator('[data-action="retry-save"]').count(), 1, 'ошибка хаба должна оставлять паузу');
   assert.equal(await iframe.evaluate(key => localStorage.getItem(key), currentKey), null, 'ожидающий прогресс не записывается локально');
@@ -1351,7 +1352,7 @@ try {
   assert.deepEqual(await page.evaluate(() => JSON.parse((window as unknown as { harness: Harness }).harness.records.progress!)), initialRecord);
   await page.evaluate(() => { (window as unknown as { harness: Harness }).harness.failSave = false; });
   await click(iframe, 'retry-save');
-  await frame.getByRole('heading', { name: 'День 1 · Подготовка' }).waitFor();
+  await frame.getByRole('heading', { name: ru.ui.hud.dayHeading(1, true) }).waitFor();
   const accepted = await page.evaluate(() => JSON.parse((window as unknown as { harness: Harness }).harness.records.progress!));
   assert.equal(accepted.revision, 2);
   assert.equal(JSON.parse(accepted.payload).profile.seasonsStarted, 1);
@@ -1359,11 +1360,11 @@ try {
   await page.evaluate(() => { (window as unknown as { harness: Harness }).harness.welcome = true; });
   await iframe.evaluate(() => location.reload());
   await frame.locator('html[data-gf-ready="hub"]').waitFor();
-  await frame.getByRole('heading', { name: 'День 1 · Подготовка' }).waitFor();
+  await frame.getByRole('heading', { name: ru.ui.hud.dayHeading(1, true) }).waitFor();
   // Перечитывание сохранений тоже использует исходный транспорт без fallback в standalone.
   await page.evaluate(() => { (window as unknown as { harness: Harness }).harness.welcome = false; });
   await click(iframe, 'menu'); await click(iframe, 'recovery'); await click(iframe, 'recheck');
-  await frame.getByRole('heading', { name: 'День 1 · Подготовка' }).waitFor();
+  await frame.getByRole('heading', { name: ru.ui.hud.dayHeading(1, true) }).waitFor();
   assert.equal(await page.evaluate(() => (window as unknown as { harness: Harness }).harness.helloCount), 2);
   assert.ok((await frame.locator('#storage-status').textContent())?.includes('Game Factory'));
   report.flows.push('SDK hub в iframe: ready ждёт welcome и оба load; ранний F3; отказ записи без нового welcome оставляет pending и пустой localStorage; успешный повтор пишет revision 2 в исходный хаб; reload и recheck восстанавливают тот же сезон.');

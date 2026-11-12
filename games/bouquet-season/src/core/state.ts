@@ -1,3 +1,4 @@
+import { ru } from '../i18n/ru.ts';
 import { fieldSize, mainSlots, eventSlots, openFlowers, availableKind, isOwned, type PurchaseId } from './shop.ts';
 import { isObjects, changeLayout, type Layout, type LayoutCommand } from './layout.ts';
 import { newGarden, emptyStock, editGarden, isGarden, type Garden } from './garden.ts';
@@ -58,9 +59,9 @@ export function hasGrowthCalendar(s:NonNullable<GameState['season']>,board=s.boa
 }
 
 export function requireSeasonAction(state: GameState): NonNullable<GameState['season']> {
-  if (!state.season) throw Error('Сначала начните сезон.');
-  if (state.season.board.result) throw Error('Сезон уже завершён.');
-  if (state.season.board.pending) throw Error('Сначала завершите выбор улучшения.');
+  if (!state.season) throw Error(ru.errors.seasonNotStarted);
+  if (state.season.board.result) throw Error(ru.errors.seasonFinished);
+  if (state.season.board.pending) throw Error(ru.errors.finishChoiceFirst);
   return state.season;
 }
 
@@ -70,7 +71,7 @@ export function changeSettings(state: GameState, patch: Partial<Settings>): Game
 
 export function editLayout(state: GameState, command: LayoutCommand): GameState {
   const season = requireSeasonAction(state);
-  if(command.type==='place'&&!availableKind(season.access,command.kind))throw Error('Объект ещё не открыт.');
+  if(command.type==='place'&&!availableKind(season.access,command.kind))throw Error(ru.errors.objectNotOpen);
   const layout = changeLayout(season.layout,command,fieldSize(season.access));
   return layout === season.layout ? state : refreshStateOffers({ ...state,season:{ ...season,layout,garden:editGarden(season.garden,command),effects:editEffectBindings(season.effects,command) } });
 }
@@ -79,7 +80,7 @@ export function editLayout(state: GameState, command: LayoutCommand): GameState 
 // и дедлайны. В обычном UI этапа 3 эта функция не вызывается без доски заказов.
 export function enterGrowthDay(state: GameState): GameState {
   requireSeasonAction(state);
-  if(!state.season)throw Error('Сначала начните сезон.');
+  if(!state.season)throw Error(ru.errors.seasonNotStarted);
   if(state.season.day===20)throw Error('Рост дня 21 не допускается.');
   const grown=growDay(state.season.layout.objects,state.season.garden.plants,state.season.effects,fieldSize(state.season.access));
   return {...state,season:{...state.season,day:state.season.day+1,status:'growing',
@@ -87,7 +88,7 @@ export function enterGrowthDay(state: GameState): GameState {
 }
 export function harvest(state: GameState, cell: Cell): GameState {
   requireSeasonAction(state);
-  if(!state.season)throw Error('Сначала начните сезон.');
+  if(!state.season)throw Error(ru.errors.seasonNotStarted);
   const result=cutPlant(state.season.layout.objects,state.season.garden.plants,cell);
   const count=state.season.garden.stock[result.kind]+result.amount;
   if(!Number.isSafeInteger(count))throw Error('Запас цветов превышает допустимое число.');
@@ -175,11 +176,11 @@ export function readState(value: unknown, version: 1|2|3|4|5|6): GameState | nul
 
 export function installModule(state:GameState,id:number,at:Cell|null):GameState {
   const s=requireSeasonAction(state), module=s.effects.modules.find(m=>m.id===id);
-  if(!module)throw Error('Модуль не найден.');
+  if(!module)throw Error(ru.errors.moduleNotFound);
   if(at) {
     const obj=s.layout.objects.find(o=>sameCell(o,at));
-    if(!obj || !compatible(module.effect,obj.kind))throw Error('Модуль не подходит этому объекту.');
-    if(s.effects.modules.some(m=>m.id!==id&&m.at&&sameCell(m.at,at)))throw Error('Слот занят. Сначала снимите установленный модуль.');
+    if(!obj || !compatible(module.effect,obj.kind))throw Error(ru.errors.moduleIncompatible);
+    if(s.effects.modules.some(m=>m.id!==id&&m.at&&sameCell(m.at,at)))throw Error(ru.errors.slotBusy);
   }
   if(at===null&&module.at===null || at&&module.at&&sameCell(at,module.at))return state;
   return refreshStateOffers({...state,season:{...s,layout:{...s.layout,undo:null},garden:{...s.garden,undo:null},effects:{...s.effects,undo:null,modules:s.effects.modules.map(m=>m.id===id?{...m,at:at&&{...at}}:m)}}});

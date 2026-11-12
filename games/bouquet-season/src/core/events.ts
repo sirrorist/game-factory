@@ -1,3 +1,4 @@
+import { ru } from '../i18n/ru.ts';
 import { nextRandom, portions, OPEN_FLOWERS, type FlowerKind, type Order } from './orders.ts';
 import { findProductionPlan, type ProductionState, type ProductionGoal } from './planner.ts';
 
@@ -11,7 +12,7 @@ export interface UrgentRequest {
   delivered: number | null;
 }
 export interface EventsState { requests: UrgentRequest[]; fair: { minimum: boolean; bonus: boolean; closed: boolean } }
-export const urgentName = (template: UrgentTemplate): string => ({ U1: 'Подарок ко дню рождения', U2: 'Неожиданный подарок', U3: 'Свадебный букет' })[template];
+export const urgentName = (template: UrgentTemplate): string => ru.events.urgentNames[template];
 export function startEvents(seed: number, day = 1): { events: EventsState; rng: number } {
   let rng = nextRandom(seed); const first = 3 + rng % 3;
   rng = nextRandom(rng); const second = 8 + rng % 3;

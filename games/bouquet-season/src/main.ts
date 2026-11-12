@@ -1,3 +1,4 @@
+import { ru } from './i18n/ru.ts';
 import { purchase, fieldSize, availableKind, openFlowers, accessLevel, type PurchaseId } from './core/shop.ts';
 import { shopMarkup } from './shop-ui.ts';
 import { recordTutorial, tutorialTip } from './core/tutorial.ts';
@@ -24,7 +25,7 @@ const $ = (id: string): HTMLElement => document.getElementById(id)!;
 const button = (action: string, text: string, style = ''): string => `<button data-action="${action}" class="${style}">${text}</button>`;
 const escape = (value: string): string => value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 
-const careDescription=(kind:ObjectKind,fx:EffectsState):string=>isPlant(kind)&&hasGlobal(fx,'P1',kind)?waterPlant(kind)?'Нужен свет · полив ускоряет рост':'Нужен полив · свет ускоряет рост':CATALOG.find(c=>c.kind===kind)!.care;
+const careDescription=(kind:ObjectKind,fx:EffectsState):string=>isPlant(kind)&&hasGlobal(fx,'P1',kind)?waterPlant(kind)?ru.field.care.lightFirst:ru.field.care.waterFirst:CATALOG.find(c=>c.kind===kind)!.care;
 
 async function main(): Promise<void> {
   bindTouchButtons($('app'));
@@ -95,20 +96,20 @@ async function main(): Promise<void> {
     const backup = saves?.backup ?? (copies.previous.status === 'valid' ? copies.previous.record : null);
     const paused = !!saves?.hasPending;
     const controlsText=touch
-      ? 'Выберите объект в каталоге и коснитесь клетки. Перенос — одним пальцем или через карточку объекта. Камера — двумя пальцами. «Всё поле» возвращает обзор.'
-      : 'ЛКМ — выбор и перенос объектов. ПКМ — отмена посадки/переноса; по пустой клетке — каталог для неё. Колесо — масштаб; средняя кнопка, WASD или стрелки — перемещение камеры. «Всё поле» возвращает обзор.';
+      ? ru.ui.hud.controlsTouch
+      : ru.ui.hud.controlsMouse;
     const selectedObject=state?.season?.layout.objects.find(o=>selected&&sameCell(o,selected));
     $('world').classList.toggle('in-season',!!state?.season);
     $('field-tools').hidden=!state?.season;
     $('scene-caption').hidden=!!state?.season;
     const run = state?.season, active = run?.board.active[0];
-    $('placement-status').textContent=fieldTool ? ('kind'in fieldTool ? `${objectName(fieldTool.kind)} · выберите клетку` : 'Перенос · выберите свободную клетку') : active ? `${active.stage===6?'Финал':`Заказ ${active.stage} / 5`} · до конца дня ${active.deadline} · репутация ${run!.reputation} / 3` : 'Выберите основной заказ на доске';
+    $('placement-status').textContent=fieldTool ? ('kind'in fieldTool ? ru.field.placeCell(objectName(fieldTool.kind)) : ru.field.moveCell) : active ? ru.orders.status.active(active.stage===6,active.stage,active.deadline,run!.reputation) : ru.orders.status.pickMain;
     $('orders-button').classList.toggle('primary',!!run && !active);
-    $('next-day-button').textContent=run?.day===20?'Конец дня 20':'Следующий день';
-    $('next-day-button').title=active?'Завершить текущий день: сначала сроки, затем рост следующего дня':'Для перехода дня нужен активный основной заказ';
+    $('next-day-button').textContent=run?.day===20?ru.ui.hud.endDay20:ru.ui.hud.nextDay;
+    $('next-day-button').title=active?ru.ui.hud.nextDayHint:ru.ui.hud.nextDayNeedOrder;
     const stock=state?.season?.garden.stock;
-    $('stock-status').textContent=stock&&run?`Срезано · ${openFlowers(run.access).map(k=>`${flowerName(k)}: ${stock[k]}`).join(' · ')}`:'';
-    const ripe=ripeCount(run);$('harvest-count').textContent=String(ripe);$('harvest-button').setAttribute('aria-label',`Срезать готовые: ${ripe}`);
+    $('stock-status').textContent=stock&&run?ru.field.stockLine(openFlowers(run.access).map(k=>ru.field.stockItem(flowerName(k),stock[k])).join(' · ')):'';
+    const ripe=ripeCount(run);$('harvest-count').textContent=String(ripe);$('harvest-button').setAttribute('aria-label',ru.field.harvestAria(ripe));
     const tip=state&&tutorialTip(state);
     $('tutorial-button').hidden=!tip;
     $('tutorial-button').title=tip?.title??'';
@@ -118,55 +119,55 @@ async function main(): Promise<void> {
     scene?.setState(state??null,fieldTool,['object','object-modules','remove-confirm'].includes(screenName)?selected:null);
     let html = '';
     if (paused) {
-      html = `<h2>Прогресс в памяти</h2><p class="warning">Запись не завершена. Новые действия приостановлены. Не закрывайте эту вкладку.</p><p>${escape(saves?.error ?? 'Сохраняем…')}</p><div class="actions">${button('retry-save', 'Повторить сохранение', 'primary')}</div>`;
+      html = `<h2>${ru.saves.pending.title}</h2><p class="warning">${ru.saves.pending.warning}</p><p>${escape(saves?.error ?? ru.saves.pending.saving)}</p><div class="actions">${button('retry-save', ru.saves.pending.retry, 'primary')}</div>`;
     } else if (!sdk.persistent) {
-      html = `<h2>Нужно постоянное хранение</h2><p class="warning">Сейчас прогресс исчезнет после закрытия вкладки. Начало сезона недоступно.</p><p>Разрешите браузеру сохранять данные и повторите проверку.</p><div class="actions">${button('recheck', 'Проверить ещё раз', 'primary')}${button('recovery', 'Восстановление')}</div>`;
-      if (screenName === 'recovery') html += '<p>Восстановление станет доступно после успешной проверки постоянного хранения.</p>';
+      html = `<h2>${ru.saves.nonPersistent.title}</h2><p class="warning">${ru.saves.nonPersistent.warning}</p><p>${ru.saves.nonPersistent.hint}</p><div class="actions">${button('recheck', ru.saves.nonPersistent.recheck, 'primary')}${button('recovery', ru.saves.recovery.title)}</div>`;
+      if (screenName === 'recovery') html += `<p>${ru.saves.nonPersistent.recoveryLater}</p>`;
     } else if (screenName === 'reset-confirm') {
-      html = `<h2>Создать новый профиль?</h2><p class="warning">Текущий прогресс будет заменён пустым профилем. Старую основную запись восстановить не получится.</p><div class="actions">${button('reset', 'Подтверждаю замену профиля', 'danger')}${button('recovery', 'Отмена')}</div>`;
+      html = `<h2>${ru.saves.reset.title}</h2><p class="warning">${ru.saves.reset.warning}</p><div class="actions">${button('reset', ru.saves.reset.confirm, 'danger')}${button('recovery', ru.ui.common.cancel)}</div>`;
     } else if (screenName === 'restore-confirm' && backup) {
-      html = `<h2>Восстановить копию?</h2><p>Будет восстановлен весь профиль на ${escape(new Date(backup.savedAt).toLocaleString('ru-RU'))}, запись №${backup.revision}. Более поздние действия потеряются. Деньги и награды не суммируются.</p><div class="actions">${button('restore', 'Подтверждаю восстановление', 'primary')}${button('recovery', 'Отмена')}</div>`;
+      html = `<h2>${ru.saves.restore.title}</h2><p>${ru.saves.restore.text(escape(new Date(backup.savedAt).toLocaleString('ru-RU')), backup.revision)}</p><div class="actions">${button('restore', ru.saves.restore.confirm, 'primary')}${button('recovery', ru.ui.common.cancel)}</div>`;
     } else if (screenName === 'recovery' || damaged) {
-      html = `<h2>Восстановление</h2><p>${damaged ? 'Основная запись не читается. Данные оставлены на месте.' : 'Можно вернуться к предыдущей корректной записи.'}</p><p>${backup ? `Предыдущая копия: №${backup.revision}, ${escape(new Date(backup.savedAt).toLocaleString('ru-RU'))}.` : 'Исправная предыдущая копия не найдена.'}</p><div class="actions">${backup ? button('restore-confirm', 'Выбрать копию') : ''}${button('recheck', 'Повторить проверку')}${damaged ? button('reset-confirm', 'Создать новый профиль', 'danger') : button('menu', 'Назад')}</div>`;
+      html = `<h2>${ru.saves.recovery.title}</h2><p>${damaged ? ru.saves.recovery.damaged : ru.saves.recovery.canReturn}</p><p>${backup ? ru.saves.recovery.backup(backup.revision, escape(new Date(backup.savedAt).toLocaleString('ru-RU'))) : ru.saves.recovery.noBackup}</p><div class="actions">${backup ? button('restore-confirm', ru.saves.recovery.pick) : ''}${button('recheck', ru.saves.recovery.recheck)}${damaged ? button('reset-confirm', ru.saves.reset.create, 'danger') : button('menu', ru.ui.common.back)}</div>`;
     } else if(screenName==='shop'&&state){html=shopMarkup(state);
     } else if(screenName==='tutorial'&&state){
-      html=`<h2>Подсказка: ${tip?.title??'Первые шаги завершены'}</h2><p>${tip?.text??'Можно продолжать сезон. Подсказки не меняют заказ и не выдают награды.'}</p><div class="actions">${tip?button(tip.action,tip.label,'primary'):button('continue','К полю')}${button('skip-tutorial','Пропустить обучение')}${button('continue','Вернуться к полю')}</div>`;
+      html=`<h2>${ru.tutorial.panelTitle(tip?.title??ru.tutorial.doneTitle)}</h2><p>${tip?.text??ru.tutorial.doneText}</p><div class="actions">${tip?button(tip.action,tip.label,'primary'):button('continue',ru.ui.common.toField)}${button('skip-tutorial',ru.tutorial.skip)}${button('continue',ru.ui.common.returnToField)}</div>`;
     } else if (screenName === 'orders' && state?.season) {
       html = boardMarkup(state);
     } else if(screenName==='events'&&state?.season){html=eventsMarkup(state);
     } else if(screenName==='modules'&&state?.season){html=modulesMarkup(state,selectedModule);
     } else if(screenName==='spend-confirm'&&spending){
-      html=`<h2>Потратить общий запас?</h2><p class="warning">После этой сдачи другая уже готовая обязательная цель потеряет готовность.</p>${spending.risks.map(r=>`<p><strong>${r.name}</strong><br>Будет не хватать: ${r.missing.map(i=>`${flowerName(i.kind)} — ${i.count}`).join(', ')}.</p>`).join('')}<div class="actions">${button('confirm-spend','Да, сдать и потратить цветы','danger')}${button('cancel-spend','Отмена')}</div>`;
+      html=`<h2>${ru.orders.spend.title}</h2><p class="warning">${ru.orders.spend.warning}</p>${spending.risks.map(r=>ru.orders.spend.risk(r.name,r.missing.map(i=>ru.orders.spend.missingItem(flowerName(i.kind),i.count)).join(', '))).join('')}<div class="actions">${button('confirm-spend',ru.orders.spend.confirm,'danger')}${button('cancel-spend',ru.ui.common.cancel)}</div>`;
     } else if (screenName === 'pending' && state?.season?.board.pending) {
       html = pendingMarkup(state);
     } else if (screenName === 'result' && state?.season?.board.result) {
       html = resultMarkup(state);
     } else if (screenName === 'surrender-confirm' && state?.season) {
-      html = `<h2>Закончить сезон поражением?</h2><p>Будет потеряно 25% дохода этого сезона с округлением вниз. Старые накопления и весь опыт сохранятся. Вернуться к этому сезону будет нельзя.</p><div class="actions">${button('surrender','Подтвердить поражение','danger')}${button('orders','Назад к заказам')}</div>`;
+      html = `<h2>${ru.orders.surrender.title}</h2><p>${ru.orders.surrender.text}</p><div class="actions">${button('surrender',ru.orders.surrender.confirm,'danger')}${button('orders',ru.ui.common.backToOrders)}</div>`;
     } else if (screenName === 'catalog' && state?.season) {
-      html = `<h2>Каталог</h2><p class="small catalog-note">${catalogTarget?'Выберите предмет: он будет поставлен на выбранную клетку.':'Размещение бесплатно. Растения и устройства занимают по клетке.'}</p><div class="catalog-grid">${CATALOG.filter(c=>availableKind(state.season!.access,c.kind)).map(c=>`<button data-action="pick-${c.kind}"><strong>${c.name}</strong><span>${careDescription(c.kind,state.season!.effects)}</span></button>`).join('')}</div><div class="actions">${button('continue','Вернуться к полю')}</div>`;
+      html = `<h2>${ru.field.catalog.title}</h2><p class="small catalog-note">${catalogTarget?ru.field.catalog.noteTarget:ru.field.catalog.noteFree}</p><div class="catalog-grid">${CATALOG.filter(c=>availableKind(state.season!.access,c.kind)).map(c=>`<button data-action="pick-${c.kind}"><strong>${c.name}</strong><span>${careDescription(c.kind,state.season!.effects)}</span></button>`).join('')}</div><div class="actions">${button('continue',ru.ui.common.returnToField)}</div>`;
     } else if (screenName === 'remove-confirm' && selectedObject) {
-      html = `<h2>Удалить растение?</h2><p class="warning">${objectName(selectedObject.kind)} будет убрана с участка. Прогресс растения потеряется. Последнее изменение можно отменить.</p><div class="actions">${button('remove','Удалить растение','danger')}${button('object','Отмена')}</div>`;
+      html = `<h2>${ru.field.remove.title}</h2><p class="warning">${ru.field.remove.text(objectName(selectedObject.kind))}</p><div class="actions">${button('remove',ru.field.remove.plant,'danger')}${button('object',ru.ui.common.cancel)}</div>`;
     } else if (screenName === 'object-modules' && state?.season && selectedObject) {
       html = objectModulesMarkup(state, selectedObject);
     } else if (screenName === 'object' && selectedObject) {
       const plant=isPlant(selectedObject.kind);
       const season=state!.season!,crop=season.garden.plants.find(p=>sameCell(p,selectedObject));
       const conditions=plantConditions(livingObjects(season.layout.objects,season.garden.plants),selectedObject,season.effects,fieldSize(season.access));
-      const status=conditions?`<p class="small plant-conditions">☀ Свет: ${conditions.light?'есть':'нет'} · 💧 Полив: ${conditions.water?'есть':'нет'}<br>Значки у горшка показывают действующие условия.</p>`:'';
-      const phase=crop?.wilt===3?'Погибло':crop?.yield?`Готово к срезке: ${crop.yield} цветка`:crop?.growth?'Растёт':'Начало цикла';
-      const health=crop?.wilt===3?'Растение не восстановится. Удалите его, чтобы посадить новое.':crop?.wilt?`Увядание: ${crop.wilt} из 3 плохих дней. Исправьте обязательный уход; восстановление займёт 1 день.`:selectedObject.adaptation?'Адаптация · 1 день без роста. После пересадки прогресс сохранён.':crop?.recovering?'Восстановление · день без роста. Цикл сохранён.':'Пересадка пропустит один день роста.';
+      const status=conditions?`<p class="small plant-conditions">${ru.field.card.conditionsLine(conditions.light,conditions.water)}<br>${ru.field.card.conditionsHint}</p>`:'';
+      const phase=crop?.wilt===3?ru.field.card.phaseDead:crop?.yield?ru.field.card.phaseReady(crop.yield):crop?.growth?ru.field.card.phaseGrowing:ru.field.card.phaseStart;
+      const health=crop?.wilt===3?ru.field.card.healthDead:crop?.wilt?ru.field.card.healthWilting(crop.wilt):selectedObject.adaptation?ru.field.card.healthAdaptation:crop?.recovering?ru.field.card.healthRecovering:ru.field.card.healthTransplant;
       const swapped=plant&&hasGlobal(season.effects,'P1',selectedObject.kind),mod=moduleAt(season.effects,selectedObject);
-      const effectInfo=`${swapped?'<p class="small">Предпочтения изменены: обязательный и дополнительный уход поменялись местами.</p>':''}<article class="order-card"><h3>Сезонный модуль</h3><p class="small">${mod?`Модуль: <strong>${effectDefinition(mod.effect).name}</strong>.`:'Модуль: свободный слот.'}</p>${button('object-modules',mod?'Управлять модулем':'Установить модуль')}</article>`;
-      const details=crop?`<div class="plant-info"><p class="small">${careDescription(selectedObject.kind,season.effects)}.</p><p class="small plant-growth"><strong>${phase}</strong><br>Рост: ${crop.growth/2} / 4 · Дней роста: ${crop.growthDays}<br>${crop.wilt===3?'Урожай потерян. Срезка недоступна.':crop.yield?'Урожай уже зафиксирован.':`Срезка: 2 цветка${crop.bonus?' + 1 за другой вид весь цикл':crop.supportBonus?' + 1 возможен с подпоркой и устройством весь цикл':'; бонус урожая в этом цикле потерян'}.`}</p><p class="small plant-health">${health}</p>${status}</div>`:`<p>Зона показана при наведении и переносе; улучшения могут менять её. Устройства передают условия растениям. Парная установка заимствует только собственную зону соседа, без цепочек.</p>`;
-      const cut=crop?`<button data-action="harvest" class="primary" data-unavailable="${crop.yield===0||crop.wilt===3}">${crop.yield?`Срезать: ${crop.yield}`:crop.wilt===3?'Нет урожая':'Пока не готово'}</button>`:'';
-      html = `<h2>${objectName(selectedObject.kind)}</h2> <div class="object-details">${details}<div class="object-module-summary">${effectInfo}</div></div><div class="actions">${cut}${button('move-object','Переместить')}${button(plant?'remove-confirm':'remove',plant?'Удалить растение':'Убрать устройство','danger')}${button('continue','Назад к полю')}</div>`;
+      const effectInfo=`${swapped?`<p class="small">${ru.field.card.swappedNote}</p>`:''}<article class="order-card"><h3>${ru.field.card.moduleTitle}</h3><p class="small">${mod?ru.field.card.moduleInstalled(effectDefinition(mod.effect).name):ru.field.card.moduleFree}</p>${button('object-modules',mod?ru.field.card.moduleManage:ru.field.card.moduleInstall)}</article>`;
+      const details=crop?`<div class="plant-info"><p class="small">${careDescription(selectedObject.kind,season.effects)}.</p><p class="small plant-growth"><strong>${phase}</strong><br>${ru.field.card.growthLine(crop.growth/2,crop.growthDays)}<br>${crop.wilt===3?ru.field.card.yieldLost:crop.yield?ru.field.card.yieldFixed:ru.field.card.cutLine(crop.bonus?ru.field.card.cutBonusOther:crop.supportBonus?ru.field.card.cutBonusSupport:ru.field.card.cutBonusLost)}</p><p class="small plant-health">${health}</p>${status}</div>`:`<p>${ru.field.card.deviceInfo}</p>`;
+      const cut=crop?`<button data-action="harvest" class="primary" data-unavailable="${crop.yield===0||crop.wilt===3}">${crop.yield?ru.field.card.cutButton(crop.yield):crop.wilt===3?ru.field.card.noYield:ru.field.card.notReady}</button>`:'';
+      html = `<h2>${objectName(selectedObject.kind)}</h2> <div class="object-details">${details}<div class="object-module-summary">${effectInfo}</div></div><div class="actions">${cut}${button('move-object',ru.field.card.move)}${button(plant?'remove-confirm':'remove',plant?ru.field.remove.plant:ru.field.remove.device,'danger')}${button('continue',ru.ui.common.backToField)}</div>`;
     } else if (screenName === 'settings') {
-      html = `<h2>Настройки</h2><label><input id="tutorial" type="checkbox" ${state?.settings.tutorial ? 'checked' : ''}>Показывать обучение</label><label><input id="motion" type="checkbox" ${state?.settings.reducedMotion ? 'checked' : ''}>Сокращать переходы</label><p class="small settings-note">Подсказки ведут через первый настоящий заказ. Их можно пропустить в любой момент. Повторное включение покажет только ещё нужные шаги. Настройки сохраняются.</p><div class="actions">${button('menu', 'Назад')}</div>`;
+      html = `<h2>${ru.ui.settings.title}</h2><label><input id="tutorial" type="checkbox" ${state?.settings.tutorial ? 'checked' : ''}>${ru.ui.settings.tutorial}</label><label><input id="motion" type="checkbox" ${state?.settings.reducedMotion ? 'checked' : ''}>${ru.ui.settings.reducedMotion}</label><p class="small settings-note">${ru.ui.settings.note}</p><div class="actions">${button('menu', ru.ui.common.back)}</div>`;
     } else if (screenName === 'workshop' && state?.season) {
-      html = `<span class="eyebrow">СЕЗОН ${state.season.number}</span><h2>День ${state.season.day} · ${state.season.day===1?'Подготовка':'Выращивание'}</h2><div class="stats"><span><strong>${state.season.reputation} / 3</strong>Репутация</span><span><strong>${state.season.layout.objects.length} / ${fieldSize(state.season.access)}</strong>Занято клеток</span></div><p>Прогресс растений и срезанные цветы сохраняются. Для смены дня нужен активный основной заказ.</p><p class="small">${touch?'Выберите объект в каталоге и коснитесь клетки. Перенос — одним пальцем; камера — двумя.':'Выберите объект и нажмите клетку. Перенос — левой кнопкой; камера — колёсиком, средней кнопкой, WASD или стрелками.'}</p><div class="actions">${button('orders','Доска заказов')}${button('catalog','Каталог')}${button('modules','Сезонные улучшения')}${button('events','Просьбы и ярмарка')}${button('shop','Развитие мастерской')}${tip?button('tutorial','Подсказка'):''}${button('menu', 'Меню и настройки')}</div>`;
+      html = `<span class="eyebrow">${ru.ui.season.eyebrow(state.season.number)}</span><h2>${ru.ui.hud.dayHeading(state.season.day,state.season.day===1)}</h2><div class="stats"><span><strong>${state.season.reputation} / 3</strong>${ru.ui.season.reputation}</span><span><strong>${state.season.layout.objects.length} / ${fieldSize(state.season.access)}</strong>${ru.ui.season.cellsUsed}</span></div><p>${ru.ui.season.progressNote}</p><p class="small">${touch?ru.ui.season.helpTouch:ru.ui.season.helpMouse}</p><div class="actions">${button('orders',ru.ui.common.ordersBoard)}${button('catalog',ru.ui.common.catalog)}${button('modules',ru.ui.common.seasonUpgrades)}${button('events',ru.ui.common.eventsAndFair)}${button('shop',ru.ui.common.workshopDevelopment)}${tip?button('tutorial',ru.ui.common.hint):''}${button('menu', ru.ui.common.menuAndSettings)}</div>`;
     } else {
-      html = `<span class="eyebrow">ДОБРО ПОЖАЛОВАТЬ</span><h2>Ваша мастерская</h2><p class="menu-intro">Постепенно вырастите небольшую оранжерею в мастерскую букетов.</p><div class="stats"><span><strong>${state?.profile.coins ?? 0}</strong>Монеты</span><span><strong>${state?.profile.experience ?? 0}</strong>Опыт</span></div><p class="small">Уровень ${accessLevel(state?.profile.experience??0)} · покупки открываются за опыт и монеты.</p><p class="small controls-help"><strong>Управление</strong><br>${controlsText}</p><div class="actions menu-actions">${button(!state?.season||run?.board.result ? 'start' : 'continue', run?.board.result ? 'Начать новый сезон' : state?.season ? 'Продолжить сезон' : 'Начать сезон', 'primary')}${run?.board.result?button('result','Итоги сезона'):''}${button('shop','Развитие мастерской')}${button('settings', 'Настройки')}${button('fullscreen', 'На весь экран')}${button('recovery', 'Восстановление')}</div>`;
+      html = `<span class="eyebrow">${ru.ui.menu.eyebrow}</span><h2>${ru.ui.menu.title}</h2><p class="menu-intro">${ru.ui.menu.intro}</p><div class="stats"><span><strong>${state?.profile.coins ?? 0}</strong>${ru.ui.menu.coins}</span><span><strong>${state?.profile.experience ?? 0}</strong>${ru.ui.menu.experience}</span></div><p class="small">${ru.ui.menu.level(accessLevel(state?.profile.experience??0))}</p><p class="small controls-help"><strong>${ru.ui.menu.controls}</strong><br>${controlsText}</p><div class="actions menu-actions">${button(!state?.season||run?.board.result ? 'start' : 'continue', run?.board.result ? ru.ui.common.startNewSeason : state?.season ? ru.ui.menu.continueSeason : ru.ui.menu.startSeason, 'primary')}${run?.board.result?button('result',ru.ui.common.seasonResults):''}${button('shop',ru.ui.common.workshopDevelopment)}${button('settings', ru.ui.menu.settings)}${button('fullscreen', ru.ui.menu.fullscreen)}${button('recovery', ru.saves.recovery.title)}</div>`;
     }
     const focused = document.activeElement instanceof HTMLInputElement ? document.activeElement.id : '';
     $('panel-body').innerHTML = html;
@@ -186,8 +187,8 @@ async function main(): Promise<void> {
     ($('menu-button') as HTMLButtonElement).disabled = working || paused;
     ($('debug-button') as HTMLButtonElement).disabled = false;
     ($('drawer-debug') as HTMLButtonElement).disabled = false;
-    $('season-status').textContent = state?.season ? `День ${state.season.day} · ${state.season.day===1?'Подготовка':'Выращивание'} · ${state.season.layout.objects.length} / ${fieldSize(state.season.access)}` : 'Мастерская · Между сезонами';
-    $('storage-status').textContent = `${sdk.mode === 'hub' ? 'Game Factory' : 'Самостоятельный запуск'} · ${sdk.persistent ? 'постоянное хранение' : 'хранение недоступно'}${saves?.savedRevision ? ` · запись №${saves.savedRevision}` : ''}`;
+    $('season-status').textContent = state?.season ? ru.ui.hud.seasonStatus(state.season.day,state.season.day===1,state.season.layout.objects.length,fieldSize(state.season.access)) : ru.ui.hud.seasonBetween;
+    $('storage-status').textContent = `${sdk.mode === 'hub' ? ru.saves.status.hostHub : ru.saves.status.hostStandalone} · ${sdk.persistent ? ru.saves.status.persistent : ru.saves.status.unavailable}${saves?.savedRevision ? ru.saves.status.revision(saves.savedRevision) : ''}`;
     $('app').setAttribute('aria-busy', String(working));
     if (paused || !sdk.persistent || damaged) drawer.setOpen(true);
     drawer.refresh(canDismiss());
@@ -200,7 +201,7 @@ async function main(): Promise<void> {
     if (sdk?.mode === 'hub') return sdk;
     const candidate = await GameFactory.init({ gameId: __GF_GAME_ID__ });
     if (sdk && (candidate.mode !== sdk.mode || candidate.gameId !== sdk.gameId)) {
-      throw new Error('Исходное хранилище не подтверждено. Данные оставлены на месте.');
+      throw new Error(ru.saves.errors.originUnconfirmedKept);
     }
     return candidate;
   }
@@ -227,7 +228,7 @@ async function main(): Promise<void> {
       working=true;screenName='workshop';render();
       await persist(()=>next);
       if(command.type!=='place')fieldTool=null;
-    }catch(error){notify(error instanceof Error?error.message:'Изменение не завершено.');}
+    }catch(error){notify(error instanceof Error?error.message:ru.ui.notify.changeFailed);}
     finally{working=false;render();}
   }
   function fieldTap(cell:Cell): void {
@@ -236,7 +237,7 @@ async function main(): Promise<void> {
     const object=saves.state.season?.layout.objects.find(o=>sameCell(o,cell));
     if(object){selected=cell;fieldTool=null;screenName='object';drawer.setOpen(true);render();}
     else if(fieldTool&&'kind'in fieldTool)void boardEdit({type:'place',kind:fieldTool.kind,to:cell});
-    else notify('Выберите растение или устройство в каталоге.');
+    else notify(ru.ui.notify.pickInCatalog);
   }
   function cancelPlacement(): void {
     if(working || drawer.blocking || saves?.blocked)return;
@@ -281,7 +282,7 @@ async function main(): Promise<void> {
           screen.orientation?.unlock();
           await document.exitFullscreen();
         } else if (window.innerWidth >= window.screen.width - 2 && window.innerHeight >= window.screen.height - 2) {
-          notify('Полный экран уже включён хабом или браузером. Для выхода используйте «Назад» или Esc.');
+          notify(ru.ui.notify.fullscreenBusy);
         } else {
           await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
           if (touch) await (window.screen.orientation as ScreenOrientation & { lock?: (mode: string) => Promise<void> }).lock?.('landscape').catch(() => undefined);
@@ -356,7 +357,7 @@ async function main(): Promise<void> {
       } else if (name === 'continue') {fieldTool=null;showWorkshop();}
       else if (name === 'menu') { screenName = 'menu'; drawer.setOpen(true); }
       else if (name === 'settings') screenName = 'settings';
-    } catch (error) { notify(error instanceof Error ? error.message : 'Действие не завершено.'); }
+    } catch (error) { notify(error instanceof Error ? error.message : ru.ui.notify.actionFailed); }
     finally { working = false; render(); }
   }
 
@@ -371,7 +372,7 @@ async function main(): Promise<void> {
     const patch = input.id === 'tutorial' ? { tutorial: input.checked } : { reducedMotion: input.checked };
     const result = persist(state => changeSettings(state, patch));
     render();
-    void result.catch(() => notify('Настройки не сохранены.')).finally(() => { working = false; render(); });
+    void result.catch(() => notify(ru.ui.notify.settingsNotSaved)).finally(() => { working = false; render(); });
   });
   $('menu-button').addEventListener('click', () => { void action('menu'); });
   $('catalog-button').addEventListener('click',()=>void action('catalog'));
@@ -449,6 +450,6 @@ function hidePreloader(): void {
 
 void main().catch(error => {
   hidePreloader();
-  $('panel').textContent = `Не удалось открыть мастерскую: ${error instanceof Error ? error.message : 'ошибка запуска'}. Перезагрузите страницу для повторной проверки.`;
+  $('panel').textContent = ru.ui.notify.startFailed(error instanceof Error ? error.message : ru.ui.notify.startFailedReason);
   $('app').setAttribute('aria-busy', 'false');
 });

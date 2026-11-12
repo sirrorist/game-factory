@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { newProfile, startSeason, changeSettings } from '../src/core/state.ts';
 import { CURRENT_KEY, PREVIOUS_KEY, MAX_SAVE_BYTES, SaveSession, encode, decode, readCopies, type StoragePort } from '../src/core/saves.ts';
+import { ru } from '../src/i18n/ru.ts';
+import { msg } from './ru-match.ts';
 
 class Memory implements StoragePort {
   mode: 'hub' | 'standalone' = 'standalone';
@@ -167,8 +169,8 @@ test('Ожидающая запись хаба не переходит в лок
   const local = new Memory();
   const otherHub = new Memory();
   otherHub.mode = 'hub';
-  assert.throws(() => session.rebind(local), /хранилищ/);
-  assert.throws(() => session.rebind(otherHub), /хранилищ/);
+  assert.throws(() => session.rebind(local), msg(ru.saves.errors.originUnconfirmed));
+  assert.throws(() => session.rebind(otherHub), msg(ru.saves.errors.originUnconfirmed));
   assert.equal(session.hasPending, true);
   assert.deepEqual(session.state, pendingState);
   assert.equal(await session.retry(), false);
@@ -190,8 +192,8 @@ test('Перепроверка локального хранения прини�
   hub.mode = 'hub';
   const otherGame = new Memory();
   otherGame.gameId = 'other-game';
-  assert.throws(() => session.rebind(hub), /хранилищ/);
-  assert.throws(() => session.rebind(otherGame), /хранилищ/);
+  assert.throws(() => session.rebind(hub), msg(ru.saves.errors.originUnconfirmed));
+  assert.throws(() => session.rebind(otherGame), msg(ru.saves.errors.originUnconfirmed));
   assert.doesNotThrow(() => session.rebind(new Memory()));
 });
 
