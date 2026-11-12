@@ -873,7 +873,7 @@ try {
     if(full){
     const ripe=enterGrowthDay(stageOne);
     await install(stageOne);await capture('growth-board');await tapCell(page,{q:0,r:0});await capture('growth-card');
-    assert.ok((await page.locator('.plant-growth').textContent())!.includes(ru.field.card.growthLine(2,0).split(' · ')[0]));
+    assert.ok((await page.locator('.plant-growth').textContent())!.includes(ru.field.card.growthLine(2,0).split(' · ')[0]!));
     assert.equal(await page.locator('[data-action="harvest"]').isDisabled(),true);
     await install(ripe);await capture('ready-board');
     await dragCell(page,{q:0,r:0},{q:1,r:-1});await tapCell(page,{q:1,r:-1});await capture('grown-moved-card');
@@ -910,7 +910,7 @@ try {
       assert.ok((await page.locator('.plant-health').textContent())!.includes(card==='dead-card'?ru.field.card.healthDead:ru.field.card.healthWilting(dry.season!.garden.plants[0]!.wilt)));
       if(card==='dead-card'){
         assert.ok((await page.locator('.plant-growth').textContent())!.includes(ru.field.card.yieldLost));
-        assert.ok(!(await page.locator('.plant-growth').textContent())!.includes(ru.field.card.cutLine('x').split('x')[0]));
+        assert.ok(!(await page.locator('.plant-growth').textContent())!.includes(ru.field.card.cutLine('x').split('x')[0]!));
       }
     }
     const damaged=enterGrowthDay(editLayout(startSeason(newProfile(),44),{type:'place',kind:'carnation',to:{q:0,r:0}}));
