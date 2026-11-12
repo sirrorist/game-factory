@@ -3,7 +3,7 @@ import {recordTutorial} from '../src/core/tutorial.ts';
 // Проверяется собранная игра; имитация отказов находится только в браузерном тесте.
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { readFile, mkdir, writeFile, readdir, rename } from 'node:fs/promises';
+import { readFile, mkdir, writeFile, readdir, rename, rm } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { resolve, extname } from 'node:path';
 import { chromium, type Page, type Frame } from 'playwright';
@@ -22,8 +22,35 @@ import { submitOrder,acceptOrder,chooseReward,closeDay } from '../src/core/calen
 
 // BOUQUET_DIST - отдельная сборка, чтобы параллельная пересборка dist не ломала прогон.
 const root = resolve(process.env.BOUQUET_DIST ?? resolve(import.meta.dirname, '../dist'));
-const output = resolve(import.meta.dirname, process.env.BOUQUET_ARTIFACTS ?? '../artifacts/object-modules-2026-11-05/after');
+const output = resolve(import.meta.dirname, process.env.BOUQUET_ARTIFACTS ?? '../artifacts/browser/latest');
+
+// Режимы прогона. BOUQUET_SCOPE=key (по умолчанию) - механически проверяются только ключевые экраны
+// интерфейса: игровой цикл (рост, заказы, события, покупки) закрывают юнит-тесты, а браузеру нужен
+// каждый ВИД экрана на всех семи профилях. BOUQUET_SCOPE=full - прежний длинный сценарий (~129
+// состояний на профиль), для проверки перед релизом.
+// BOUQUET_ALL_PNG=1 - снимки всех состояний, иначе PNG пишутся только для ключевых (выборка для
+// просмотра моделью); DOM-проверкам файлы не нужны. BOUQUET_VIDEO=1 - ещё и запись демо-видео.
+const scope = process.env.BOUQUET_SCOPE ?? 'key';
+assert.ok(scope === 'key' || scope === 'full', `BOUQUET_SCOPE: key или full, получено ${scope}`);
+const full = scope === 'full';
+const allPng = process.env.BOUQUET_ALL_PNG === '1';
+const withVideo = process.env.BOUQUET_VIDEO === '1';
+// Ключевые состояния: по одному на каждый различный вид экрана/панели. Только они дают PNG
+// (в обоих режимах) и только они проходят DOM-проверки в режиме key; остальные состояния
+// (то же меню/карточка, но с другими данными) в key пропускаются, в full - проверяются без PNG.
+const KEY_STATES: ReadonlySet<string> = new Set([
+  'menu', 'workshop', 'catalog', 'object', 'remove-confirm',            // меню, поле, каталог, карточка, удаление
+  'settings', 'recovery', 'restore-confirm', 'reset-confirm',           // настройки, восстановление, подтверждения
+  'corrupt-both', 'nonpersistent', 'save-error',                        // обе копии повреждены, нет постоянного хранения, ошибка записи
+  'f3', 'menu-closed', 'notice-queue', 'growth-card',                   // отладка, закрытое меню, очередь уведомлений, карточка с ростом
+  'orders-offers', 'orders-module-choice', 'orders-events',             // доска заказов, выбор улучшения, просьбы и ярмарка
+  'orders-modules', 'orders-module-target', 'orders-shop-funded',       // сезонные улучшения, установка модуля, развитие мастерской
+  'orders-victory', 'orders-calendar-loss',                             // победа, поражение
+  'orders-surrender-confirm', 'orders-spend-confirm', 'orders-tutorial-accept', // подтверждения, подсказка обучения
+]);
+// Очищается только этот каталог и только по шаблону: прогоны не копятся.
 await mkdir(output, { recursive: true });
+for (const name of await readdir(output)) if (/\.(png|webm)$/.test(name) || name === 'report.json') await rm(resolve(output, name), { force: true });
 const server = createServer(async (request, response) => {
   try {
     const path = new URL(request.url!, 'http://localhost').pathname;
@@ -44,7 +71,7 @@ const bundleHashes = Object.fromEntries(await Promise.all((await readdir(resolve
 const hashFile = async (path: string): Promise<string> => createHash('sha256').update(await readFile(path)).digest('hex');
 const inputFiles = ['build/obfuscation.ts','build/release-check.ts','test/obfuscation.test.ts','test/release.test.ts','test/release-check.ts','src/core/shop.ts','src/core/tutorial.ts','src/shop-ui.ts','test/shop.test.ts','test/expansion.test.ts','test/tutorial.test.ts','test/full-season-browser.ts','src/core/effects.ts','src/core/events.ts','src/core/rewards.ts','src/core/progress.ts','test/effects.test.ts','test/effect-growth.test.ts','test/events.test.ts','test/rewards.test.ts','test/legacy-fixtures.ts','test/stage5-fixtures.ts','src/core/orders.ts', 'src/core/planner.ts', 'src/core/board.ts', 'src/core/calendar.ts', 'src/order-ui.ts', 'test/orders.test.ts', 'test/planner.test.ts', 'test/calendar.test.ts', 'test/order-fixtures.ts', 'src/notices.ts', 'test/panel-checks.ts', 'src/main.ts', 'src/drawer.ts', 'src/field-input.ts', 'src/touch-buttons.ts', 'src/core/field.ts', 'src/core/layout.ts', 'src/core/conditions.ts', 'src/core/growth.ts', 'src/core/garden.ts', 'src/core/camera.ts', 'src/scene.ts', 'src/style.css', 'src/fonts/fonts.css', 'src/core/state.ts', 'src/core/saves.ts', 'test/browser.ts', 'test/state.test.ts', 'test/saves.test.ts', 'test/field.test.ts', 'test/layout.test.ts', 'test/conditions.test.ts', 'test/camera.test.ts', 'test/growth.test.ts', 'test/garden.test.ts', 'test/season-growth.test.ts', 'game.json', 'index.html', 'vite.config.ts', 'package.json', 'tsconfig.json'];
 const inputHashes = Object.fromEntries(await Promise.all(inputFiles.map(async file => [file, await hashFile(resolve(import.meta.dirname, '..', file))])));
-const report: { bundleHashes: Record<string, string>; htmlSha256: string; inputHashes: Record<string, string>; pngHashes: Record<string, string>; videos: Record<string, string>; profiles: unknown[]; scaleProbes: unknown[]; flows: string[]; errors: string[]; complete: boolean } = { bundleHashes, htmlSha256: await hashFile(resolve(root, 'index.html')), inputHashes, pngHashes: {}, videos: {}, profiles: [], scaleProbes: [], flows: [], errors: [], complete: false };
+const report: { bundleHashes: Record<string, string>; htmlSha256: string; inputHashes: Record<string, string>; scope: string; pngHashes: Record<string, string>; videos: Record<string, string>; profiles: unknown[]; scaleProbes: unknown[]; flows: string[]; errors: string[]; complete: boolean } = { bundleHashes, htmlSha256: await hashFile(resolve(root, 'index.html')), inputHashes, scope, pngHashes: {}, videos: {}, profiles: [], scaleProbes: [], flows: [], errors: [], complete: false };
 const currentKey = 'gf:bouquet-season:save:progress';
 const previousKey = 'gf:bouquet-season:save:progress.previous';
 
@@ -200,7 +227,7 @@ try {
   await Promise.all(Array.from({length:workers},async()=>{
    while(profileQueue.length){
     const profile=profileQueue.shift()!;
-    const context = await browser.newContext({ viewport: { width: profile.width, height: profile.height }, hasTouch: profile.touch, isMobile: profile.touch, deviceScaleFactor: profile.touch ? 3 : 2 });
+    const context = await browser.newContext({ viewport: { width: profile.width, height: profile.height }, hasTouch: profile.touch, isMobile: profile.touch, deviceScaleFactor: profile.touch ? 2 : 1 });
     const page = await context.newPage();
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
@@ -210,6 +237,8 @@ try {
     const readingProbes: unknown[] = [];
     let expectedDay=1;
     const capture = async (name: string): Promise<void> => {
+      const key = KEY_STATES.has(name);
+      if (!full && !key) return;
       await settled(page);
       const headings: Record<string, string> = { menu: 'Ваша мастерская', workshop: 'День 1 · Подготовка', settings: 'Настройки', recovery: 'Восстановление', 'restore-confirm': 'Восстановить копию?', 'save-error': 'Прогресс в памяти', 'corrupt-current': 'Восстановление', 'restore-save-error': 'Прогресс в памяти', 'corrupt-both': 'Восстановление', 'reset-confirm': 'Создать новый профиль?', nonpersistent: 'Нужно постоянное хранение', 'nonpersistent-recovery': 'Нужно постоянное хранение', f3: 'Ваша мастерская', equipped:'День 1 · Подготовка', catalog:'Каталог', object:'Гвоздика', 'remove-confirm':'Удалить растение?', placed:'День 1 · Подготовка', moved:'День 1 · Подготовка', 'placement-error':'Прогресс в памяти', 'undo-reloaded':'День 1 · Подготовка', 'camera-gesture':'День 1 · Подготовка', 'menu-closed': 'Мастерская · Между сезонами', 'reduced-motion': 'Настройки' };
       headings['conditions-card']='Гвоздика';headings['context-catalog']='Каталог';
@@ -278,7 +307,9 @@ try {
       });
       // Снимок сохраняется и при неуспешной геометрии, чтобы дефект можно было увидеть.
       const filename = `${profile.id}-${name}.png`;
-      await page.screenshot({ path: resolve(output, filename) });
+      const shot = key || allPng;
+      if (shot) await page.screenshot({ path: resolve(output, filename) });
+      try {
       assert.equal(metrics.overflow, false, `${profile.id}/${name}: прокрутка страницы`);
       const scale = Math.max(1, profile.width / 1920);
       assert.ok(Math.abs(metrics.rootFont - 16 * scale) < .02, `${profile.id}/${name}: неверный корневой масштаб`);
@@ -324,7 +355,12 @@ try {
       if (profile.height <= 540 && profile.width > profile.height) assert.ok(layout.headerHeight <= 3.75, `${profile.id}/${name}: шапка ${layout.headerHeight.toFixed(2)}rem выше 3,75rem`);
       assert.equal(metrics.canvasPixels[0], metrics.canvasCss[0]);
       assert.equal(metrics.canvasPixels[1], metrics.canvasCss[1]);
-      report.pngHashes[filename] = await hashFile(resolve(output, filename));
+      } catch (error) {
+        // Состояние без обычного снимка при отказе проверки всё равно фиксируется для разбора.
+        if (!shot) await page.screenshot({ path: resolve(output, `${profile.id}-${name}-failure.png`) });
+        throw error;
+      }
+      if (shot) report.pngHashes[filename] = await hashFile(resolve(output, filename));
       states.push(name);
       checks.push({ name, ...metrics, normalReading });
       if (metrics.drawerOpen) {
@@ -339,6 +375,7 @@ try {
         if (name.startsWith('orders-object-module-') || ['object', 'growth-card', 'ripe-wilt-card', 'corrupt-current', 'orders-offers', 'orders-pending', 'orders-victory','orders-module-choice','orders-modules','orders-module-target','orders-events','orders-spend-confirm','orders-p1-catalog','orders-p1-object','orders-shop-locked','orders-shop-funded','orders-shop-all','orders-shop-season','orders-expanded-catalog','orders-parallel','orders-two-events','orders-tutorial-care','orders-tutorial-cut'].includes(name)) {
           for (const end of [false, true]) {
             if(end)await page.evaluate(()=>{const body=document.getElementById('panel-body')!,content=body.querySelector<HTMLElement>('.panel-content')!,scroll=body.dataset.scroll==='all'?body:content;scroll.scrollTop=scroll.scrollHeight;});
+            if (!key && !allPng) continue;
             const enlarged = `${profile.id}-${name}-text200${end ? '-bottom' : ''}.png`;
             await page.screenshot({ path: resolve(output, enlarged) });
             report.pngHashes[enlarged] = await hashFile(resolve(output, enlarged));
@@ -368,7 +405,7 @@ try {
           const menu = document.getElementById('menu-button')!.getBoundingClientRect();
           return { split, tools: document.getElementById('field-tools')!.getBoundingClientRect().top, header, menu: menu.left >= 0 && menu.right <= innerWidth };
         });
-        if (['workshop', 'full-field'].includes(name)) for (const end of [false, true]) {
+        if (['workshop', 'full-field'].includes(name) && (key || allPng)) for (const end of [false, true]) {
           if (end) await page.locator('#field-tools').evaluate(element => { element.scrollTop = element.scrollHeight; });
           const enlarged = `${profile.id}-${name}-text200${end ? '-bottom' : ''}.png`;
           await page.screenshot({ path: resolve(output, enlarged) });
@@ -780,7 +817,60 @@ try {
       assert.equal(await page.evaluate(key=>JSON.parse(localStorage.getItem(key)!).revision,currentKey),50,'чтение не пишет сейв');
     };
     const savedState=async():Promise<GameState>=>page.evaluate(key=>JSON.parse(JSON.parse(localStorage.getItem(key)!).payload),currentKey);
-    const stageOne=enterGrowthDay(growthFixture()),ripe=enterGrowthDay(stageOne);
+    const panelAction=async(name:string)=>{
+      await page.locator(`#panel [data-action="${name}"]`).scrollIntoViewIfNeeded();
+      await click(page,name);
+    };
+    const stageOne=enterGrowthDay(growthFixture());
+    if(!full){
+      // Ключевые экраны без прохождения: каждое состояние - готовый валидный сейв из фикстур.
+      // Пропущено в key (достижимо только прохождением или несколькими нажатиями поверх сейва;
+      // логику закрывают юнит-тесты, полный сценарий - BOUQUET_SCOPE=full): отказ/повтор записи
+      // на срезке, сдаче, выборе, магазине и установке модуля; реальная сдача заказа до pending;
+      // двойное событие срезки; увядание/гибель/восстановление/адаптация; поворот карточки; рост 21.
+      await install(stageOne);await tapCell(page,{q:0,r:0});await capture('growth-card');
+      await click(page,'continue');await toolbar(page,'overview-button');
+      // Очередь уведомлений: тот же сценарий, что и в full, на готовом сейве.
+      await page.emulateMedia({reducedMotion:'reduce'});
+      await page.clock.install();await page.clock.pauseAt(await page.evaluate(()=>Date.now()+1000));
+      await click(page,'menu');
+      await page.evaluate(()=>{
+        Object.defineProperty(screen,'width',{configurable:true,value:innerWidth+100});
+        Object.defineProperty(screen,'height',{configurable:true,value:innerHeight+100});
+        document.documentElement.requestFullscreen=async()=>{throw new Error((window as unknown as {noticeMessage:string}).noticeMessage);};
+      });
+      for(const letter of ['A','B','C','D']){
+        await page.evaluate(message=>{(window as unknown as {noticeMessage:string}).noticeMessage=message;},`Нет доступа к полному экрану (${letter}).`);
+        await click(page,'fullscreen');
+      }
+      assert.equal(await page.locator('#notice .notice').count(),3,'очередь ограничена тремя сообщениями');
+      await click(page,'settings');await click(page,'menu');
+      assert.equal(await page.locator('#notice .notice').count(),3,'перерисовка меню сохраняет очередь');
+      await page.clock.resume();
+      await capture('notice-queue');await click(page,'continue');
+      await page.emulateMedia({reducedMotion:'no-preference'});
+      const planted=plantedOrderFixture();await install(planted.state);
+      await toolbar(page,'orders-button');await capture('orders-offers');
+      await install(moduleRewardFixture());await capture('orders-module-choice');
+      await install(eventFixture());await toolbar(page,'orders-button');await panelAction('events');await capture('orders-events');
+      await install(moduleFixture());await toolbar(page,'orders-button');await panelAction('modules');await capture('orders-modules');
+      await panelAction('module-1');await capture('orders-module-target');
+      const risk=eventFixture(20,'U1',9);risk.season!.garden.stock.chrysanthemum=0;
+      risk.season!.board.active=[{...risk.season!.board.active[0]!,...orderCandidates(1,15)[0]!,id:20}];risk.season!.board.completed=[];risk.profile.experience=0;risk.profile.progress.main=0;
+      await install(risk);await toolbar(page,'orders-button');await panelAction('events');await panelAction('urgent-accept-1');
+      await panelAction('urgent-submit-1');await capture('orders-spend-confirm');
+      const funded=newProfile();funded.profile.coins=1000;funded.profile.experience=600;
+      await install(funded);await panelAction('shop');await capture('orders-shop-funded');
+      const finals=orderFixture(5,20,100);await install(finals);await toolbar(page,'orders-button');
+      const finalId=finals.season!.board.offers[0]!.id;
+      await panelAction(`accept-${finalId}`);await toolbar(page,'orders-button');await panelAction(`deliver-${finalId}`);await capture('orders-victory');
+      assert.equal((await savedState()).season!.board.result!.outcome,'win');
+      await install(activeOrderFixture(2,20,15));await toolbar(page,'next-day-button');await capture('orders-calendar-loss');
+      await install(orderFixture(0,20));await toolbar(page,'orders-button');await panelAction('surrender-confirm');await capture('orders-surrender-confirm');
+      await install(startSeason(newProfile(),123));await toolbar(page,'tutorial-button');await capture('orders-tutorial-accept');
+    }
+    if(full){
+    const ripe=enterGrowthDay(stageOne);
     await install(stageOne);await capture('growth-board');await tapCell(page,{q:0,r:0});await capture('growth-card');
     assert.ok((await page.locator('.plant-growth').textContent())!.includes('Рост: 2 / 4'));
     assert.equal(await page.locator('[data-action="harvest"]').isDisabled(),true);
@@ -897,10 +987,6 @@ try {
     await page.emulateMedia({reducedMotion:'no-preference'});
     // Этап 4. Новые экраны; поздние ступени — отдельные валидные fixtures.
     // Обычный путь реально принимает заказ, растит, срезает и сдаёт до pending.
-    const panelAction=async(name:string)=>{
-      await page.locator(`#panel [data-action="${name}"]`).scrollIntoViewIfNeeded();
-      await click(page,name);
-    };
     const planted=plantedOrderFixture();await install(planted.state);
     await toolbar(page,'orders-button');await capture('orders-offers');
     const offers=JSON.stringify((await savedState()).season!.board.offers);
@@ -1100,6 +1186,7 @@ try {
     let learning=acceptOrder(intro,intro.season!.board.offers[0]!.id);const plantKind=learning.season!.board.active[0]!.ingredients[0]!.kind;
     learning=recordTutorial(editLayout(learning,{type:'place',kind:plantKind,to:{q:0,r:0}}));await install(learning);await toolbar(page,'tutorial-button');await capture('orders-tutorial-care');
     learning.profile.tutorial=['accept','plant','care','day'];await install(learning);await toolbar(page,'tutorial-button');await capture('orders-tutorial-cut');
+    }
     await page.setViewportSize({width:profile.height,height:profile.width});await checkPanelReading(page);await page.setViewportSize({width:profile.width,height:profile.height});
     assert.deepEqual(errors, [], profile.id);
     report.profiles.push({ ...profile, states, checks, readingProbes, motion, closing, f3, fieldF3, errors });
@@ -1111,14 +1198,14 @@ try {
   report.flows.push('Панель: поле во весь экран, одинаковый canvas до/после, середина slide/fade 240 мс, Tab/Shift+Tab внутри, закрытие кнопкой/Esc/фоном, блокировка до конца закрытия и отсутствие нажатий сквозь меню, сокращение переходов.');
   report.flows.push('Этап 2: каталог четырёх типов, размещение касанием/мышью, реальный pointer drag, карточка, отмена подтверждения, удаление, reload и одноразовый undo, отказ/повтор записи переноса, wheel/средняя/клавиши либо двухпальцевый жест с изменением изображения; обзор возвращает исходное изображение; отменённый указатель не пишет, зона видна до отпускания; заполнение 19 клеток, F3 на заполненном поле, выбор объекта после поворота без записи и отмена удерживаемого переноса открытием меню.');
   report.flows.push('Семь профилей: касания/мышь, старт, reload без записи, настройки, подтверждение восстановления, сбой/повтор записи, повреждения, явный новый профиль, persistent:false/повтор, F3, resize.');
-  report.flows.push('Этап 3: независимые валидные сохранения для роста, готовности, увядания 1/2, гибели, восстановления, адаптации, зрелого увядания и дня20. Реальные срезка/перенос/reload/undo, запас и цикл, отказ/повтор и двойное событие без удвоения. День в обычном UI заблокирован без активного основного заказа; все новые карточки проверены без обрезки текста/действий, включая поворот.');
+  if (full) report.flows.push('Этап 3: независимые валидные сохранения для роста, готовности, увядания 1/2, гибели, восстановления, адаптации, зрелого увядания и дня20. Реальные срезка/перенос/reload/undo, запас и цикл, отказ/повтор и двойное событие без удвоения. День в обычном UI заблокирован без активного основного заказа; все новые карточки проверены без обрезки текста/действий, включая поворот.');
   report.flows.push('Full HD/QHD/4K: реальные KeyboardEvent через CDP с code KeyA/KeyD/KeyW/KeyS и русскими ф/в/ц/ы, AZERTY q/z. Проверены направление по пикселям цветка, остановка при keyup с другой раскладкой, сброс удержания меню и неизменность обеих копий сохранения.');
   report.flows.push('Обратная связь: подсветка собственной и верхней соседней клетки сохраняет пиксели цветка; значок полива выше тени; зона лампы не окрашивает устройство; карточки показывают свет/воду и адаптацию. ПКМ отменяет посадку/перенос и удерживаемый drag без записи, открывает каталог пустой клетки; отмена ничего не пишет, выбор ставит ровно один предмет и увеличивает revision один раз, undo возвращает расстановку; обычный каталог не использует прежнюю цель ПКМ.');
   report.flows.push('Каждый открытый экран семи профилей проверен с текстом 200%: достижимы первая/последняя буква каждого абзаца и все кнопки через внутреннюю прокрутку; корневой шрифт и минимальные цели касания сохранены. Для четырёх карточек/ошибок сняты начало и конец.');
   report.flows.push('Уведомления: реальные повторные касания дают ×N, повтор продлевает 6 секунд; очередь максимум 3 с вытеснением старого, ошибки fullscreen через UI; очередь переживает смену экрана, внутри меню не накрывает действия; закрытие возвращает сообщения под верхнюю панель. Clock проверяет истечение; обе копии сейва и пиксели поля неизменны.');
-  report.flows.push('Этап6: магазин/все покупки/отказ и повтор записи/закрытые покупки в сезоне,8типовкаталога/37клеток/4новые карточки,параллельные основные с сохранением первого срока/две просьбы,контекстное обучение/пропуск без отмены заказа;новые панели normal/text200 и поворот.');
-  report.flows.push('Этап5: три сохранённых варианта, отказ/повтор выбора без второго эффекта, inventory/установка/снятие/перенос/undo/reload, кольцевая зона, U3 и сохранение основного при выборе, обе цели ярмарки, подтверждение риска/отмена без записи, ожидающая/поздняя просьба и накопительный сюжет. Новые панели и текст200 проверены всеми7профилями.');
-  report.flows.push('Этап4: доска предложений/reload, реальное принятие, закрытие undo, рост и повтор записи без повторного дня, массовая срезка, сдача с отказом и двойным событием, pending после1/5 иreload без обхода. Поздние независимые fixtures: финальные3состава/2темы, принятие/победа на20, однократная выплата и новыйсезон, конец20 безроста21, нулеваярепутация безроста, пустаядоска, отмена/подтверждение добровольного поражения. Все новые панели читаемы при обычном тексте и200%.');
+  if (full) report.flows.push('Этап6: магазин/все покупки/отказ и повтор записи/закрытые покупки в сезоне,8типовкаталога/37клеток/4новые карточки,параллельные основные с сохранением первого срока/две просьбы,контекстное обучение/пропуск без отмены заказа;новые панели normal/text200 и поворот.');
+  if (full) report.flows.push('Этап5: три сохранённых варианта, отказ/повтор выбора без второго эффекта, inventory/установка/снятие/перенос/undo/reload, кольцевая зона, U3 и сохранение основного при выборе, обе цели ярмарки, подтверждение риска/отмена без записи, ожидающая/поздняя просьба и накопительный сюжет. Новые панели и текст200 проверены всеми7профилями.');
+  if (full) report.flows.push('Этап4: доска предложений/reload, реальное принятие, закрытие undo, рост и повтор записи без повторного дня, массовая срезка, сдача с отказом и двойным событием, pending после1/5 иreload без обхода. Поздние независимые fixtures: финальные3состава/2темы, принятие/победа на20, однократная выплата и новыйсезон, конец20 безроста21, нулеваярепутация безроста, пустаядоска, отмена/подтверждение добровольного поражения. Все новые панели читаемы при обычном тексте и200%.');
   // Та же ширина с меньшей высотой и увеличенный текст не должны уменьшать масштаб.
   for (const probe of [
     { width: 1920, height: 920, text: 1 },
@@ -1169,8 +1256,11 @@ try {
   assert.equal(await reducedPage.locator('#drawer-layer').getAttribute('data-state'), 'open');
   assert.equal(await reducedPage.locator('#panel').evaluate(element => element.getAnimations().length), 0);
   await reducedContext.close();
+  report.flows.push(full
+    ? 'Режим full: все состояния сценария (~129 на профиль), DOM-проверки на каждом; PNG только ключевым (BOUQUET_ALL_PNG=1 - всем).'
+    : 'Режим key: только ключевые экраны (KEY_STATES), без прохождения игрового цикла; PNG только ключевым. Прохождение, рост, заказы по шагам и отказы записи вне ключевых экранов - режим full.');
   report.flows.push('Системная prefers-reduced-motion: reduce отключает выезд; Escape закрывает и повторно открывает панель без двойного срабатывания.');
-  for (const demo of [{ id: 'phone', width: 390, height: 844, touch: true }, { id: 'desktop', width: 1920, height: 1080, touch: false }]) {
+  if (withVideo) for (const demo of [{ id: 'phone', width: 390, height: 844, touch: true }, { id: 'desktop', width: 1920, height: 1080, touch: false }]) {
     const demoContext = await browser.newContext({ viewport: { width: demo.width, height: demo.height }, hasTouch: demo.touch, isMobile: demo.touch, recordVideo: { dir: resolve(output, 'video-temp'), size: demo.touch ? { width: 390, height: 844 } : { width: 960, height: 540 } } });
     const demoPage = await demoContext.newPage();
     demoPage.on('pageerror', error => report.errors.push(error.message));

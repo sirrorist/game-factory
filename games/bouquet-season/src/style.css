@@ -70,6 +70,14 @@ canvas { display: block; }
 #panel-body { padding: 0 .25rem .25rem 0; min-height: 0; display: flex; flex-direction: column; flex: 1; overflow: hidden; overscroll-behavior: contain; }
 #panel-body[data-scroll="all"] { overflow-y: auto; }
 #panel-body[data-scroll="all"] > .panel-content { flex: none; overflow: visible; }
+/* Полоса прокрутки в теме: тонкий бегунок цвета крафта без стрелок. Chrome и Safari берут
+   ::-webkit-scrollbar; scrollbar-color только для Firefox - в Chrome он отключил бы эти стили. */
+::-webkit-scrollbar { width: 0.625rem; height: 0.625rem; }
+::-webkit-scrollbar-track { background: #e6dbbf8c; border: 0.1875rem solid transparent; border-radius: 1rem; background-clip: padding-box; }
+::-webkit-scrollbar-thumb { background: #c4b088; border: 0.1875rem solid transparent; border-radius: 1rem; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background-color: #9f8b62; }
+::-webkit-scrollbar-button, ::-webkit-scrollbar-corner { display: none; background: transparent; }
+@supports not selector(::-webkit-scrollbar) { * { scrollbar-width: thin; scrollbar-color: #c4b088 transparent; } }
 .panel-content { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; overflow-wrap: anywhere; }
 .panel-heading { flex: none; }
 .panel-heading h2 { overflow-wrap: anywhere; }
