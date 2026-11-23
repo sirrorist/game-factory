@@ -13,6 +13,8 @@ import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { accessEvents, changeUserAccess, lockAccessChanges, retryTransaction, schema, session, user, passkey, type Db, type AnyDb } from '../src/index.ts';
 import { MIGRATIONS_DIR } from '../src/migrations.ts';
 import { createOwner, setPassword } from '../src/admin.ts';
+// owner одним паролем не входит (D-072): механику Better Auth проверяем на developer.
+import { createMember } from './auth-subjects.ts';
 import { ensureHubRole, HUB_ROLE } from '../src/roles.ts';
 import { createHubAuth } from '../../../apps/hub/src/lib/auth-core.ts';
 import type { BetterAuthPlugin } from '../../../apps/hub/node_modules/better-auth/dist/index.mjs';
@@ -238,7 +240,7 @@ test('отдельное подключение gf_hub: права SQL, F4 и ш
     action: 'forged', securityGeneration: 0, reason: 'Подмена' }), (error) => errorCode(error) === '42501');
   await assert.rejects(hubDb.delete(accessEvents), (error) => errorCode(error) === '42501');
   const email = 'native-hub-login@example.test';
-  await createOwner(first, email, 'Вход', password);
+  await createMember(first, email, 'Вход', password);
   const service = auth(hubDb);
   const login = await request(service, 'sign-in/email', { email, password });
   assert.equal(login.status, 200, await login.clone().text());
@@ -247,7 +249,7 @@ test('отдельное подключение gf_hub: права SQL, F4 и ш
 
 test('F2: passkey createSession=true через transaction callback после сброса отклоняется', { skip: !bin, timeout: 15_000 }, async () => {
   const email = 'native-passkey-race@example.test';
-  const id = await createOwner(second, email, 'Гонка callback', password);
+  const id = await createMember(second, email, 'Гонка callback', password);
   const gate = barrier(); const key = authenticator(); let throughTransaction = false;
   const service = auth(first, pauseAdapter('/passkey/verify-registration', 'create', gate, (inside) => { throughTransaction = inside; }));
   const login = await request(service, 'sign-in/email', { email, password });
@@ -271,7 +273,7 @@ test('F2: passkey createSession=true через transaction callback после 
 
 test('F2: server API changePassword после сброса не перезаписывает пароль оператора', { skip: !bin, timeout: 15_000 }, async () => {
   const email = 'native-api-race@example.test';
-  const id = await createOwner(second, email, 'Гонка server API', password);
+  const id = await createMember(second, email, 'Гонка server API', password);
   const gate = barrier();
   const service = auth(first, pausePassword('/change-password', gate));
   const login = await request(service, 'sign-in/email', { email, password });
