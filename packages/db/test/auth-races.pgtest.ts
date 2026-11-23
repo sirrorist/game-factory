@@ -7,6 +7,7 @@ import { migrate } from 'drizzle-orm/pglite/migrator';
 import type { BetterAuthPlugin } from '../../../apps/hub/node_modules/better-auth/dist/index.mjs';
 import { createHubAuth, SESSION_COOKIE } from '../../../apps/hub/src/lib/auth-core.ts';
 import { createOwner, setPassword } from '../src/admin.ts';
+import { createMember } from './auth-subjects.ts';
 import { schema, session, passkey, account, retryTransaction, user } from '../src/index.ts';
 import { MIGRATIONS_DIR } from '../src/migrations.ts';
 import { authenticator, barrier, cookies, pauseAdapter, pausePassword } from './auth-race-fixtures.ts';
@@ -38,7 +39,7 @@ async function request(auth: ReturnType<typeof service>, path: string, body?: Re
 
 test('F1: вход со старым хешем после аварийного сброса не создаёт сессию', { timeout: 20_000 }, async () => {
   const email = 'race-login@example.test';
-  const id = await createOwner(db, email, 'Гонка входа', password);
+  const id = await createMember(db, email, 'Гонка входа', password);
   const gate = barrier();
   const auth = service(pausePassword('/sign-in/email', gate));
   const inflight = request(auth, 'sign-in/email', { email, password });
@@ -54,7 +55,7 @@ test('F1: вход со старым хешем после аварийного 
 
 test('F2: начатая смена пароля не перезаписывает пароль аварийного сброса', { timeout: 20_000 }, async () => {
   const email = 'race-password@example.test';
-  const id = await createOwner(db, email, 'Гонка пароля', password);
+  const id = await createMember(db, email, 'Гонка пароля', password);
   const gate = barrier();
   const auth = service(pausePassword('/change-password', gate));
   const login = await request(auth, 'sign-in/email', { email, password });
@@ -94,7 +95,7 @@ test('F1: прочитанный перед сбросом passkey не созд
 
 test('F2: регистрация passkey после сброса не сохраняет новый ключ', { timeout: 20_000 }, async () => {
   const email = 'race-passkey-register@example.test';
-  const id = await createOwner(db, email, 'Гонка регистрации', password);
+  const id = await createMember(db, email, 'Гонка регистрации', password);
   const key = authenticator();
   const gate = barrier();
   const auth = service(pauseAdapter('/passkey/verify-registration', 'create', gate));
@@ -114,7 +115,7 @@ test('F2: регистрация passkey после сброса не сохра
 
 test('штатные регистрация/вход passkey и server API работают; getSession не продлевает срок (D-071)', async () => {
   const email = 'normal-passkey@example.test';
-  const id = await createOwner(db, email, 'Штатный ключ', password);
+  const id = await createMember(db, email, 'Штатный ключ', password);
   const auth = service();
   const login = await request(auth, 'sign-in/email', { email, password });
   assert.equal(login.status, 200);
@@ -151,7 +152,7 @@ test('штатные регистрация/вход passkey и server API ра�
 
 test('штатная смена пароля с revokeOtherSessions выпускает новую сессию', async () => {
   const email = 'normal-password@example.test';
-  await createOwner(db, email, 'Штатная смена', password);
+  await createMember(db, email, 'Штатная смена', password);
   const auth = service();
   const login = await request(auth, 'sign-in/email', { email, password });
   assert.equal(login.status, 200);

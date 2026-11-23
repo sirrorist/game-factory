@@ -2,9 +2,10 @@
 
 import { headers } from 'next/headers';
 import { cache } from 'react';
-import { can, readSessionAccess, type Permission, type UserRole } from '@gf/db';
+import { can, type Permission, type UserRole } from '@gf/db';
 import { hubAuth } from './auth.ts';
 import { hubDb } from './db.ts';
+import { sessionAccess } from './session-access.ts';
 
 export interface HubUser {
   id: string;
@@ -18,11 +19,9 @@ export interface HubUser {
 export const currentUser = cache(async (): Promise<HubUser | null> => {
   const auth = hubAuth();
   if (!auth) return null;
-  const s = await auth.api.getSession({ headers: await headers() });
-  if (!s) return null;
   const db = hubDb();
   if (!db) return null;
-  const current = await readSessionAccess(db, s.session.id);
+  const current = (await sessionAccess(auth, db, await headers()))?.user;
   return current ? { id: current.id, name: current.name, email: current.email, role: current.role, status: 'active' } : null;
 });
 

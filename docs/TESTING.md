@@ -55,6 +55,11 @@ unit 335/335, `test:db` 109/109 без пропусков (CI 45177534994). Чт
 восстановление без потерь и только с новым паролем, одноразовый UV, guard по учётке (JSON и
 urlencoded), `/change-password`, ключи факторов по байтам; только native - отсев мусора и
 исчерпанных источников до `access_lock`, один активный enrolment при двух кодах.
+Подключение B (2026-11-23, D-072): `packages/db/test/auth-b-consumers.pgtest.ts` - старый вход
+owner/admin/TOTP-пользователя неотличим от неверного пароля (сырое тело и заголовки) и не зовёт
+`verify`, passkey-вход owner без сессии, SSR и маршрут B не пускают сессию без доказательства,
+белый список путей Better Auth; локально `test:db` 116: 86 pass + 30 skip. Тесты A с owner - на
+developer (`auth-subjects.ts`); e2e входа - developer, владелец через B (`tests/e2e/seed-auth.ts`).
 Лимит на штатных маршрутах Better Auth - `apps/hub/test/guarded-auth.test.ts` (подставной
 обработчик, без Next).
 

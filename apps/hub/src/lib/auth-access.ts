@@ -1,7 +1,7 @@
 // Снимок доказательства входа живёт только в одном handler/api-вызове, не в cookie.
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { lockAuthAccess, readEmailAccess, readPasskeyAccess, retryTransaction, schema, type AnyDb } from '@gf/db';
-import type { BetterAuthOptions, DBAdapter, Where } from 'better-auth';
+import { factorRequired, lockAuthAccess, readEmailAccess, readPasskeyAccess, retryTransaction, schema, type AnyDb } from '@gf/db';
+import { BASE_ERROR_CODES, type BetterAuthOptions, type DBAdapter, type Where } from 'better-auth';
 import { APIError } from 'better-auth/api';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 
@@ -11,6 +11,12 @@ type Mutation = { model: string; data?: Record<string, unknown>; update?: Record
 const mutations = new Set(['create', 'update', 'updateMany', 'delete', 'deleteMany', 'consumeOne', 'incrementOne']);
 
 function denied(): never { throw new APIError('UNAUTHORIZED', { message: 'доступ изменён: повторите вход' }); }
+// Тот же ответ, что у Better Auth на неверный пароль: верный пароль owner/admin без второго
+// фактора не должен отличаться от неверного - иначе старый вход стал бы оракулом пароля.
+// Тем же конструктором, что в sign-in Better Auth: тело должно совпасть байт в байт, с порядком ключей.
+export function invalidLogin(): never {
+  throw APIError.from('UNAUTHORIZED', BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD);
+}
 
 export function authAccess(db: AnyDb) {
   const requests = new AsyncLocalStorage<RequestAccess>();
@@ -59,6 +65,9 @@ export function authAccess(db: AnyDb) {
           }
           // Порядок всегда user → credentials/session. До криптографии блокировок нет.
           if (!await lockAuthAccess(tx, proof, deleteExpired)) denied();
+          // Better Auth выдаёт сессию по одному паролю или passkey без UV. Кому второй фактор
+          // обязателен, тому сессию выдают только процедуры B (gf_b_password_login/totp_login).
+          if (args.model === 'session' && key === 'create' && await factorRequired(tx, proof.userId)) invalidLogin();
           const field = args.model === 'user' ? 'id' : 'userId';
           let input = args;
           if (key === 'create') {

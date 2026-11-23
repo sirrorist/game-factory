@@ -1,15 +1,21 @@
 // Конфигурация без Next/окружения: те же HTTP-обработчики проверяются на временной БД.
 import { passkey } from '@better-auth/passkey';
-import { MIN_PASSWORD_LENGTH, readSessionAccess, type AnyDb } from '@gf/db';
+import { factorStore, MIN_PASSWORD_LENGTH, readEmailAccess, readSessionAccess, type AnyDb } from '@gf/db';
 import { betterAuth, type BetterAuthPlugin } from 'better-auth';
 import { APIError, createAuthMiddleware, getSessionFromCtx } from 'better-auth/api';
-import { authAccess } from './auth-access.ts';
+import { authAccess, invalidLogin } from './auth-access.ts';
 import { SESSION_TTL_S } from './session-bearer.ts';
 
 export const SESSION_COOKIE = '__Host-gf-session';
 
+// Сессия учётки с обязательным вторым фактором ходит в Better Auth только сюда: чтение, выход,
+// имя профиля. Пароль, passkey, email и выдача сессий - через /api/account/security. Белый
+// список: новый путь Better Auth или плагина закрыт, пока его не внесут сюда после ревью.
+const REQUIRED_ALLOWED = new Set(['/get-session', '/sign-out', '/update-user', '/list-sessions',
+  '/revoke-session', '/revoke-sessions', '/revoke-other-sessions', '/passkey/list-user-passkeys']);
+
 export function createHubAuth(db: AnyDb, origin: string, secret: string, plugins: BetterAuthPlugin[] = []) {
-  const access = authAccess(db);
+  const access = authAccess(db), factors = factorStore(db);
   const auth = betterAuth({
     appName: 'Game Factory',
     baseURL: origin,
@@ -52,7 +58,16 @@ export function createHubAuth(db: AnyDb, origin: string, secret: string, plugins
         if (/^\/(?:send-verification-email|verify-email|request-password-reset|reset-password|forget-password)(?:\/|$)/.test(ctx.path)) {
           throw new APIError('FORBIDDEN', { message: 'используйте платформенное действие' });
         }
-        if (ctx.path === '/sign-in/email' && typeof ctx.body?.email === 'string') ctx.body.email = ctx.body.email.trim().toLowerCase();
+        if (ctx.path === '/sign-in/email' && typeof ctx.body?.email === 'string') {
+          ctx.body.email = ctx.body.email.trim().toLowerCase();
+          const row = await readEmailAccess(db, ctx.body.email);
+          if (row && typeof ctx.body.password === 'string' && await factors.required(row.id)) {
+            // Вход только через B. Работа - как у Better Auth для неизвестного email (хэш пароля
+            // и общий 401), без проверки пароля: ни ответ, ни время его не подтверждают.
+            await ctx.context.password.hash(ctx.body.password);
+            invalidLogin();
+          }
+        }
         await access.before(ctx.path, ctx.body);
         // Профиль/пароль/регистрация не являются способом назначить права.
         if (ctx.body && ['role', 'status', 'securityGeneration', 'security_generation', 'emailVerified', 'email_verified', 'authActionsNotBefore', 'auth_actions_not_before']
@@ -61,8 +76,13 @@ export function createHubAuth(db: AnyDb, origin: string, secret: string, plugins
         }
         if (ctx.path === '/sign-out') return;
         const current = await getSessionFromCtx(ctx);
-        if (current && !await readSessionAccess(db, current.session.id)) {
+        // Доказательство B проверяется по исходному bearer: сессия owner без TOTP/UV - не сессия.
+        if (current && (!await readSessionAccess(db, current.session.id)
+          || !await factors.access(current.session.id, current.session.token))) {
           throw new APIError('UNAUTHORIZED', { message: 'сессия недействительна' });
+        }
+        if (current && !REQUIRED_ALLOWED.has(ctx.path) && await factors.required(current.user.id)) {
+          throw new APIError('FORBIDDEN', { message: 'для этой учётки - через раздел безопасности' });
         }
       }),
     },

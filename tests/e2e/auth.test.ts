@@ -1,12 +1,14 @@
-// Вход владельца (слайс 1.2, критерии спецификации этапа 1): вход и выход, атрибуты куки,
-// CSRF в proxy.ts, кука без `__Host-` не принимается, лимит пароля, passkey.
+// Вход в хаб (слайс 1.2, критерии спецификации этапа 1; B - D-066): вход и выход, атрибуты куки,
+// CSRF в proxy.ts, кука без `__Host-` не принимается, лимит пароля, passkey - на учётке developer;
+// владелец входит только паролем и TOTP через /api/account/security, форма его одним паролем не пускает.
 // Хаб - настоящая сборка с настоящим Postgres (GF_E2E_PG) и ролью gf_hub.
 
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Server } from 'node:http';
 import type { Browser } from 'playwright';
-import { buildData, close, freePort, gameVersion, launchBrowser, OWNER, prepareAuthDb, startHub, startPlay, type Hub } from './helpers.ts';
+import { buildData, close, freePort, gameVersion, launchBrowser, MEMBER, OWNER, OWNER_TOTP, prepareAuthDb, startHub, startPlay, type Hub } from './helpers.ts';
+import { totpCode } from '../../packages/db/src/auth-factor-crypto.ts';
 
 let hub: Hub;
 let play: { server: Server; port: number };
@@ -40,15 +42,36 @@ function value(setCookie: string): string {
 /** Вход "как браузер хаба", но из Node: тут можно подставить любой Origin и любые куки. */
 let nextIp = 1;
 /** Каждому входу - свой адрес: лимиты считаются по адресу, тесты не должны делить счёт. */
-async function apiSignIn(password = OWNER.password, ip = `198.51.100.${nextIp++}`): Promise<{ status: number; csrf: string; session?: string; raw?: string }> {
+async function apiSignIn(password = MEMBER.password, ip = `198.51.100.${nextIp++}`, email = MEMBER.email): Promise<{ status: number; csrf: string; session?: string; raw?: string }> {
   const csrf = value(setCookies(await fetch(`${hub.origin}/`)).get('__Host-gf-csrf')!);
   const r = await fetch(`${hub.origin}/api/auth/sign-in/email`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', origin: hubOrigin, cookie: `__Host-gf-csrf=${csrf}`, 'x-gf-csrf': csrf, 'x-real-ip': ip },
-    body: JSON.stringify({ email: OWNER.email, password }),
+    body: JSON.stringify({ email, password }),
   });
   const raw = setCookies(r).get('__Host-gf-session');
   return { status: r.status, csrf, session: raw ? value(raw) : undefined, raw };
+}
+
+/** Вход владельца через B: пароль, затем TOTP. Код одного шага принимается один раз - входим однажды на файл. */
+let ownerSession: string | undefined;
+async function ownerSignIn(): Promise<string> {
+  if (ownerSession) return ownerSession;
+  const csrf = value(setCookies(await fetch(`${hub.origin}/`)).get('__Host-gf-csrf')!);
+  const post = (action: string, body: object, cookie = '') => fetch(`${hub.origin}/api/account/security/${action}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: hubOrigin, cookie: `__Host-gf-csrf=${csrf}; ${cookie}`, 'x-gf-csrf': csrf, 'x-real-ip': '198.51.100.250' },
+    body: JSON.stringify(body),
+  });
+  const first = await post('password', { email: OWNER.email, password: OWNER.password });
+  assert.deepEqual(await first.json(), { code: 'totp_required' }, 'B: пароль владельца - только шаг к TOTP');
+  const context = setCookies(first).get('__Host-gf-factor-context');
+  assert.ok(context, 'B: нет куки контекста');
+  const second = await post('totp', { code: totpCode(OWNER_TOTP, Math.floor(Date.now() / 30000)) }, `__Host-gf-factor-context=${value(context)}`);
+  assert.equal(second.status, 200, await second.clone().text());
+  const raw = setCookies(second).get('__Host-gf-session');
+  assert.ok(raw, 'B: нет куки сессии');
+  return (ownerSession = value(raw));
 }
 
 async function whoAmI(cookie: string): Promise<string | null> {
@@ -62,12 +85,12 @@ test('вход и выход через форму: имя в шапке, стр
   await page.goto(`${hub.origin}/`);
   await page.getByTestId('sign-in-link').click();
   await page.waitForURL(`${hub.origin}/login`);
-  await page.getByLabel('Почта').fill(OWNER.email);
-  await page.getByLabel('Пароль').fill(OWNER.password);
+  await page.getByLabel('Почта').fill(MEMBER.email);
+  await page.getByLabel('Пароль').fill(MEMBER.password);
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
   await page.waitForURL(`${hub.origin}/account`);
-  assert.equal(await page.getByTestId('account-email').textContent(), OWNER.email);
-  assert.equal(await page.getByTestId('user-name').textContent(), OWNER.name);
+  assert.equal(await page.getByTestId('account-email').textContent(), MEMBER.email);
+  assert.equal(await page.getByTestId('user-name').textContent(), MEMBER.name);
 
   await page.getByTestId('sign-out').click();
   await page.waitForURL(`${hub.origin}/`);
@@ -77,15 +100,28 @@ test('вход и выход через форму: имя в шапке, стр
   await page.close();
 });
 
-test('владельцу после входа видны пререлизы (до 1.0.0) с меткой и Web kit; после выхода - снова нет (D-060)', async () => {
-  const id = 'rogue-destiny';
-  assert.match(gameVersion(id), /^0\./, `${id}: уже не пререлиз - взять другую игру`);
+test('владелец: форма одним паролем не пускает (как неверный пароль), B паролем и TOTP - пускает', async () => {
   const page = await browser.newPage();
   await page.goto(`${hub.origin}/login`);
   await page.getByLabel('Почта').fill(OWNER.email);
   await page.getByLabel('Пароль').fill(OWNER.password);
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
-  await page.waitForURL(`${hub.origin}/account`);
+  assert.match((await page.getByTestId('login-error').textContent()) ?? '', /Неверная почта или пароль/);
+  assert.equal(new URL(page.url()).pathname, '/login');
+  await page.close();
+  assert.equal((await apiSignIn(OWNER.password, '198.51.100.249', OWNER.email)).session, undefined);
+  assert.equal(await whoAmI(`__Host-gf-session=${await ownerSignIn()}`), OWNER.email);
+});
+
+test('владельцу после входа видны пререлизы (до 1.0.0) с меткой и Web kit; после выхода - снова нет (D-060)', async () => {
+  const id = 'rogue-destiny';
+  assert.match(gameVersion(id), /^0\./, `${id}: уже не пререлиз - взять другую игру`);
+  const context = await browser.newContext();
+  // Экрана входа B ещё нет: сессию выдаёт API, браузер получает её куку.
+  await context.addCookies([{ name: '__Host-gf-session', value: await ownerSignIn(), url: hub.origin, secure: true, httpOnly: true, sameSite: 'Lax' }]);
+  const page = await context.newPage();
+  await page.goto(`${hub.origin}/account`);
+  assert.equal(await page.getByTestId('account-email').textContent(), OWNER.email);
 
   await page.goto(`${hub.origin}/`);
   const card = page.locator(`[data-game-id="${id}"]`);
@@ -107,7 +143,7 @@ test('владельцу после входа видны пререлизы (д
   assert.equal(await page.locator(`[data-game-id="${id}"]`).count(), 0, 'после выхода пререлиз виден');
   await page.goto(`${hub.origin}/kit`);
   await page.waitForURL(`${hub.origin}/login`);
-  await page.close();
+  await context.close();
 });
 
 test('неверный пароль - сообщение, а не вход', async () => {
@@ -131,7 +167,7 @@ test('кука сессии: __Host-, Secure, HttpOnly, Path=/, SameSite=Lax, б
   assert.match(raw, /;\s*Path=\//i);
   assert.match(raw, /;\s*SameSite=Lax/i);
   assert.doesNotMatch(raw, /;\s*Domain=/i);
-  assert.equal(await whoAmI(`__Host-gf-session=${r.session}`), OWNER.email);
+  assert.equal(await whoAmI(`__Host-gf-session=${r.session}`), MEMBER.email);
 });
 
 test('кука с тем же значением, но без __Host- (её может поставить поддомен игры), не принимается', async () => {
@@ -153,7 +189,7 @@ test('CSRF: Origin игры или без Origin - 403 от proxy даже с в
     fetch(`${hub.origin}/api/auth/update-user`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', cookie, ...headers },
-      body: JSON.stringify({ name: OWNER.name }),
+      body: JSON.stringify({ name: MEMBER.name }),
     });
   const game = `http://snake.play.localhost:${play.port}`;
   assert.ok(await proxyRejected(await post({ origin: game, 'x-gf-csrf': csrf })), 'Origin игры');
@@ -198,9 +234,9 @@ test('перебор пароля: после пяти неверных - 429, �
   const ip = '203.0.113.77';
   for (let i = 0; i < 5; i++) assert.equal((await apiSignIn('неверный пароль', ip)).status, 401, `попытка ${i + 1}`);
   assert.equal((await apiSignIn('неверный пароль', ip)).status, 429);
-  assert.equal((await apiSignIn(OWNER.password, ip)).status, 429);
+  assert.equal((await apiSignIn(MEMBER.password, ip)).status, 429);
   // Другой адрес не задет: бан - адреса, а не учётки (владельца не запереть чужим перебором).
-  assert.equal((await apiSignIn(OWNER.password, '203.0.113.78')).status, 200);
+  assert.equal((await apiSignIn(MEMBER.password, '203.0.113.78')).status, 200);
 });
 
 test('passkey: добавить на странице учётки и войти им без пароля', async () => {
@@ -214,8 +250,8 @@ test('passkey: добавить на странице учётки и войти
   });
 
   await page.goto(`${hub.origin}/login`);
-  await page.getByLabel('Почта').fill(OWNER.email);
-  await page.getByLabel('Пароль').fill(OWNER.password);
+  await page.getByLabel('Почта').fill(MEMBER.email);
+  await page.getByLabel('Пароль').fill(MEMBER.password);
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
   await page.waitForURL(`${hub.origin}/account`);
   await page.getByRole('button', { name: 'Добавить passkey' }).click();
@@ -226,6 +262,6 @@ test('passkey: добавить на странице учётки и войти
   await page.goto(`${hub.origin}/login`);
   await page.getByRole('button', { name: 'Войти с passkey' }).click();
   await page.waitForURL(`${hub.origin}/account`, { timeout: 10_000 });
-  assert.equal(await page.getByTestId('account-email').textContent(), OWNER.email);
+  assert.equal(await page.getByTestId('account-email').textContent(), MEMBER.email);
   await context.close();
 });

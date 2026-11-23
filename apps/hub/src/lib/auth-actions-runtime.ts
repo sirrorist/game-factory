@@ -6,6 +6,7 @@ import { hubMailClientFromEnv } from './mail-client.ts';
 import { hubOrigin } from './config.ts';
 import { hubDb } from './db.ts';
 import { hubAuth } from './auth.ts';
+import { sessionAccess } from './session-access.ts';
 
 let runtime: ReturnType<typeof createRuntime> | undefined;
 function createRuntime() {
@@ -13,7 +14,8 @@ function createRuntime() {
   if (!db || !origin) throw new Error('для закрытого auth-стенда нужны база и origin');
   const keys = authMailKeysFromEnv(), store = authMailStore(db, keys, origin);
   const handle = authActionHttp({ db, origin, keys, store, enabled: true,
-    async session(headers) { return (await hubAuth()?.api.getSession({ headers }))?.session ?? null; } });
+    // Та же проверка, что у страниц: сессия без доказательства B - гость, а не 503.
+    async session(headers) { const auth = hubAuth(); const current = auth && await sessionAccess(auth, db, headers); return current ? { id: current.sessionId } : null; } });
   return { store, handle };
 }
 export async function handleAuthAction(req: Request, purpose: 'verify' | 'reset', action: 'request' | 'consume') {

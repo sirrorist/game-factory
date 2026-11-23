@@ -20,6 +20,17 @@ function createAuth(db: NonNullable<ReturnType<typeof hubDb>>, origin: string, s
 export type HubAuth = ReturnType<typeof createAuth>;
 
 let cached: HubAuth | null | undefined;
+let secret: string | undefined;
+
+/** Секрет входа из файла: им же подписывается кука сессии, которую выдаёт B. */
+export function hubAuthSecret(): string {
+  if (secret !== undefined) return secret;
+  const file = process.env.GF_AUTH_SECRET_FILE;
+  if (!file) throw new Error('база настроена, а GF_AUTH_SECRET_FILE - нет: секрет входа берётся только из файла');
+  const value = readFileSync(file, 'utf8').trim();
+  if (value.length < 32) throw new Error('GF_AUTH_SECRET_FILE: секрет короче 32 символов');
+  return (secret = value);
+}
 
 /**
  * Вход хаба или null, если база не настроена (сборка, e2e без базы). База есть, а origin или
@@ -31,9 +42,5 @@ export function hubAuth(): HubAuth | null {
   if (!db) return (cached = null);
   const origin = hubOrigin();
   if (!origin) throw new Error('база настроена, а GF_HUB_ORIGIN - нет: вход без origin хаба не включается');
-  const file = process.env.GF_AUTH_SECRET_FILE;
-  if (!file) throw new Error('база настроена, а GF_AUTH_SECRET_FILE - нет: секрет входа берётся только из файла');
-  const secret = readFileSync(file, 'utf8').trim();
-  if (secret.length < 32) throw new Error('GF_AUTH_SECRET_FILE: секрет короче 32 символов');
-  return (cached = createAuth(db, origin, secret));
+  return (cached = createAuth(db, origin, hubAuthSecret()));
 }

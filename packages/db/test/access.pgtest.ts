@@ -12,6 +12,7 @@ import {
   schema, session, user, type UserRole,
 } from '../src/index.ts';
 import { createOwner, setPassword } from '../src/admin.ts';
+import { createMember } from './auth-subjects.ts';
 import { MIGRATIONS_DIR } from '../src/migrations.ts';
 import { ensureHubRole, HUB_ROLE } from '../src/roles.ts';
 import { createHubAuth, SESSION_COOKIE } from '../../../apps/hub/src/lib/auth-core.ts';
@@ -215,19 +216,19 @@ function sessionCookie(response: Response): string {
 }
 
 test('реальные HTTP auth: роль не меняется через профиль, регистрация/удаление закрыты, old cookie отозвана', async () => {
-  const id = await createOwner(db, 'http-owner@example.test', 'Тестовый owner', password);
+  const id = await createMember(db, 'http-owner@example.test', 'Тестовый developer', password);
   const service = auth();
   const login = await requestAuth(service, 'sign-in/email', { email: 'http-owner@example.test', password });
   assert.equal(login.status, 200, await login.clone().text());
   const cookie = sessionCookie(login);
   const sessionResponse = await requestAuth(service, 'get-session', undefined, cookie);
   const logged = await sessionResponse.json();
-  assert.equal(can(await readSessionAccess(db, logged.session.id), 'kit.view'), true);
+  assert.equal((await readSessionAccess(db, logged.session.id))?.role, 'developer');
   for (const body of [{ role: 'user' }, { status: 'suspended' }, { securityGeneration: 42 }, { emailVerified: true }]) {
     const response = await requestAuth(service, 'update-user', { name: 'Профиль', ...body }, cookie);
     assert.equal(response.status, 400, JSON.stringify(body));
   }
-  assert.equal((await readUserAccess(db, id))?.role, 'owner');
+  assert.equal((await readUserAccess(db, id))?.role, 'developer');
   const deletion = await requestAuth(service, 'delete-user', { password }, cookie);
   assert.notEqual(deletion.status, 200);
   const signup = await requestAuth(service, 'sign-up/email', { email: 'new@example.test', password, name: 'Новый' });
@@ -237,11 +238,11 @@ test('реальные HTTP auth: роль не меняется через пр
   const again = await requestAuth(service, 'sign-in/email', { email: 'http-owner@example.test', password });
   assert.equal(again.status, 200);
   const newSession = await (await requestAuth(service, 'get-session', undefined, sessionCookie(again))).json();
-  assert.equal(can(await readSessionAccess(db, newSession.session.id), 'kit.view'), false);
+  assert.equal((await readSessionAccess(db, newSession.session.id))?.role, 'user');
 });
 
 test('блокировка закрывает новый парольный вход и общий путь создания сессий passkey, разблокировка не оживляет old cookie', async () => {
-  const id = await createOwner(db, 'http-blocked@example.test', 'Блокируемый', password);
+  const id = await createMember(db, 'http-blocked@example.test', 'Блокируемый', password);
   const service = auth();
   const login = await requestAuth(service, 'sign-in/email', { email: 'http-blocked@example.test', password });
   assert.equal(login.status, 200);
@@ -269,7 +270,7 @@ test('аварийная смена пароля остаётся атомарн
 });
 
 test('реальный вход и изменение профиля работают с ограниченной SQL-ролью хаба', async () => {
-  await createOwner(db, 'limited-db@example.test', 'Ограниченный SQL', password);
+  await createMember(db, 'limited-db@example.test', 'Ограниченный SQL', password);
   const service = auth();
   await ensureHubRole(db, 'only-test-hub-password-1234');
   await db.execute(sql.raw(`set role ${HUB_ROLE}`));
@@ -281,7 +282,7 @@ test('реальный вход и изменение профиля работ�
     assert.equal(profile.status, 200, await profile.clone().text());
     const current = await (await requestAuth(service, 'get-session', undefined, cookie)).json();
     assert.equal(current.user.name, 'Обновлённый профиль');
-    assert.equal(can(await readSessionAccess(db, current.session.id), 'kit.view'), true);
+    assert.equal((await readSessionAccess(db, current.session.id))?.role, 'developer');
   } finally {
     await db.execute(sql`reset role`);
   }

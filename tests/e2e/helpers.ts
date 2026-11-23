@@ -10,6 +10,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createPlayServer } from '../../apps/play-server/src/server.ts';
+import { totpSecret } from '../../packages/db/src/auth-factor-crypto.ts';
 
 const ROOT = new URL('../../', import.meta.url).pathname;
 
@@ -145,21 +146,30 @@ export async function startHub(opts: { port: number; dataDir: string; playPort: 
 }
 
 export const OWNER = { email: 'owner@e2e.test', name: 'Владелец', password: 'e2e owner password 1' };
+/** Учётка без обязательного второго фактора: owner одним паролем не входит (B). */
+export const MEMBER = { email: 'developer@e2e.test', name: 'Разработчик', password: 'e2e developer password 1' };
+/** TOTP владельца для этого процесса: prepareAuthDb заводит его в базе заново. */
+export const OWNER_TOTP = totpSecret();
 
 /**
  * База для e2e входа: настоящий Postgres из GF_E2E_PG (в CI - сервис той же версии, что прод).
- * Миграции и роль хаба - как на проде (migrate.ts), владелец - командой admin.ts; хаб потом
- * ходит в базу ролью gf_hub, не владельцем. Возвращает окружение для startHub.
+ * Миграции и роль хаба - как на проде (migrate.ts), владелец - командой admin.ts, developer и
+ * TOTP владельца - seed-auth.ts; хаб потом ходит в базу ролью gf_hub, не владельцем.
+ * Возвращает окружение для startHub.
  */
 export function prepareAuthDb(hubOrigin: string): Record<string, string> {
   const owner = process.env.GF_E2E_PG;
   if (!owner) throw new Error('GF_E2E_PG не задан: e2e входа нужен Postgres (в CI - сервис postgres)');
   const dir = mkdtempSync(join(tmpdir(), 'gf-e2e-auth-'));
   const hubPassword = randomBytes(18).toString('base64url');
-  const files = { hub: join(dir, 'hub'), secret: join(dir, 'secret'), admin: join(dir, 'admin') };
+  const files = { hub: join(dir, 'hub'), secret: join(dir, 'secret'), admin: join(dir, 'admin'),
+    member: join(dir, 'member'), factorKey: join(dir, 'factor-key'), totp: join(dir, 'totp') };
   writeFileSync(files.hub, hubPassword);
   writeFileSync(files.secret, randomBytes(32).toString('base64url'));
   writeFileSync(files.admin, OWNER.password);
+  writeFileSync(files.member, MEMBER.password);
+  writeFileSync(files.factorKey, randomBytes(32));
+  writeFileSync(files.totp, OWNER_TOTP);
   const db = join(ROOT, 'packages/db/src');
   const run = (args: string[], env: Record<string, string>): void => {
     const r = spawnSync(process.execPath, args, { cwd: join(ROOT, 'packages/db'), env: { ...process.env, GF_DATABASE_URL: owner, ...env }, encoding: 'utf8' });
@@ -172,8 +182,10 @@ export function prepareAuthDb(hubOrigin: string): Record<string, string> {
   } catch {
     run([join(db, 'admin.ts'), 'set-password', '--email', OWNER.email], { GF_ADMIN_PASSWORD_FILE: files.admin });
   }
+  run([join(ROOT, 'tests/e2e/seed-auth.ts'), MEMBER.email, MEMBER.name, files.member, files.factorKey, files.totp, OWNER.email], {});
   const url = new URL(owner);
   url.username = 'gf_hub';
   url.password = hubPassword;
-  return { GF_DATABASE_URL: url.toString(), GF_HUB_ORIGIN: hubOrigin, GF_AUTH_SECRET_FILE: files.secret };
+  return { GF_DATABASE_URL: url.toString(), GF_HUB_ORIGIN: hubOrigin, GF_AUTH_SECRET_FILE: files.secret,
+    GF_AUTH_FACTOR_KEY_FILE: files.factorKey };
 }

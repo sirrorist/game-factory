@@ -1,4 +1,4 @@
-// Реальный HTTP-контроллер и SQL; Next-маршрут B пока не подключён.
+// Реальный HTTP-контроллер и SQL; Next-маршрут - app/api/account/security/[action] (тонкая обёртка).
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';

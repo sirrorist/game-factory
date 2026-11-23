@@ -27,6 +27,16 @@ export async function factorResult<T>(db: AnyDb, query: SQL): Promise<T> {
     return rows[0]!.value;
   });
 }
+/**
+ * Обязателен ли второй фактор: роль admin/owner, флаг усиления или активный TOTP; неизвестная
+ * учётка - да. Без своей транзакции: адаптер Better Auth зовёт её внутри своей, после блокировки
+ * строки user, - так смена роли не проскочит между проверкой и выдачей сессии.
+ */
+export async function factorRequired(db: Pick<AnyDb, 'execute'>, userId: string): Promise<boolean> {
+  const result = await db.execute(sql`select public.gf_b_required(${userId}) as value`);
+  const rows = (Array.isArray(result) ? result : (result as { rows: unknown[] }).rows) as { value: boolean }[];
+  return rows[0]?.value !== false;
+}
 const array = (values: readonly string[]) => sql`ARRAY[${sql.join(values.map(value => sql`${value}`), sql`, `)}]::text[]`;
 
 export function factorStore(db: AnyDb) {
@@ -36,6 +46,9 @@ export function factorStore(db: AnyDb) {
     },
     access(id: string, bearer: string): Promise<SessionProof | null> {
       return factorResult(db, sql`select public.gf_b_session_access(${id},${bearer}) as value`);
+    },
+    required(userId: string): Promise<boolean> {
+      return factorRequired(db, userId);
     },
     passwordContext(s: FactorSnapshot, hash: string, purpose: 'login' | 'reauth' | 'password',
       original: { id: string; bearer: string } | null, sourceHash: string): Promise<boolean> {
