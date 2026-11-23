@@ -53,10 +53,16 @@ async function apiSignIn(password = MEMBER.password, ip = `198.51.100.${nextIp++
   return { status: r.status, csrf, session: raw ? value(raw) : undefined, raw };
 }
 
-/** Вход владельца через B: пароль, затем TOTP. Код одного шага принимается один раз - входим однажды на файл. */
-let ownerSession: string | undefined;
+/** Код TOTP владельца: код одного шага B принимает один раз, второй вход - следующим шагом (окно пускает). */
+let lastStep = -1;
+function ownerCode(): string {
+  const step = Math.max(Math.floor(Date.now() / 30000), lastStep + 1);
+  lastStep = step;
+  return totpCode(OWNER_TOTP, step);
+}
+
+/** Вход владельца через B из Node: пароль, затем TOTP; возвращает значение куки сессии. */
 async function ownerSignIn(): Promise<string> {
-  if (ownerSession) return ownerSession;
   const csrf = value(setCookies(await fetch(`${hub.origin}/`)).get('__Host-gf-csrf')!);
   const post = (action: string, body: object, cookie = '') => fetch(`${hub.origin}/api/account/security/${action}`, {
     method: 'POST',
@@ -67,11 +73,11 @@ async function ownerSignIn(): Promise<string> {
   assert.deepEqual(await first.json(), { code: 'totp_required' }, 'B: пароль владельца - только шаг к TOTP');
   const context = setCookies(first).get('__Host-gf-factor-context');
   assert.ok(context, 'B: нет куки контекста');
-  const second = await post('totp', { code: totpCode(OWNER_TOTP, Math.floor(Date.now() / 30000)) }, `__Host-gf-factor-context=${value(context)}`);
+  const second = await post('totp', { code: ownerCode() }, `__Host-gf-factor-context=${value(context)}`);
   assert.equal(second.status, 200, await second.clone().text());
   const raw = setCookies(second).get('__Host-gf-session');
   assert.ok(raw, 'B: нет куки сессии');
-  return (ownerSession = value(raw));
+  return value(raw);
 }
 
 async function whoAmI(cookie: string): Promise<string | null> {
@@ -117,9 +123,17 @@ test('владельцу после входа видны пререлизы (д
   const id = 'rogue-destiny';
   assert.match(gameVersion(id), /^0\./, `${id}: уже не пререлиз - взять другую игру`);
   const context = await browser.newContext();
-  // Экрана входа B ещё нет: сессию выдаёт API, браузер получает её куку.
-  await context.addCookies([{ name: '__Host-gf-session', value: await ownerSignIn(), url: hub.origin, secure: true, httpOnly: true, sameSite: 'Lax' }]);
   const page = await context.newPage();
+  // Экрана входа B ещё нет: страница хаба сама зовёт маршрут B, куки ставит ответ хаба
+  // (подставить __Host- куку через addCookies на http://localhost Chromium не даёт).
+  await page.goto(`${hub.origin}/login`);
+  const statuses = await page.evaluate(async ({ email, password, code }) => {
+    const csrf = document.cookie.split('; ').find((c) => c.startsWith('__Host-gf-csrf='))!.slice('__Host-gf-csrf='.length);
+    const post = (action: string, body: object) => fetch(`/api/account/security/${action}`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-gf-csrf': csrf }, body: JSON.stringify(body) });
+    return [(await post('password', { email, password })).status, (await post('totp', { code })).status];
+  }, { email: OWNER.email, password: OWNER.password, code: ownerCode() });
+  assert.deepEqual(statuses, [200, 200]);
   await page.goto(`${hub.origin}/account`);
   assert.equal(await page.getByTestId('account-email').textContent(), OWNER.email);
 

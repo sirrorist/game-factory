@@ -270,6 +270,12 @@ PGlite в `test:db` работает суперпользователем: пр�
 проходило, e2e на настоящем Postgres дал 503. Обход: B - отдельным пулом `authDb()` ролью `gf_auth`;
 что видит какая роль - проверяют только native-тесты и e2e в CI, не PGlite.
 
+**П-087. `context.addCookies` не ставит `__Host-` куку на `http://localhost`.**
+Симптом: `Storage.setCookies: Invalid cookie fields` (CI 45200374815). `Set-Cookie` от хаба на
+localhost Chromium принимает (localhost - безопасный контекст), а CDP-установку `Secure` куки для
+`http://` - нет. Обход: не подставлять сессию, а войти из страницы хаба (`page.evaluate` + `fetch`
+к маршруту) - куку ставит ответ сервера. Второй вход TOTP в одном файле - код следующего шага.
+
 ## Сборка игр (Vite и движки)
 
 **П-059. После слияния новой игры `games:build` падает: `vite: not found`.**
