@@ -3,16 +3,16 @@ import { FACTOR_CONTEXT_COOKIE, FACTOR_ENROL_COOKIE, FACTOR_REAUTH_COOKIE, type 
 import { checkCsrf } from './csrf.ts';
 import { CSRF_COOKIE, CSRF_HEADER } from './csrf-names.ts';
 import { cookieValue, readBody } from './auth-actions-http.ts';
-import { clientIp, ipKey, LoginGuard } from './login-guard.ts';
+import { clientIp, guardSubject, ipKey, passwordGuard, type LoginGuard } from './login-guard.ts';
 
-export const factorPasswordGuard = new LoginGuard();
 const headers={'cache-control':'no-store','referrer-policy':'no-referrer','x-robots-tag':'noindex','x-content-type-options':'nosniff'};
 const cookie=(name:string,value:string)=>`${name}=${value}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=300`;
 const clear=(name:string)=>`${name}=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0`;
 
 export function factorHttp(deps:{enabled:boolean;origin:string;secret:string;control:FactorController;
   session:(headers:Headers)=>Promise<{id:string;email:string}|null>;guard?:LoginGuard}) {
-  const guard=deps.guard??factorPasswordGuard;
+  // По умолчанию - общий счёт со старым маршрутом входа: два счёта удвоили бы лимит на адрес.
+  const guard=deps.guard??passwordGuard;
   return async(req:Request,action:string):Promise<Response>=>{
     const reply=(value:object,status=200,cookies:string[]=[])=>{
       const h=new Headers(headers);for(const value of cookies)h.append('set-cookie',value);
@@ -47,9 +47,9 @@ export function factorHttp(deps:{enabled:boolean;origin:string;secret:string;con
         const verdict=guard.check(source);
         if(verdict.banned){const res=reply({code:'source_limited'},429);res.headers.set('retry-after',String(verdict.retryAfterS));return res;}
         const old=action==='reauth'?await original():null;if(action==='reauth'&&!old)return fail();
-        const result=await deps.control.password(input.email!,input.password!,source,old);
-        if(!result){const ban=guard.fail(source);console.warn(`gf-auth: вход отклонён ip=${clientIp(req.headers)} причина=пароль${ban?` бан=${ban.bannedForS}с`:''}`);return fail();}
-        guard.success(source);
+        const result=await deps.control.password(input.email!,input.password!,source,old),subject=guardSubject(input.email);
+        if(!result){const ban=guard.fail(source,Date.now(),subject);console.warn(`gf-auth: вход отклонён ip=${clientIp(req.headers)} причина=пароль${ban?` бан=${ban.bannedForS}с`:''}`);return fail();}
+        guard.success(source,subject);
         if(result.kind==='denied')return fail();
         return result.kind==='totp'?reply({code:'totp_required'},200,[cookie(FACTOR_CONTEXT_COOKIE,result.cookie)])
           :reply({code:'ok'},200,[await signedSessionCookie(result.session.token,deps.secret),clear(FACTOR_CONTEXT_COOKIE)]);
@@ -79,8 +79,15 @@ export function factorHttp(deps:{enabled:boolean;origin:string;secret:string;con
       }
       const old=await original();if(!old)return fail();
       if(action==='password-change') {
-        return await deps.control.changePassword(old,old.email,input.password!,input.newPassword!)
-          ?reply({code:'ok'},200,[clear(SESSION_COOKIE)]):fail();
+        // Проверка старого пароля - тот же лимит, что у входа: свежая сессия не даёт подбирать его без счёта.
+        const verdict=guard.check(source),subject=guardSubject(old.email);
+        if(verdict.banned){const res=reply({code:'source_limited'},429);res.headers.set('retry-after',String(verdict.retryAfterS));return res;}
+        if(await deps.control.changePassword(old,old.email,input.password!,input.newPassword!)) {
+          guard.success(source,subject);return reply({code:'ok'},200,[clear(SESSION_COOKIE)]);
+        }
+        const ban=guard.fail(source,Date.now(),subject);
+        console.warn(`gf-auth: смена пароля отклонена ip=${clientIp(req.headers)} причина=пароль${ban?` бан=${ban.bannedForS}с`:''}`);
+        return fail();
       }
       if(action==='backup-rotate') {const result=await deps.control.rotate(old);return result?reply(result):fail();}
       if(action==='uv-reauth') {const result=await deps.control.uvContext(old);return result?reply({code:'ok'},200,[cookie(FACTOR_REAUTH_COOKIE,result)]):fail();}

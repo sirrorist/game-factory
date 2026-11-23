@@ -117,6 +117,7 @@ const B_WRITERS = [
   'gf_b_totp_pending(text,text,text,text)',
   'gf_b_totp_complete(text,text,text,text,bigint,text[],text,text)',
   'gf_b_backup_context(text,text)',
+  'gf_b_uv_login_context(text,text)',
   'gf_b_backup_recover(text,text,text,text,text)',
   'gf_b_password_change(text,text,text,text,text)',
   'gf_b_backup_rotate(text,text,text[],text)',

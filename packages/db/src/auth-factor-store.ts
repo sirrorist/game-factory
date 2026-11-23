@@ -91,7 +91,10 @@ export function factorStore(db: AnyDb) {
     uvContext(session: { id: string; bearer: string }, hash: string): Promise<boolean> {
       return factorResult(db, sql`select public.gf_b_uv_context(${session.id},${session.bearer},${hash}) as value`);
     },
-    uvFinish(snapshot: UvSnapshot, counter: number, hash: string | null,
+    uvLoginContext(hash: string, sourceHash: string): Promise<boolean> {
+      return factorResult(db, sql`select public.gf_b_uv_login_context(${hash},${sourceHash}) as value`);
+    },
+    uvFinish(snapshot: UvSnapshot, counter: number, hash: string,
       session: { id: string; token: string; issuance: string }, hashes: readonly string[], setId: string): Promise<FactorSession | { enrolled: true } | null> {
       return factorResult(db, sql`select public.gf_b_uv_finish(${snapshot.userId},${snapshot.generation},${snapshot.key.id},
         ${snapshot.fingerprint},${counter},${hash},${session.id},${session.token},${session.issuance},${array(hashes)},${setId}) as value`);

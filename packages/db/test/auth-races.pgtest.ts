@@ -112,7 +112,7 @@ test('F2: регистрация passkey после сброса не сохра
   assert.equal((await db.select().from(passkey).where(eq(passkey.userId, id))).length, 0);
 });
 
-test('штатные регистрация/вход passkey, server API и refresh сохраняют работу', async () => {
+test('штатные регистрация/вход passkey и server API работают; getSession не продлевает срок (D-071)', async () => {
   const email = 'normal-passkey@example.test';
   const id = await createOwner(db, email, 'Штатный ключ', password);
   const auth = service();
@@ -136,7 +136,9 @@ test('штатные регистрация/вход passkey, server API и refr
   assert.equal(current?.user.id, id);
   await db.update(session).set({ expiresAt: new Date(Date.now() + 86_400_000) }).where(eq(session.id, current!.session.id));
   const refreshed = await auth.api.getSession({ headers: new Headers({ cookie }) });
-  assert.ok(refreshed!.session.expiresAt.getTime() > Date.now() + 86_400_000);
+  // Сессия работает, но не продлевается: срок - строго 30 дней от входа (D-071).
+  assert.equal(refreshed?.user.id, id);
+  assert.ok(refreshed!.session.expiresAt.getTime() <= Date.now() + 86_400_000);
   assert.equal((await request(auth, 'sign-out', {}, cookie)).status, 200);
   assert.equal(await auth.api.getSession({ headers: new Headers({ cookie }) }), null);
   const fresh = await request(auth, 'sign-in/email', { email, password });

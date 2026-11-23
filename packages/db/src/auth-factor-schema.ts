@@ -28,7 +28,7 @@ export const authContexts = authPrivate.table('contexts', {
   createdAt: time('created_at'), expiresAt: time('expires_at'),
 }, t => [check('context_hash', sql`${t.tokenHash} ~ '^[a-f0-9]{64}$'`),
   check('context_state', sql`${t.state} in ('active', 'spent')`),
-  check('context_purpose', sql`${t.purpose} in ('login','reauth','password','enrol-token','enrol-cookie','setup','backup')`),
+  check('context_purpose', sql`${t.purpose} in ('login','reauth','password','enrol-token','enrol-cookie','setup','backup','uv-login')`),
   check('context_attempts', sql`${t.attempts} between 0 and 5`),
   index('context_expiry_idx').on(t.expiresAt), index('context_user_idx').on(t.userId)]);
 
@@ -49,7 +49,7 @@ export const authReservations = authPrivate.table('reservations', {
 export const authFactorCounters = authPrivate.table('counters', {
   key: text('key').primaryKey(), domain: text('domain').notNull(),
   hits: jsonb('hits').$type<number[]>().notNull(), expiresAt: time('expires_at'),
-}, t => [check('factor_counter_domain', sql`${t.domain} in ('mfa', 'backup', 'issue', 'enrol')`),
+}, t => [check('factor_counter_domain', sql`${t.domain} in ('mfa', 'backup', 'issue', 'enrol', 'uv')`),
   check('factor_counter_bounded', sql`jsonb_typeof(${t.hits}) = 'array' and jsonb_array_length(${t.hits}) <= 20`),
   index('factor_counter_expiry_idx').on(t.expiresAt)]);
 

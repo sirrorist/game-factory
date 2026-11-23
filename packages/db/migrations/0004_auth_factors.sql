@@ -24,7 +24,7 @@ CREATE TABLE "auth_private"."contexts" (
 	"expires_at" timestamp with time zone NOT NULL,
 	CONSTRAINT "context_hash" CHECK ("auth_private"."contexts"."token_hash" ~ '^[a-f0-9]{64}$'),
 	CONSTRAINT "context_state" CHECK ("auth_private"."contexts"."state" in ('active', 'spent')),
-	CONSTRAINT "context_purpose" CHECK ("auth_private"."contexts"."purpose" in ('login','reauth','password','enrol-token','enrol-cookie','setup','backup')),
+	CONSTRAINT "context_purpose" CHECK ("auth_private"."contexts"."purpose" in ('login','reauth','password','enrol-token','enrol-cookie','setup','backup','uv-login')),
 	CONSTRAINT "context_attempts" CHECK ("auth_private"."contexts"."attempts" between 0 and 5)
 );
 --> statement-breakpoint
@@ -33,7 +33,7 @@ CREATE TABLE "auth_private"."counters" (
 	"domain" text NOT NULL,
 	"hits" jsonb NOT NULL,
 	"expires_at" timestamp with time zone NOT NULL,
-	CONSTRAINT "factor_counter_domain" CHECK ("auth_private"."counters"."domain" in ('mfa', 'backup', 'issue', 'enrol')),
+	CONSTRAINT "factor_counter_domain" CHECK ("auth_private"."counters"."domain" in ('mfa', 'backup', 'issue', 'enrol', 'uv')),
 	CONSTRAINT "factor_counter_bounded" CHECK (jsonb_typeof("auth_private"."counters"."hits") = 'array' and jsonb_array_length("auth_private"."counters"."hits") <= 20)
 );
 --> statement-breakpoint
@@ -111,10 +111,13 @@ REVOKE ALL ON FUNCTION public.gf_b_required(text) FROM PUBLIC;
 CREATE OR REPLACE FUNCTION public.gf_guard_session_access() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE current_generation integer; current_status text;
 BEGIN
+  -- Сессия живёт строго 30 дней от входа (D-071): продление не двигает срок дальше.
   IF TG_OP = 'INSERT' THEN
+    NEW.expires_at := least(NEW.expires_at, NEW.created_at + interval '30 days');
     SELECT security_generation, status INTO current_generation, current_status
       FROM public."user" WHERE id = NEW.user_id FOR SHARE;
   ELSE
+    NEW.expires_at := least(NEW.expires_at, OLD.created_at + interval '30 days');
     -- Строка session уже заблокирована: здесь нет обратной блокировки user.
     IF OLD.expires_at <= clock_timestamp() THEN
       RAISE EXCEPTION 'нельзя продлевать истёкшую сессию' USING ERRCODE = '23514';
@@ -170,6 +173,11 @@ DECLARE c auth_private.contexts%ROWTYPE; u public."user"%ROWTYPE;
 BEGIN
   IF context_hash IS NULL OR context_hash !~ '^[a-f0-9]{64}$' OR source_hash IS NULL
      OR source_hash !~ '^[a-f0-9]{64}$' OR attempt_id IS NULL OR attempt_id !~ '^[a-f0-9]{64}$' THEN RETURN NULL; END IF;
+  -- Неизвестный или погасший контекст отсекаем до глобальной блокировки: поток мусорных
+  -- cookie не должен вставать в очередь вместе с настоящими входами. Решение - по строке,
+  -- перечитанной уже под блокировкой ниже.
+  IF NOT EXISTS (SELECT 1 FROM auth_private.contexts WHERE token_hash = context_hash
+    AND state = 'active' AND expires_at > clock_timestamp()) THEN RETURN NULL; END IF;
   UPDATE public.access_lock SET id = id WHERE id = 1;
   IF NOT FOUND THEN RAISE EXCEPTION 'не готова блокировка изменений доступа'; END IF;
   SELECT * INTO c FROM auth_private.contexts WHERE token_hash = context_hash;
@@ -232,7 +240,7 @@ BEGIN
   now_at := clock_timestamp();
   DELETE FROM auth_private.contexts WHERE token_hash IN
     (SELECT token_hash FROM auth_private.contexts WHERE expires_at < now_at - interval '1 day' ORDER BY expires_at LIMIT 100);
-  IF (SELECT count(*) FROM auth_private.contexts cx WHERE cx.purpose <> 'backup') >= 10000 THEN RETURN false; END IF;
+  IF (SELECT count(*) FROM auth_private.contexts cx WHERE cx.purpose NOT IN ('backup','uv-login')) >= 10000 THEN RETURN false; END IF;
   keys := ARRAY['issue:target:' || public.gf_b_hash(uid || ':' || purpose), 'issue:source:' || source_hash];
   budgets := ARRAY[5,20];
   FOR i IN 1..2 LOOP
@@ -284,7 +292,7 @@ BEGIN
   UPDATE auth_private.reservations SET finished_at = now_at WHERE id = attempt_id;
   IF c.purpose = 'reauth' THEN DELETE FROM public.session WHERE id = c.session_id; END IF;
   INSERT INTO public.session(id,token,user_id,security_generation,created_at,updated_at,expires_at)
-    VALUES(new_id,new_token,u.id,u.security_generation,now_at,now_at,now_at + interval '7 days') RETURNING * INTO s;
+    VALUES(new_id,new_token,u.id,u.security_generation,now_at,now_at,now_at + interval '30 days') RETURNING * INTO s;
   INSERT INTO auth_private.proofs(session_id,user_id,generation,bearer_hash,issuance_id,method,factor_id,verified_at)
     VALUES(s.id,u.id,u.security_generation,public.gf_b_hash(s.token),issuance_id,'totp',f.id,now_at);
   RETURN to_jsonb(s);
@@ -345,7 +353,7 @@ BEGIN
   UPDATE auth_private.contexts SET state='spent' WHERE token_hash=c.token_hash;
   IF c.purpose='password' THEN DELETE FROM public.session WHERE id=c.session_id; END IF;
   INSERT INTO public.session(id,token,user_id,security_generation,created_at,updated_at,expires_at)
-    VALUES(new_id,new_token,u.id,u.security_generation,now_at,now_at,now_at+interval '7 days') RETURNING * INTO s;
+    VALUES(new_id,new_token,u.id,u.security_generation,now_at,now_at,now_at+interval '30 days') RETURNING * INTO s;
   INSERT INTO auth_private.proofs(session_id,user_id,generation,bearer_hash,issuance_id,method,verified_at)
     VALUES(s.id,u.id,u.security_generation,public.gf_b_hash(s.token),issuance_id,'password',now_at);
   RETURN to_jsonb(s);
@@ -374,7 +382,7 @@ BEGIN
   IF NOT FOUND THEN RETURN false; END IF;
   access:=public.gf_b_fresh(sid,bearer);now_at:=clock_timestamp();
   IF access IS NULL OR context_hash IS NULL OR context_hash!~'^[a-f0-9]{64}$'
-    OR (SELECT count(*) FROM auth_private.contexts WHERE purpose<>'backup')>=10000 THEN RETURN false; END IF;
+    OR (SELECT count(*) FROM auth_private.contexts WHERE purpose NOT IN ('backup','uv-login'))>=10000 THEN RETURN false; END IF;
   UPDATE auth_private.contexts SET state='spent' WHERE user_id=u.id AND purpose='setup';
   INSERT INTO auth_private.contexts(token_hash,user_id,generation,purpose,session_id,session_bearer_hash,created_at,expires_at)
     VALUES(context_hash,u.id,u.security_generation,'setup',sid,public.gf_b_hash(bearer),now_at,now_at+interval '5 minutes');
@@ -392,7 +400,7 @@ BEGIN
     OR reason~'[[:cntrl:]]' THEN RETURN false; END IF;
   UPDATE public.access_lock SET id=id WHERE id=1;
   SELECT * INTO u FROM public."user" WHERE id=uid FOR UPDATE;
-  IF NOT FOUND OR u.status<>'active' OR (SELECT count(*) FROM auth_private.contexts WHERE purpose<>'backup')>=10000 THEN RETURN false; END IF;
+  IF NOT FOUND OR u.status<>'active' OR (SELECT count(*) FROM auth_private.contexts WHERE purpose NOT IN ('backup','uv-login'))>=10000 THEN RETURN false; END IF;
   now_at:=clock_timestamp();
   UPDATE public.account SET password=password_hash,updated_at=now_at WHERE user_id=uid AND provider_id='credential';
   IF NOT FOUND THEN RETURN false; END IF;
@@ -416,6 +424,9 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog AS $$
 DECLARE c auth_private.contexts%ROWTYPE; u public."user"%ROWTYPE; now_at timestamptz;
 BEGIN
   IF cookie_hash IS NULL OR cookie_hash!~'^[a-f0-9]{64}$' OR original_hash=cookie_hash THEN RETURN false; END IF;
+  -- Как в gf_b_reserve: случайный token не доходит до глобальной блокировки.
+  IF NOT EXISTS(SELECT 1 FROM auth_private.contexts WHERE token_hash=original_hash
+    AND state='active' AND expires_at>clock_timestamp()) THEN RETURN false; END IF;
   UPDATE public.access_lock SET id=id WHERE id=1;
   SELECT * INTO c FROM auth_private.contexts WHERE token_hash=original_hash;
   IF NOT FOUND THEN RETURN false; END IF;
@@ -424,8 +435,9 @@ BEGIN
   IF NOT FOUND OR u.status<>'active' OR u.security_generation<>c.generation OR c.state<>'active'
     OR c.purpose<>'enrol-token' OR c.expires_at<=now_at THEN RETURN false; END IF;
   UPDATE auth_private.contexts SET state='spent' WHERE token_hash=c.token_hash;
-  INSERT INTO auth_private.contexts(token_hash,user_id,generation,purpose,created_at,expires_at)
-    VALUES(cookie_hash,u.id,u.security_generation,'enrol-cookie',now_at,c.expires_at);
+  -- data несёт метку recovery дальше: по ней totp_complete отзывает прежние факторы.
+  INSERT INTO auth_private.contexts(token_hash,user_id,generation,purpose,data,created_at,expires_at)
+    VALUES(cookie_hash,u.id,u.security_generation,'enrol-cookie',c.data,now_at,c.expires_at);
   RETURN true;
 END;
 $$;
@@ -448,7 +460,7 @@ BEGIN
   DELETE FROM auth_private.factors WHERE user_id=u.id AND kind='totp' AND state='pending';
   INSERT INTO auth_private.factors(id,user_id,kind,state,key_id,ciphertext,created_at,expires_at)
     VALUES(factor_id,u.id,'totp','pending',key_id,ciphertext,now_at,now_at+interval '10 minutes');
-  UPDATE auth_private.contexts SET data=jsonb_build_object('factorId',factor_id) WHERE token_hash=c.token_hash;
+  UPDATE auth_private.contexts SET data=c.data||jsonb_build_object('factorId',factor_id) WHERE token_hash=c.token_hash;
   RETURN true;
 END;
 $$;
@@ -470,6 +482,8 @@ BEGIN
     OR c.purpose NOT IN ('setup','enrol-cookie') OR c.expires_at<=now_at OR c.data->>'factorId' IS DISTINCT FROM factor_id THEN RETURN false; END IF;
   -- Новый пароль - только в enrolment после exchange/recover; setup меняет пароль лишь через password-change.
   IF password_hash IS NOT NULL AND c.purpose<>'enrol-cookie' THEN RETURN false; END IF;
+  -- Восстановление по backup-коду - только с новым паролем: прежний мог утечь (решение владельца 2026-11-23).
+  IF c.data ? 'recovery' AND password_hash IS NULL THEN RETURN false; END IF;
   SELECT * INTO f FROM auth_private.factors WHERE id=factor_id AND user_id=u.id FOR UPDATE;
   IF NOT FOUND OR f.kind<>'totp' OR f.state<>'pending' OR f.expires_at<=now_at
     OR f.ciphertext IS DISTINCT FROM original_ciphertext OR accepted_step IS NULL OR accepted_step<=f.last_step
@@ -484,6 +498,13 @@ BEGIN
   -- TOTP без действующего пароля не даёт достижимого способа входа.
   IF NOT EXISTS(SELECT 1 FROM public.account WHERE user_id=u.id AND provider_id='credential' AND password IS NOT NULL) THEN RETURN false; END IF;
   DELETE FROM auth_private.factors WHERE user_id=u.id AND kind='totp' AND id<>f.id;
+  -- Восстановление по backup-коду отзывает прежнее только сейчас, когда новый фактор готов:
+  -- брошенное на полпути восстановление не оставляет учётку без входа.
+  IF c.data ? 'recovery' THEN
+    DELETE FROM auth_private.factors WHERE user_id=u.id AND id<>f.id;
+    DELETE FROM public.passkey WHERE user_id=u.id;
+    DELETE FROM public.session WHERE user_id=u.id;
+  END IF;
   UPDATE auth_private.factors SET state='active',last_step=accepted_step,expires_at=NULL WHERE id=f.id;
   DELETE FROM auth_private.backup_codes WHERE user_id=u.id;
   INSERT INTO auth_private.backup_codes(code_hash,user_id,set_id,created_at) SELECT h,u.id,set_id,now_at FROM unnest(code_hashes) h;
@@ -518,13 +539,17 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog AS $$
 DECLARE key_name text; row_hits jsonb; now_at timestamptz; now_ms bigint;
 BEGIN
   IF context_hash IS NULL OR source_hash IS NULL OR context_hash!~'^[a-f0-9]{64}$' OR source_hash!~'^[a-f0-9]{64}$' THEN RETURN false; END IF;
+  -- Исчерпанный бюджет источника отсекаем до глобальной блокировки; решение - снова под ней.
+  IF (SELECT count(*) FROM auth_private.counters ctr,jsonb_array_elements(ctr.hits) value WHERE ctr.key='backup:issue:'||source_hash
+    AND value::bigint>floor(extract(epoch FROM clock_timestamp())*1000)::bigint-900000)>=20 THEN RETURN false; END IF;
   UPDATE public.access_lock SET id=id WHERE id=1;
   now_at:=clock_timestamp();now_ms:=floor(extract(epoch FROM now_at)*1000)::bigint;
   DELETE FROM auth_private.contexts WHERE token_hash IN
     (SELECT token_hash FROM auth_private.contexts WHERE purpose='backup' AND expires_at<now_at-interval '1 day' ORDER BY expires_at LIMIT 100);
   DELETE FROM auth_private.counters WHERE key IN
     (SELECT key FROM auth_private.counters WHERE domain='backup' AND expires_at<now_at ORDER BY expires_at LIMIT 100);
-  IF (SELECT count(*) FROM auth_private.contexts WHERE purpose='backup')>=10000 THEN RETURN false; END IF;
+  -- Потолок - по живым контекстам: истёкшие лежат до суток и не должны держать восстановление закрытым.
+  IF (SELECT count(*) FROM auth_private.contexts WHERE purpose='backup' AND expires_at>now_at)>=10000 THEN RETURN false; END IF;
   key_name:='backup:issue:'||source_hash;
   SELECT coalesce(jsonb_agg(value),'[]'::jsonb) INTO row_hits
     FROM auth_private.counters ctr,jsonb_array_elements(ctr.hits) value
@@ -547,24 +572,19 @@ BEGIN
   UPDATE public.access_lock SET id=id WHERE id=1;
   SELECT * INTO u FROM public."user" WHERE id=uid FOR UPDATE;
   now_at:=clock_timestamp();
-  IF NOT FOUND OR u.status<>'active' OR (SELECT count(*) FROM auth_private.contexts WHERE purpose<>'backup')>=10000 THEN RETURN false; END IF;
+  IF NOT FOUND OR u.status<>'active' OR (SELECT count(*) FROM auth_private.contexts WHERE purpose NOT IN ('backup','uv-login'))>=10000 THEN RETURN false; END IF;
   SELECT * INTO c FROM auth_private.contexts WHERE token_hash=context_hash;
   IF NOT FOUND OR c.purpose<>'backup' OR c.state<>'active' OR c.expires_at<=now_at THEN RETURN false; END IF;
   IF NOT EXISTS(SELECT 1 FROM auth_private.reservations r WHERE r.id=attempt_id AND r.context_hash=c.token_hash AND r.finished_at IS NULL)
     OR NOT EXISTS(SELECT 1 FROM auth_private.backup_codes b WHERE b.code_hash=gf_b_backup_recover.code_hash AND b.user_id=u.id) THEN RETURN false; END IF;
-  DELETE FROM auth_private.backup_codes WHERE user_id=u.id;
-  DELETE FROM auth_private.factors WHERE user_id=u.id;
-  DELETE FROM public.passkey WHERE user_id=u.id;
-  DELETE FROM public.session WHERE user_id=u.id;
-  -- После полного восстановления не оставляем потенциально украденный старый пароль.
-  UPDATE public.account SET password=NULL,updated_at=now_at WHERE user_id=u.id AND provider_id='credential';
-  UPDATE auth_private.contexts SET state='spent' WHERE token_hash=c.token_hash OR user_id=u.id;
+  -- Здесь ничего не сжигаем (решение владельца 2026-11-23): пароль, факторы, passkey, сессии и
+  -- остальные коды живут, пока новый фактор не включён в gf_b_totp_complete - он и отзывает
+  -- прежнее. Брошенное восстановление не запирает учётку. Новое восстановление заменяет
+  -- незавершённое прежнее: активным остаётся максимум одно.
+  UPDATE auth_private.contexts SET state='spent' WHERE token_hash=c.token_hash OR (user_id=u.id AND data ? 'recovery');
   UPDATE auth_private.reservations SET finished_at=now_at WHERE id=attempt_id;
-  INSERT INTO public.auth_recovery_guards(user_id,enhanced_required) VALUES(u.id,true)
-    ON CONFLICT(user_id) DO UPDATE SET enhanced_required=true;
-  UPDATE public."user" SET security_generation=security_generation+1,updated_at=now_at WHERE id=u.id RETURNING * INTO u;
-  INSERT INTO auth_private.contexts(token_hash,user_id,generation,purpose,created_at,expires_at)
-    VALUES(enrol_hash,u.id,u.security_generation,'enrol-token',now_at,now_at+interval '5 minutes');
+  INSERT INTO auth_private.contexts(token_hash,user_id,generation,purpose,data,created_at,expires_at)
+    VALUES(enrol_hash,u.id,u.security_generation,'enrol-token','{"recovery":true}'::jsonb,now_at,now_at+interval '5 minutes');
   RETURN true;
 END;
 $$;
@@ -623,6 +643,39 @@ BEGIN
 END;
 $$;
 --> statement-breakpoint
+-- Анонимный одноразовый контекст входа по UV: выдаётся до WebAuthn-церемонии, гасится в
+-- gf_b_uv_finish. Свой домен счётчиков и свой потолок - не съедает квоты MFA и backup.
+CREATE FUNCTION public.gf_b_uv_login_context(context_hash text, source_hash text) RETURNS boolean
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog AS $$
+DECLARE key_name text; row_hits jsonb; now_at timestamptz; now_ms bigint;
+BEGIN
+  IF context_hash IS NULL OR source_hash IS NULL OR context_hash!~'^[a-f0-9]{64}$' OR source_hash!~'^[a-f0-9]{64}$' THEN RETURN false; END IF;
+  -- Как в gf_b_backup_context: исчерпанный бюджет источника - отказ до глобальной блокировки.
+  IF (SELECT count(*) FROM auth_private.counters ctr,jsonb_array_elements(ctr.hits) value WHERE ctr.key='uv:issue:'||source_hash
+    AND value::bigint>floor(extract(epoch FROM clock_timestamp())*1000)::bigint-900000)>=20 THEN RETURN false; END IF;
+  UPDATE public.access_lock SET id=id WHERE id=1;
+  now_at:=clock_timestamp();now_ms:=floor(extract(epoch FROM now_at)*1000)::bigint;
+  DELETE FROM auth_private.contexts WHERE token_hash IN
+    (SELECT token_hash FROM auth_private.contexts WHERE purpose='uv-login' AND expires_at<now_at-interval '1 day' ORDER BY expires_at LIMIT 100);
+  DELETE FROM auth_private.counters WHERE key IN
+    (SELECT key FROM auth_private.counters WHERE domain='uv' AND expires_at<now_at ORDER BY expires_at LIMIT 100);
+  IF (SELECT count(*) FROM auth_private.contexts WHERE purpose='uv-login' AND expires_at>now_at)>=10000 THEN RETURN false; END IF;
+  key_name:='uv:issue:'||source_hash;
+  SELECT coalesce(jsonb_agg(value),'[]'::jsonb) INTO row_hits
+    FROM auth_private.counters ctr,jsonb_array_elements(ctr.hits) value
+    WHERE ctr.key=key_name AND value::bigint>now_ms-900000;
+  IF jsonb_array_length(row_hits)>=20 OR (NOT EXISTS(SELECT 1 FROM auth_private.counters WHERE key=key_name)
+    AND (SELECT count(*) FROM auth_private.counters WHERE domain='uv')>=10000) THEN RETURN false; END IF;
+  INSERT INTO auth_private.counters(key,domain,hits,expires_at) VALUES(key_name,'uv',row_hits||to_jsonb(now_ms),now_at+interval '15 minutes')
+    ON CONFLICT(key) DO UPDATE SET hits=excluded.hits,expires_at=excluded.expires_at;
+  INSERT INTO auth_private.contexts(token_hash,purpose,created_at,expires_at)
+    VALUES(context_hash,'uv-login',now_at,now_at+interval '5 minutes');
+  RETURN true;
+END;
+$$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.gf_b_uv_login_context(text,text) FROM PUBLIC;
+--> statement-breakpoint
 REVOKE ALL ON FUNCTION public.gf_b_backup_context(text,text) FROM PUBLIC;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION public.gf_b_backup_recover(text,text,text,text,text) FROM PUBLIC;
@@ -660,6 +713,9 @@ BEGIN
   now_at:=clock_timestamp();
   IF NOT FOUND OR u.status<>'active' OR u.security_generation<>c.generation OR c.state<>'active'
     OR c.purpose NOT IN ('setup','enrol-cookie') OR c.expires_at<=now_at OR c.data?'uvKeyId' THEN RETURN NULL; END IF;
+  -- При восстановлении ключ не заводим вовсе: ожидающий passkey держателя кода лёг бы в public.passkey,
+  -- а завершить восстановление можно только через TOTP с новым паролем.
+  IF c.data ? 'recovery' THEN RETURN NULL; END IF;
   IF c.purpose='setup' AND NOT EXISTS(SELECT 1 FROM public.session original WHERE original.id=c.session_id
     AND original.user_id=u.id AND public.gf_b_hash(original.token)=c.session_bearer_hash
     AND public.gf_b_fresh(original.id,original.token) IS NOT NULL) THEN RETURN NULL; END IF;
@@ -685,7 +741,7 @@ BEGIN
   IF NOT FOUND THEN RETURN false; END IF;
   access:=public.gf_b_session_access(sid,bearer);now_at:=clock_timestamp();
   IF access IS NULL OR context_hash IS NULL OR context_hash!~'^[a-f0-9]{64}$'
-    OR (SELECT count(*) FROM auth_private.contexts WHERE purpose<>'backup')>=10000 THEN RETURN false; END IF;
+    OR (SELECT count(*) FROM auth_private.contexts WHERE purpose NOT IN ('backup','uv-login'))>=10000 THEN RETURN false; END IF;
   INSERT INTO auth_private.contexts(token_hash,user_id,generation,purpose,session_id,session_bearer_hash,created_at,expires_at)
     VALUES(context_hash,u.id,u.security_generation,'reauth',sid,public.gf_b_hash(bearer),now_at,now_at+interval '5 minutes');
   RETURN true;
@@ -707,12 +763,17 @@ BEGIN
   fp:=public.gf_b_hash(jsonb_build_array(k.user_id,k.credential_id,k.public_key)::text);
   SELECT fx.* INTO f FROM auth_private.factors fx WHERE fx.credential_id=k.id AND fx.user_id=u.id AND fx.kind='uv' AND fx.fingerprint=fp FOR UPDATE;
   IF NOT FOUND OR fp IS DISTINCT FROM fingerprint THEN RETURN NULL; END IF;
-  IF context_hash IS NOT NULL THEN
-    SELECT * INTO c FROM auth_private.contexts WHERE token_hash=context_hash;
-    IF NOT FOUND OR c.user_id<>u.id OR c.generation<>generation OR c.state<>'active' OR c.expires_at<=now_at THEN RETURN NULL; END IF;
+  -- Без серверного контекста UV ничего не выдаёт: повтор того же снимка (двойная отправка,
+  -- ретрай) не становится второй сессией. Вход - одноразовым анонимным контекстом 'uv-login'.
+  IF context_hash IS NULL THEN RETURN NULL; END IF;
+  SELECT * INTO c FROM auth_private.contexts WHERE token_hash=context_hash;
+  IF NOT FOUND OR c.state<>'active' OR c.expires_at<=now_at THEN RETURN NULL; END IF;
+  IF c.purpose='uv-login' THEN
+    IF c.user_id IS NOT NULL THEN RETURN NULL; END IF;
+  ELSIF c.user_id IS DISTINCT FROM u.id OR c.generation IS DISTINCT FROM generation THEN RETURN NULL;
   END IF;
   IF f.state='pending' THEN
-    IF c.purpose IS NULL OR c.purpose NOT IN ('enrol-cookie','setup') OR f.expires_at<=now_at
+    IF c.purpose NOT IN ('enrol-cookie','setup') OR f.expires_at<=now_at
       OR c.data->>'uvKeyId' IS DISTINCT FROM k.id
       OR code_hashes IS NULL OR cardinality(code_hashes)<>10
       OR cardinality(ARRAY(SELECT DISTINCT unnest(code_hashes)))<>10
@@ -720,6 +781,8 @@ BEGIN
     IF c.purpose='setup' AND NOT EXISTS(SELECT 1 FROM public.session original WHERE original.id=c.session_id
       AND original.user_id=u.id AND public.gf_b_hash(original.token)=c.session_bearer_hash
       AND public.gf_b_fresh(original.id,original.token) IS NOT NULL) THEN RETURN NULL; END IF;
+    -- Восстановление требует нового пароля, а его здесь не передать: только через TOTP-complete.
+    IF c.data ? 'recovery' THEN RETURN NULL; END IF;
     UPDATE auth_private.factors SET state='active',expires_at=NULL WHERE id=f.id;
     DELETE FROM auth_private.backup_codes WHERE user_id=u.id;
     INSERT INTO auth_private.backup_codes(code_hash,user_id,set_id,created_at) SELECT h,u.id,set_id,now_at FROM unnest(code_hashes) h;
@@ -729,16 +792,16 @@ BEGIN
     UPDATE public."user" SET security_generation=security_generation+1,updated_at=now_at WHERE id=u.id;
     RETURN jsonb_build_object('enrolled',true);
   END IF;
-  IF f.state<>'active' OR (context_hash IS NOT NULL AND c.purpose<>'reauth') THEN RETURN NULL; END IF;
+  IF f.state<>'active' OR c.purpose NOT IN ('reauth','uv-login') THEN RETURN NULL; END IF;
+  IF new_id IS NULL OR new_token IS NULL OR issuance_id IS NULL OR length(new_token)<32 THEN RETURN NULL; END IF;
   IF c.purpose='reauth' THEN
     IF NOT EXISTS(SELECT 1 FROM public.session original WHERE original.id=c.session_id AND original.user_id=u.id
       AND public.gf_b_hash(original.token)=c.session_bearer_hash AND original.expires_at>now_at) THEN RETURN NULL; END IF;
-    UPDATE auth_private.contexts SET state='spent' WHERE token_hash=c.token_hash;
     DELETE FROM public.session WHERE id=c.session_id;
   END IF;
-  IF new_id IS NULL OR new_token IS NULL OR issuance_id IS NULL OR length(new_token)<32 THEN RETURN NULL; END IF;
+  UPDATE auth_private.contexts SET state='spent' WHERE token_hash=c.token_hash;
   INSERT INTO public.session(id,token,user_id,security_generation,created_at,updated_at,expires_at)
-    VALUES(new_id,new_token,u.id,u.security_generation,now_at,now_at,now_at+interval '7 days') RETURNING * INTO s;
+    VALUES(new_id,new_token,u.id,u.security_generation,now_at,now_at,now_at+interval '30 days') RETURNING * INTO s;
   INSERT INTO auth_private.proofs(session_id,user_id,generation,bearer_hash,issuance_id,method,factor_id,verified_at)
     VALUES(s.id,u.id,u.security_generation,public.gf_b_hash(s.token),issuance_id,'uv',f.id,now_at);
   RETURN to_jsonb(s);

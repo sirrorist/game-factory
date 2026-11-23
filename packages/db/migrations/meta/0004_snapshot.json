@@ -1470,7 +1470,7 @@
         },
         "context_purpose": {
           "name": "context_purpose",
-          "value": "\"auth_private\".\"contexts\".\"purpose\" in ('login','reauth','password','enrol-token','enrol-cookie','setup','backup')"
+          "value": "\"auth_private\".\"contexts\".\"purpose\" in ('login','reauth','password','enrol-token','enrol-cookie','setup','backup','uv-login')"
         },
         "context_attempts": {
           "name": "context_attempts",
@@ -1532,7 +1532,7 @@
       "checkConstraints": {
         "factor_counter_domain": {
           "name": "factor_counter_domain",
-          "value": "\"auth_private\".\"counters\".\"domain\" in ('mfa', 'backup', 'issue', 'enrol')"
+          "value": "\"auth_private\".\"counters\".\"domain\" in ('mfa', 'backup', 'issue', 'enrol', 'uv')"
         },
         "factor_counter_bounded": {
           "name": "factor_counter_bounded",

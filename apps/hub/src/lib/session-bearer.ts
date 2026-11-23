@@ -2,6 +2,8 @@ import { timingSafeEqual } from 'node:crypto';
 import { makeSignature } from 'better-auth/crypto';
 
 export const SESSION_COOKIE = '__Host-gf-session';
+/** Сессия живёт строго 30 дней от входа, без продления (D-071); потолок держит и триггер БД. */
+export const SESSION_TTL_S = 30 * 24 * 60 * 60;
 /** Проверяется именно cookie запроса, не token из результата запроса к БД. */
 export async function verifiedSessionBearer(headers: Headers, secret: string): Promise<string | null> {
   const values=(headers.get('cookie')??'').split(';').map(v=>v.trim()).filter(v=>v.startsWith(SESSION_COOKIE+'='));
@@ -16,5 +18,5 @@ export async function verifiedSessionBearer(headers: Headers, secret: string): P
 }
 export async function signedSessionCookie(token: string, secret: string): Promise<string> {
   if(!/^[A-Za-z0-9_-]{32,256}$/.test(token))throw new Error('неверный формат сессии');
-  return `${SESSION_COOKIE}=${encodeURIComponent(token+'.'+await makeSignature(token,secret))}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=604800`;
+  return `${SESSION_COOKIE}=${encodeURIComponent(token+'.'+await makeSignature(token,secret))}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_S}`;
 }

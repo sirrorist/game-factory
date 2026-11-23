@@ -4,6 +4,7 @@ import { MIN_PASSWORD_LENGTH, readSessionAccess, type AnyDb } from '@gf/db';
 import { betterAuth, type BetterAuthPlugin } from 'better-auth';
 import { APIError, createAuthMiddleware, getSessionFromCtx } from 'better-auth/api';
 import { authAccess } from './auth-access.ts';
+import { SESSION_TTL_S } from './session-bearer.ts';
 
 export const SESSION_COOKIE = '__Host-gf-session';
 
@@ -20,6 +21,9 @@ export function createHubAuth(db: AnyDb, origin: string, secret: string, plugins
     user: { deleteUser: { enabled: false } },
     session: {
       cookieCache: { enabled: false },
+      // Строго 30 дней от входа, без скользящего продления (D-071).
+      expiresIn: SESSION_TTL_S,
+      disableSessionRefresh: true,
       additionalFields: { securityGeneration: { type: 'number', input: false, returned: false, defaultValue: 0 } },
     },
     // Новая многоуровневая политика Q3 — следующий шаг; существующую защиту сохраняем.

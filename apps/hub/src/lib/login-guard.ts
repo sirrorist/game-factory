@@ -8,6 +8,8 @@
 //
 // Модуль без Next и без `@/`-импортов: его гоняет node:test напрямую (test/login-guard.test.ts).
 
+import { createHash } from 'node:crypto';
+
 export interface GuardOptions {
   /** Сколько неверных паролей за окно - бан. */
   maxFailures: number;
@@ -27,10 +29,23 @@ export const DEFAULT_GUARD: GuardOptions = {
   maxEntries: 10_000,
 };
 
+interface Failure {
+  at: number;
+  /** Хэш учётки, на которую был неверный пароль ('' - неизвестна). */
+  subject: string;
+}
+
 interface Entry {
-  failures: number[];
+  failures: Failure[];
   bannedUntil: number;
   bans: number;
+}
+
+/** Учётка для счёта - хэш нормализованного email: сам адрес в памяти процесса не держим. */
+export function guardSubject(email: unknown): string {
+  if (typeof email !== 'string') return '';
+  const value = email.trim().toLowerCase();
+  return value ? createHash('sha256').update(value).digest('hex').slice(0, 32) : '';
 }
 
 export type GuardVerdict = { banned: false } | { banned: true; retryAfterS: number };
@@ -54,11 +69,11 @@ export class LoginGuard {
     return { banned: true, retryAfterS: Math.ceil((e.bannedUntil - now) / 1000) };
   }
 
-  /** Неверный пароль. Вернёт срок бана, если этот отказ его включил. */
-  fail(ip: string, now = Date.now()): { bannedForS: number } | null {
+  /** Неверный пароль на учётку subject. Вернёт срок бана, если этот отказ его включил. */
+  fail(ip: string, now = Date.now(), subject = ''): { bannedForS: number } | null {
     const e = this.entries.get(ip) ?? { failures: [], bannedUntil: 0, bans: 0 };
-    e.failures = e.failures.filter((t) => now - t < this.opts.windowMs);
-    e.failures.push(now);
+    e.failures = e.failures.filter((f) => now - f.at < this.opts.windowMs);
+    e.failures.push({ at: now, subject });
     // Свежая запись - в конец Map: при переполнении уходят самые давние адреса.
     this.entries.delete(ip);
     this.entries.set(ip, e);
@@ -71,10 +86,16 @@ export class LoginGuard {
     return { bannedForS: Math.ceil(ms / 1000) };
   }
 
-  /** Верный пароль: счёт неудач сброшен. Число прошлых банов остаётся - повторный перебор банится дольше. */
-  success(ip: string): void {
+  /**
+   * Верный пароль снимает неудачи только по своей учётке: иначе вход в собственную учётку
+   * обнулял бы перебор чужой (4 неверных на владельца, вход к себе, ещё 4 - без бана).
+   * Число прошлых банов остаётся - повторный перебор банится дольше.
+   */
+  success(ip: string, subject = ''): void {
+    // Учётка не прочитана - снимать нечего: иначе неудачи с пустой меткой снимал бы любой вход.
+    if (!subject) return;
     const e = this.entries.get(ip);
-    if (e) e.failures = [];
+    if (e) e.failures = e.failures.filter((f) => f.subject !== subject);
   }
 
   private prune(): void {
@@ -85,6 +106,12 @@ export class LoginGuard {
     }
   }
 }
+
+/**
+ * Один счёт на процесс для всех парольных входов: старый маршрут Better Auth и вход B делят
+ * его, иначе два экземпляра удвоили бы лимит на адрес.
+ */
+export const passwordGuard = new LoginGuard();
 
 const IP_RE = /^[0-9a-fA-F:.]{2,45}$/;
 

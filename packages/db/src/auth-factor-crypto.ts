@@ -96,5 +96,21 @@ export function factorKeysFromEnv(env: NodeJS.ProcessEnv = process.env): FactorK
   if (files.length > 4 || files.some(name => [env.GF_AUTH_MAIL_KEY_FILE, env.GF_AUTH_SECRET_FILE].includes(name))) {
     throw new Error('ключи факторов должны быть отдельными');
   }
-  return factorKeys(files.map(name => readFileSync(name)));
+  const keys = files.map(name => readFileSync(name));
+  // Путь - не гарантия: симлинк или копия дали бы тот же ключ под другим именем. Сверяем байты
+  // с почтовым ключом и секретом Better Auth и ключи кольца между собой. Задан, но не читается -
+  // отказ запуска: молча пропущенная сверка - это снятая мера.
+  const others = [env.GF_AUTH_MAIL_KEY_FILE, env.GF_AUTH_SECRET_FILE].flatMap(name => {
+    if (!name) return [];
+    try { return [readFileSync(name)]; } catch { throw new Error('не читается файл ключа для сверки с ключом факторов'); }
+  });
+  const seen = new Set<string>();
+  for (const key of keys) {
+    // Тот же ключ может лежать рядом в текстовом виде - hex или base64.
+    const forms = [key, ...['hex', 'base64', 'base64url'].map(e => Buffer.from(key.toString(e as BufferEncoding)))];
+    const hex = key.toString('hex');
+    if (seen.has(hex) || others.some(other => forms.some(form => other.includes(form)))) throw new Error('ключи факторов должны быть отдельными');
+    seen.add(hex);
+  }
+  return factorKeys(keys);
 }

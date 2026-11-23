@@ -2,7 +2,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clientIp, ipKey, LoginGuard } from '../src/lib/login-guard.ts';
+import { clientIp, guardSubject, ipKey, LoginGuard } from '../src/lib/login-guard.ts';
 
 const MIN = 60_000;
 
@@ -21,9 +21,14 @@ test('неудачи вне окна не копятся; верный паро�
   // По одной раз в 20 минут - окно 15: сколько ни ошибайся так, бана нет.
   for (let i = 0; i < 8; i++) assert.equal(g.fail('ip', i * 20 * MIN), null, `попытка ${i + 1}`);
   assert.equal(g.check('ip', 160 * MIN).banned, false);
-  for (let i = 0; i < 4; i++) g.fail('ip2', i);
-  g.success('ip2');
-  assert.equal(g.fail('ip2', 10), null);
+  const me = guardSubject('me@example.test');
+  for (let i = 0; i < 4; i++) g.fail('ip2', i, me);
+  g.success('ip2', me);
+  assert.equal(g.fail('ip2', 10, me), null);
+  // Учётка не прочитана (пустая метка) - успех ничего не снимает.
+  for (let i = 0; i < 4; i++) g.fail('ip3', i);
+  g.success('ip3');
+  assert.ok(g.fail('ip3', 10));
 });
 
 test('каждый следующий бан вдвое дольше, но не дольше суток', () => {
@@ -71,4 +76,17 @@ test('IPv6 считается сетью /64: смена адреса внутр
   assert.ok(ban, 'пять адресов одной /64 - бан');
   assert.equal(g.check(ipKey('2001:db8:0:1::ffff'), 10).banned, true);
   assert.equal(g.check(ipKey('2001:db8:0:2::1'), 10).banned, false);
+});
+
+test('верный пароль снимает неудачи только своей учётки: вход к себе не обнуляет перебор чужой', () => {
+  const g = new LoginGuard(), owner = guardSubject('Owner@Example.test '), mine = guardSubject('mine@example.test');
+  for (let i = 0; i < 4; i++) assert.equal(g.fail('ip', i, owner), null);
+  g.success('ip', mine);
+  assert.ok(g.fail('ip', 10, owner), 'пятый неверный на владельца - бан, несмотря на вход в свою учётку');
+  const h = new LoginGuard();
+  for (let i = 0; i < 4; i++) h.fail('ip', i, owner);
+  h.success('ip', guardSubject('owner@example.test'));
+  assert.equal(h.fail('ip', 10, owner), null, 'свой верный пароль снимает свои ошибки; email нормализован');
+  assert.equal(guardSubject(undefined), '');
+  assert.equal(guardSubject('a@b.c').includes('@'), false, 'в памяти - хэш, не адрес');
 });

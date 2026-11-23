@@ -6,7 +6,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { eq, sql } from 'drizzle-orm';
-import { schema, user, account, session } from '../src/index.ts';
+import { schema, user, account, session, passkey } from '../src/index.ts';
 import { authFactors, authProofs, authContexts, authReservations, authFactorCounters } from '../src/auth-factor-schema.ts';
 import { backupCodes, backupHash, bearerHash, factorKeys, randomBearer, totpSecret } from '../src/auth-factor-crypto.ts';
 import { factorStore } from '../src/auth-factor-store.ts';
@@ -25,6 +25,12 @@ async function fixture(role='owner') {
   const sid=randomUUID();
   await db.insert(session).values({id:sid,token:bearer,userId:id,expiresAt:new Date(Date.now()+60_000)});
   return {id,bearer,sid,factorId,encrypted};
+}
+/** Прежний ключ пользователя: восстановление должно отозвать его только при завершении. */
+async function oldKey(userId:string) {
+  const id=randomUUID();
+  await db.insert(passkey).values({id,userId,publicKey:'synthetic-old-key',credentialID:randomBearer(),counter:0,deviceType:'singleDevice',backedUp:false});
+  return id;
 }
 async function context(f:Awaited<ReturnType<typeof fixture>>,purpose='login') {
   const hash=bearerHash(randomBearer());
@@ -195,31 +201,50 @@ test('B: операторский enrolment одноразовый; pending/acti
   assert.equal((await db.select().from(session).where(eq(session.userId,f.id))).length,0);
 });
 
-test('B: backup отзывает весь набор/факторы/пароль, не даёт session; без нового пароля TOTP не завершает recovery',async()=>{
-  const f=await fixture(), store=factorStore(db), codes=backupCodes(f.id);
+test('B: backup ничего не сжигает до конца enrolment; брошенное восстановление не запирает, завершённое отзывает прежнее',async()=>{
+  const f=await fixture(), store=factorStore(db), codes=backupCodes(f.id), source=bearerHash(f.id);
   for(const code of codes.hashes) await pg.query('insert into auth_private.backup_codes values($1,$2,$3,now())',[code,f.id,'synthetic-set']);
-  const anonymous=randomBearer(), enrol=randomBearer(), cookie=randomBearer(),source=bearerHash(f.id);
-  await pg.exec('set role gf_auth');
-  try {
+  const asAuth=async<T>(fn:()=>Promise<T>)=>{await pg.exec('set role gf_auth');try{return await fn();}finally{await pg.exec('reset role');}};
+  // То, чем владелец входит: должно пережить любое незавершённое восстановление.
+  const state=async()=>({
+    password:(await db.select().from(account).where(eq(account.userId,f.id)))[0]?.password,
+    factors:(await db.select().from(authFactors).where(eq(authFactors.userId,f.id))).filter(x=>x.state==='active').map(x=>x.id),
+    codes:(await pg.query('select 1 from auth_private.backup_codes where user_id=$1',[f.id])).rows.length,
+    sessions:(await db.select().from(session).where(eq(session.userId,f.id))).length,
+    passkeys:(await db.select().from(passkey).where(eq(passkey.userId,f.id))).length,
+  });
+  await oldKey(f.id);
+  const recover=(code:string)=>asAuth(async()=>{
+    const anonymous=randomBearer(),enrol=randomBearer(),cookie=randomBearer();
     assert.equal(await store.backupContext(bearerHash(anonymous),source),true);
     const attempt=bearerHash(randomBearer());assert.ok(await store.reserve(bearerHash(anonymous),source,attempt));
-    assert.equal(await store.recover(bearerHash(anonymous),attempt,f.id,backupHash(f.id,randomBearer()),bearerHash(enrol)),false);
-    assert.equal(await store.recover(bearerHash(anonymous),attempt,f.id,codes.hashes[0]!,bearerHash(enrol)),true);
-    assert.equal(await store.recover(bearerHash(anonymous),attempt,f.id,codes.hashes[1]!,bearerHash(randomBearer())),false);
-    assert.equal(await store.exchange(bearerHash(enrol),bearerHash(cookie)),true);
-    const snapshot=await store.snapshot(null,bearerHash(cookie));assert.equal(snapshot?.account?.password,null);
-    const id=randomUUID(),encrypted=factorKeys([Buffer.alloc(32,9)]).seal(totpSecret(),f.id,id);
+    if(!await store.recover(bearerHash(anonymous),attempt,f.id,code,bearerHash(enrol)))return null;
+    return await store.exchange(bearerHash(enrol),bearerHash(cookie))?cookie:null;
+  });
+  const before=await state();
+  assert.deepEqual(before,{password:'synthetic-password-hash',factors:[f.factorId],codes:10,sessions:1,passkeys:1});
+  assert.equal(await recover(backupHash(f.id,randomBearer())),null);
+  const abandoned=await recover(codes.hashes[0]!);assert.ok(abandoned);
+  assert.deepEqual(await state(),before,'брошенное восстановление ничего не отняло');
+  const cookie=await recover(codes.hashes[1]!);assert.ok(cookie);
+  assert.equal(await store.snapshot(null,bearerHash(abandoned)),null,'новое восстановление гасит незавершённое прежнее');
+  const id=randomUUID(),encrypted=factorKeys([Buffer.alloc(32,9)]).seal(totpSecret(),f.id,id),newHash='e'.repeat(32)+':'+'f'.repeat(128);
+  await asAuth(async()=>{
     assert.equal(await store.pending(bearerHash(cookie),id,encrypted),true);
     const next=await store.snapshot(null,bearerHash(cookie));assert.ok(next?.factor);
-    const nextAttempt=bearerHash(randomBearer());assert.ok(await store.reserve(bearerHash(cookie),source,nextAttempt));
-    const newCodes=backupCodes(f.id);
-    assert.equal(await store.complete(bearerHash(cookie),nextAttempt,next.factor,Math.floor(Date.now()/30_000),newCodes.hashes,randomUUID(),null),false);
-    assert.equal(await store.complete(bearerHash(cookie),nextAttempt,next.factor,Math.floor(Date.now()/30_000),newCodes.hashes,randomUUID(),'c'.repeat(32)+':'+ 'd'.repeat(128)),true);
-  } finally {await pg.exec('reset role');}
-  assert.equal((await db.select().from(session).where(eq(session.userId,f.id))).length,0);
+    const attempt=bearerHash(randomBearer());assert.ok(await store.reserve(bearerHash(cookie),source,attempt));
+    const step=Math.floor(Date.now()/30_000),fresh=backupCodes(f.id).hashes;
+    assert.equal(await store.complete(bearerHash(cookie),attempt,next.factor,step,fresh,randomUUID(),null),false,
+      'восстановление без нового пароля не завершается: прежний мог утечь');
+    await pg.exec('reset role');assert.deepEqual(await state(),before);await pg.exec('set role gf_auth');
+    assert.equal(await store.complete(bearerHash(cookie),attempt,next.factor,step,fresh,randomUUID(),newHash),true);
+  });
+  const after=await state();
+  assert.deepEqual(after,{password:newHash,factors:[id],codes:10,sessions:0,passkeys:0},'завершение: новый пароль, фактор и набор, прежние отозваны');
+  assert.equal((await pg.query('select 1 from auth_private.backup_codes where code_hash=$1',[codes.hashes[2]!])).rows.length,0);
 });
 
-test('B: SQL-переход UV требует ограниченный контекст, fingerprint и текущее поколение',async()=>{
+test('B: SQL-переход UV требует одноразовый контекст, fingerprint и текущее поколение',async()=>{
   // Это контракт доверенного SQL-канала, не испытание WebAuthn verifier.
   const f=await fixture(),store=factorStore(db),initial=randomBearer(),cookie=randomBearer();
   assert.equal((await pg.query<{ok:boolean}>('select gf_b_operator_enrol($1,$2,$3,$4) as ok',
@@ -230,14 +255,24 @@ test('B: SQL-переход UV требует ограниченный конт�
     counter:0,deviceType:'singleDevice',backedUp:false});assert.ok(key);
   const snapshot=await store.uvSnapshot(credential);assert.ok(snapshot);assert.equal(snapshot.state,'pending');
   const next={id:randomUUID(),token:randomBearer(),issuance:randomUUID()},codes=backupCodes(f.id);
-  assert.equal(await store.uvFinish(snapshot,0,null,next,codes.hashes,randomUUID()),null);
+  // NULL контекста - только сырым SQL: store его уже не принимает.
+  const withoutContext=async(snap:NonNullable<typeof snapshot>)=>(await pg.query<{v:unknown}>(
+    'select public.gf_b_uv_finish($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) as v',[snap.userId,snap.generation,snap.key.id,snap.fingerprint,0,
+      null,randomUUID(),randomBearer(),randomUUID(),codes.hashes,randomUUID()])).rows[0]?.v??null;
+  assert.equal(await withoutContext(snapshot),null);
+  assert.equal(await store.uvFinish(snapshot,0,bearerHash(randomBearer()),next,codes.hashes,randomUUID()),null);
   assert.deepEqual(await store.uvFinish(snapshot,0,bearerHash(cookie),next,codes.hashes,randomUUID()),{enrolled:true});
   assert.equal(await store.uvFinish(snapshot,0,bearerHash(cookie),next,codes.hashes,randomUUID()),null);
   const active=await store.uvSnapshot(credential);assert.ok(active);assert.equal(active.state,'active');
-  const result=await store.uvFinish(active,0,null,next,[],randomUUID());assert.ok(result&&'id' in result);
+  assert.equal(await withoutContext(active),null,'без контекста вход по UV не выдаёт сессию');
+  const login=randomBearer();assert.equal(await store.uvLoginContext(bearerHash(login),bearerHash('uv-source')),true);
+  const result=await store.uvFinish(active,0,bearerHash(login),next,[],randomUUID());assert.ok(result&&'id' in result);
+  assert.equal(await store.uvFinish(active,0,bearerHash(login),{...next,id:randomUUID(),token:randomBearer()},[],randomUUID()),null,
+    'повтор того же снимка и контекста - не вторая сессия');
   await pg.query('update public.passkey set public_key=$1 where id=$2',['changed-key',id]);
   assert.equal(await store.access(next.id,next.token),null,'подмена publicKey не сохраняет прежний UV proof');
-  assert.equal(await store.uvFinish(active,0,null,{...next,id:randomUUID(),token:randomBearer()},[],randomUUID()),null);
+  const again=randomBearer();assert.equal(await store.uvLoginContext(bearerHash(again),bearerHash('uv-source')),true);
+  assert.equal(await store.uvFinish(active,0,bearerHash(again),{...next,id:randomUUID(),token:randomBearer()},[],randomUUID()),null);
   assert.equal((await store.uvSnapshot(credential))?.state,null);
 });
 
@@ -246,4 +281,59 @@ test('B: активный фактор сам требует усиления, �
   assert.equal(snapshot?.required,true);
   const hash=await context(f);
   assert.equal(await store.passwordLogin(hash,{id:randomUUID(),token:randomBearer(),issuance:randomUUID()}),null);
+});
+
+test('B: сессия живёт строго 30 дней от входа - ни вставка, ни продление не двигают срок дальше (D-071)',async()=>{
+  const f=await fixture(),day=86_400_000;
+  const read=async(id:string)=>(await db.select().from(session).where(eq(session.id,id)))[0]!;
+  const sid=randomUUID();
+  await db.insert(session).values({id:sid,token:randomBearer(),userId:f.id,expiresAt:new Date(Date.now()+40*day)});
+  const inserted=await read(sid);
+  assert.equal(inserted.expiresAt.getTime(),inserted.createdAt.getTime()+30*day);
+  const original=await read(f.sid);
+  await db.update(session).set({expiresAt:new Date(Date.now()+90*day)}).where(eq(session.id,f.sid));
+  assert.equal((await read(f.sid)).expiresAt.getTime(),original.createdAt.getTime()+30*day);
+  // Сокращать срок можно: потолок, а не фиксированная дата.
+  const soon=new Date(Date.now()+30_000);
+  await db.update(session).set({expiresAt:soon}).where(eq(session.id,f.sid));
+  assert.equal((await read(f.sid)).expiresAt.getTime(),soon.getTime());
+});
+
+test('B: потолок backup-контекстов считает только живые - истёкшие не закрывают восстановление',async()=>{
+  await pg.exec(`insert into auth_private.contexts(token_hash,purpose,created_at,expires_at)
+    select encode(sha256(convert_to('ceiling-'||i,'UTF8')),'hex'),'backup',now()-interval '2 hours',now()-interval '1 hour'
+    from generate_series(1,10000) i`);
+  try {
+    assert.equal(await factorStore(db).backupContext(bearerHash(randomBearer()),bearerHash('ceiling-source')),true);
+  } finally {
+    await pg.exec(`delete from auth_private.contexts where token_hash in
+      (select encode(sha256(convert_to('ceiling-'||i,'UTF8')),'hex') from generate_series(1,10000) i)`);
+  }
+});
+
+test('B: восстановление через UV закрыто - новый пароль задаётся только в TOTP-complete; прежнее не тронуто',async()=>{
+  const f=await fixture(),store=factorStore(db),codes=backupCodes(f.id),source=bearerHash('uv-recovery:'+f.id);
+  for(const code of codes.hashes) await pg.query('insert into auth_private.backup_codes values($1,$2,$3,now())',[code,f.id,'synthetic-set']);
+  const old=await oldKey(f.id);
+  const anonymous=randomBearer(),enrol=randomBearer(),cookie=randomBearer();
+  assert.equal(await store.backupContext(bearerHash(anonymous),source),true);
+  const attempt=bearerHash(randomBearer());assert.ok(await store.reserve(bearerHash(anonymous),source,attempt));
+  assert.equal(await store.recover(bearerHash(anonymous),attempt,f.id,codes.hashes[0]!,bearerHash(enrol)),true);
+  assert.equal(await store.exchange(bearerHash(enrol),bearerHash(cookie)),true);
+  const id=randomUUID(),credential=randomBearer();
+  // Ключ держателя кода не ложится даже ожидающим: public.passkey видит штатный вход Better Auth.
+  assert.equal(await store.enrolKey(bearerHash(cookie),{id,userId:f.id,publicKey:'synthetic-new-key',credentialID:credential,
+    counter:0,deviceType:'singleDevice',backedUp:false}),null);
+  assert.deepEqual((await db.select().from(passkey).where(eq(passkey.userId,f.id))).map(k=>k.id),[old]);
+  assert.deepEqual((await db.select().from(authFactors).where(eq(authFactors.userId,f.id))).map(x=>[x.id,x.state]),[[f.factorId,'active']]);
+  assert.equal((await db.select().from(session).where(eq(session.userId,f.id))).length,1);
+  // Даже если ожидающий UV-фактор уже был (заведён в обход), recovery-контекст его не включает.
+  await pg.query(`insert into public.passkey(id,user_id,public_key,credential_id,counter,device_type,backed_up) values($1,$2,'synthetic-new-key',$3,0,'singleDevice',false)`,[id,f.id,credential]);
+  await pg.query(`insert into auth_private.factors(id,user_id,kind,state,credential_id,fingerprint,created_at,expires_at)
+    values($1,$2,'uv','pending',$1,public.gf_b_hash(jsonb_build_array($2::text,$3::text,'synthetic-new-key'::text)::text),now(),now()+interval '5 minutes')`,[id,f.id,credential]);
+  await pg.query(`update auth_private.contexts set data=data||jsonb_build_object('uvKeyId',$1::text) where token_hash=$2`,[id,bearerHash(cookie)]);
+  const snapshot=await store.uvSnapshot(credential);assert.ok(snapshot);assert.equal(snapshot.state,'pending');
+  assert.equal(await store.uvFinish(snapshot,0,bearerHash(cookie),{id:randomUUID(),token:randomBearer(),issuance:randomUUID()},
+    backupCodes(f.id).hashes,randomUUID()),null);
+  assert.equal((await db.select().from(session).where(eq(session.userId,f.id))).length,1);
 });

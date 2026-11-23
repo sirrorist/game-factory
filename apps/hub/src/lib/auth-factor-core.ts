@@ -69,8 +69,9 @@ export function factorController(store: FactorStore, keys: FactorKeys) {
       if (password !== undefined && (password.length < MIN_PASSWORD_LENGTH || password.length > 1024)) return null;
       const grant = await reserved(cookie,source); if (!grant) return null;
       if (!['setup','enrol-cookie'].includes(grant.reservation.purpose)) return null;
-      // Новый пароль - только при enrolment после exchange/recover, где старого пароля нет.
-      // В setup его принять нельзя: свежая сессия без старого пароля захватила бы учётку.
+      // Новый пароль - только при enrolment после exchange/recover: там старого пароля можно не
+      // знать; после recover он обязателен (D-071, проверяет SQL). В setup его принять нельзя:
+      // свежая сессия без старого пароля захватила бы учётку.
       if (password !== undefined && grant.reservation.purpose !== 'enrol-cookie') return null;
       const snapshot = await store.snapshot(null,grant.hash);
       if (!snapshot?.factor || snapshot.factor.state !== 'pending') return null;
@@ -108,10 +109,15 @@ export function factorController(store: FactorStore, keys: FactorKeys) {
     async uvContext(original: OriginalSession) {
       const cookie=randomBearer();return await store.uvContext(original,bearerHash(cookie)) ? cookie : null;
     },
-    async uvFinish(snapshot: UvSnapshot, counter: number, contextCookie: string | null) {
-      if (contextCookie !== null && !validBearer(contextCookie)) return null;
+    /** Одноразовый анонимный контекст входа по UV: выдать до WebAuthn-церемонии. */
+    async uvLoginContext(source: string) {
+      const cookie=randomBearer();return await store.uvLoginContext(bearerHash(cookie),bearerHash(source)) ? cookie : null;
+    },
+    // Контекст обязателен всегда: без него повтор того же снимка выдал бы ещё одну сессию.
+    async uvFinish(snapshot: UvSnapshot, counter: number, contextCookie: string) {
+      if (!validBearer(contextCookie)) return null;
       const codes=backupCodes(snapshot.userId);
-      const result=await store.uvFinish(snapshot,counter,contextCookie===null?null:bearerHash(contextCookie),newSession(),codes.hashes,randomUUID());
+      const result=await store.uvFinish(snapshot,counter,bearerHash(contextCookie),newSession(),codes.hashes,randomUUID());
       if (!result) return null;
       return 'enrolled' in result ? {kind:'enrolled' as const,codes:codes.codes,warning:BACKUP_WARNING}
         : {kind:'session' as const,session:result};

@@ -108,16 +108,45 @@ test('B native: отзыв между crypto и финальной запись�
   assert.equal((await native.db.select().from(session).where(eq(session.userId,f.id))).length,0);
 });
 
-test('B native: два разных backup-кода одного набора дают максимум один enrolment',options,async()=>{
+test('B native: два backup-кода одновременно - активен максимум один enrolment, прежний фактор цел',options,async()=>{
   const f=await fixture(),codes=backupCodes(f.id),store=factorStore(native.authDb),secondStore=factorStore(native.other);
   for(const hash of codes.hashes)await native.first`insert into auth_private.backup_codes(code_hash,user_id,set_id,created_at) values(${hash},${f.id},'synthetic',now())`;
   const a=factorController(store,keys),b=factorController(secondStore,keys),ca=await a.backupContext('same-source'),cb=await b.backupContext('same-source');
   assert.ok(ca&&cb);
   const results=await Promise.all([a.recover(ca,f.email,codes.codes[0]!,'same-source'),b.recover(cb,f.email,codes.codes[1]!,'same-source')]);
-  assert.equal(results.filter(Boolean).length,1);
+  // Восстановление ничего не сжигает до завершения: позднее гасит раннее, а не отказывает -
+  // иначе брошенная вкладка держала бы восстановление закрытым. Важен итог: один активный enrolment.
+  assert.ok(results.some(Boolean));
   assert.equal((await native.db.select().from(session).where(eq(session.userId,f.id))).length,0);
   const contexts=await native.db.select().from(authContexts).where(eq(authContexts.userId,f.id));
   assert.equal(contexts.filter(c=>c.purpose==='enrol-cookie'&&c.state==='active').length,1);
-  assert.equal((await native.db.select().from(authFactors).where(eq(authFactors.userId,f.id))).length,0);
+  assert.deepEqual((await native.db.select().from(authFactors).where(eq(authFactors.userId,f.id))).map(x=>[x.id,x.state]),[[f.factorId,'active']]);
   assert.equal((await native.db.select().from(authProofs).where(eq(authProofs.userId,f.id))).length,0);
+});
+
+test('B native: мусорный контекст не ждёт глобальной блокировки, настоящий - ждёт',options,async()=>{
+  const f=await fixture(),{cookie}=await issue(f),store=factorStore(native.authDb);
+  const within=(p:Promise<unknown>,ms:number)=>Promise.race([p.then(v=>({done:true,v})),
+    new Promise<{done:boolean;v?:unknown}>(resolve=>setTimeout(()=>resolve({done:false}),ms))]);
+  let real:Promise<unknown>|undefined;
+  // Исчерпанные бюджеты анонимных писателей - до блокировки.
+  const spentUv=bearerHash('spent-uv:'+f.id),spentBackup=bearerHash('spent-backup:'+f.id);
+  for(let i=0;i<20;i++){
+    assert.equal(await store.uvLoginContext(bearerHash(randomBearer()),spentUv),true);
+    assert.equal(await store.backupContext(bearerHash(randomBearer()),spentBackup),true);
+  }
+  await native.first.begin(async tx=>{
+    await tx`update public.access_lock set id=id where id=1`;
+    const junk=await within(store.reserve(bearerHash(randomBearer()),bearerHash('junk'),bearerHash(randomBearer())),2000);
+    assert.deepEqual(junk,{done:true,v:null},'неизвестный контекст отвечает сразу, не вставая в очередь');
+    assert.deepEqual(await within(store.exchange(bearerHash(randomBearer()),bearerHash(randomBearer())),2000),{done:true,v:false},
+      'мусорный token обмена - тоже до блокировки');
+    assert.deepEqual(await within(store.uvLoginContext(bearerHash(randomBearer()),spentUv),2000),{done:true,v:false},
+      'исчерпанный источник uv-login - отказ до блокировки');
+    assert.deepEqual(await within(store.backupContext(bearerHash(randomBearer()),spentBackup),2000),{done:true,v:false},
+      'исчерпанный источник backup - отказ до блокировки');
+    real=store.reserve(bearerHash(cookie),bearerHash('real'),bearerHash(randomBearer()));
+    assert.equal((await within(real,300)).done,false,'настоящий контекст ждёт блокировку: пред-проверка её не обходит');
+  });
+  assert.ok(await real);
 });

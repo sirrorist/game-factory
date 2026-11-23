@@ -1,7 +1,32 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BACKUP_WARNING, backupCodes, backupHash, base32, bearerHash, factorKeys,
+import { copyFileSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { BACKUP_WARNING, backupCodes, backupHash, base32, bearerHash, factorKeys, factorKeysFromEnv,
   randomBearer, totpCode, totpSecret, validBackup, validBearer, verifyTotp } from '../src/auth-factor-crypto.ts';
+
+test('ключ факторов отделён по байтам: симлинк, копия почтового ключа и повтор в кольце отвергаются', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'gf-factor-keys-'));
+  try {
+    const file = (name: string, fill: number) => { const p = join(dir, name); writeFileSync(p, Buffer.alloc(32, fill)); return p; };
+    const factor = file('factor', 1), old = file('old', 2), mail = file('mail', 3), secret = join(dir, 'secret');
+    writeFileSync(secret, 'synthetic better auth secret, long enough for the test\n');
+    const env = { GF_AUTH_FACTOR_KEY_FILE: factor, GF_AUTH_FACTOR_OLD_KEY_FILES: old, GF_AUTH_MAIL_KEY_FILE: mail, GF_AUTH_SECRET_FILE: secret };
+    assert.ok(factorKeysFromEnv(env).keyId);
+    const link = join(dir, 'link'); symlinkSync(mail, link);
+    assert.throws(() => factorKeysFromEnv({ ...env, GF_AUTH_FACTOR_KEY_FILE: link }), /отдельными/);
+    const copy = join(dir, 'copy'); copyFileSync(mail, copy);
+    assert.throws(() => factorKeysFromEnv({ ...env, GF_AUTH_FACTOR_KEY_FILE: copy }), /отдельными/);
+    const twin = join(dir, 'twin'); copyFileSync(factor, twin);
+    assert.throws(() => factorKeysFromEnv({ ...env, GF_AUTH_FACTOR_OLD_KEY_FILES: twin }), /отдельными/);
+    // Тот же ключ в секрете Better Auth текстом (hex) - тоже не отдельный.
+    const hexSecret = join(dir, 'hex-secret'); writeFileSync(hexSecret, Buffer.alloc(32, 1).toString('hex') + '\n');
+    assert.throws(() => factorKeysFromEnv({ ...env, GF_AUTH_SECRET_FILE: hexSecret }), /отдельными/);
+    // Файл для сверки задан, но не читается - отказ, а не молчаливый пропуск.
+    assert.throws(() => factorKeysFromEnv({ ...env, GF_AUTH_MAIL_KEY_FILE: join(dir, 'missing') }), /не читается/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
 
 test('TOTP: официальные SHA-1 векторы RFC 6238, шесть цифр и ограниченное окно', () => {
   const secret = base32(Buffer.from('12345678901234567890'));

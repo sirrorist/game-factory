@@ -140,3 +140,20 @@ test('B HTTP: action из прототипа - 400; сбой процедуры 
   finally {console.warn=warn;}
   assert.deepEqual(lines,['gf-auth: сбой действия=exchange ошибка=Error sqlstate=23514']);
 });
+
+test('B HTTP: вход в свою учётку не обнуляет перебор чужой; password-change считает неверный старый пароль',async()=>{
+  const f=await fixture(false),other=await fixture(false),at={cookie:'',ip:'192.0.2.50'};
+  await db.update(user).set({role:'user'}).where(eq(user.id,other.id));
+  for(let i=0;i<4;i++)assert.equal((await f.handle(request({email:f.email,password:'Synthetic wrong password '+i},at),'password')).status,401);
+  assert.equal((await f.handle(request({email:other.email,password},at),'password')).status,200);
+  assert.equal((await f.handle(request({email:f.email,password:'Synthetic wrong password 5'},at),'password')).status,401);
+  assert.equal(f.guard.check(ipKey(at.ip)).banned,true,'пятый неверный на чужую учётку - бан');
+
+  const g=await fixture(false),here={ip:'192.0.2.51'};
+  await db.update(user).set({role:'user'}).where(eq(user.id,g.id));
+  const login=await g.handle(request({email:g.email,password},{cookie:'',...here}),'password');assert.equal(login.status,200);
+  const change=(old:string)=>g.handle(request({password:old,newPassword:'Synthetic next strong password'},{cookie:cookies(login),...here}),'password-change');
+  for(let i=0;i<5;i++)assert.equal((await change('Synthetic wrong old password '+i)).status,401);
+  const banned=await change(password);assert.equal(banned.status,429,'после пяти неверных старых паролей - бан, даже с верным');
+  assert.ok(Number(banned.headers.get('retry-after'))>0);
+});
