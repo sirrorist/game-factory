@@ -63,3 +63,6 @@ export * from './auth-schema.ts';
 export * from './auth-actions.ts';
 export * from './auth-mail.ts';
 export * from './auth-crypto.ts';
+export * from './auth-factor-crypto.ts';
+export * from './auth-factor-schema.ts';
+export * from './auth-factor-store.ts';

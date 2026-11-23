@@ -34,6 +34,9 @@
 [промпт ревью реализации](HUB-STAGE-2A-03-AUTH-INTEGRATION-REVIEW-PROMPT.md),
 [перепроверка двух P2](HUB-STAGE-2A-03-AUTH-INTEGRATION-RECHECK-PROMPT.md).
 Настоящий интеграционный CI ещё не запускался; Git/dev/CI и B/C/D отдельно.
+[Закрытый B R3: усиленный вход/recovery](HUB-STAGE-2A-03-AUTH-B-PLAN.md)
+разрешён локально по D-066. [Отчёт серверного среза B](HUB-STAGE-2A-03-AUTH-B-REPORT.md)
+отделяет проверенные SQL/HTTP-компоненты от ещё не подключённых маршрутов и UI.
 [Кандидат 2А-02 + A + стенд](HUB-AUTH-DEV-PROPOSAL.md) — после разрешённой
 Git-сверки подготовлен патч к локальному dev; apply/commit/push/CI отдельно.
 

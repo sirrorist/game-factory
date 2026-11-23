@@ -12,7 +12,7 @@ const headers = { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer',
 export function cookieValue(cookie: string | null, name: string) {
   return cookie?.split(';').map(s => s.trim()).find(s => s.startsWith(name + '='))?.slice(name.length + 1);
 }
-async function readBody(req: Request): Promise<Record<string, unknown> | null> {
+export async function readBody(req: Request): Promise<Record<string, unknown> | null> {
   if (req.headers.get('content-type')?.split(';')[0] !== 'application/json' || !req.body) return null;
   const reader = req.body.getReader(), chunks: Uint8Array[] = []; let size = 0, timedOut = false;
   const timer = setTimeout(() => { timedOut = true; void reader.cancel().catch(() => {}); }, 5000); timer.unref();

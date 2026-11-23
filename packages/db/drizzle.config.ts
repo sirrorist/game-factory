@@ -3,6 +3,6 @@ import { defineConfig } from 'drizzle-kit';
 
 export default defineConfig({
   dialect: 'postgresql',
-  schema: ['./src/schema.ts', './src/auth-schema.ts'],
+  schema: ['./src/schema.ts', './src/auth-schema.ts', './src/auth-factor-schema.ts'],
   out: './migrations',
 });

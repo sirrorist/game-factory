@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { createDb, databaseUrl } from './index.ts';
 import { MIGRATIONS_DIR } from './migrations.ts';
-import { ensureHubRole, HUB_ROLE } from './roles.ts';
+import { ensureHubRole, ensureAuthRole, HUB_ROLE } from './roles.ts';
 
 const url = databaseUrl();
 if (!url) {
@@ -24,6 +24,11 @@ try {
     await ensureHubRole(db, readFileSync(hubFile, 'utf8').trim());
     console.log(`роль ${HUB_ROLE} готова`);
   } else console.warn(`GF_DB_HUB_PASSWORD_FILE не задан: роль ${HUB_ROLE} не обновлена`);
+  const authFile = process.env.GF_DB_AUTH_PASSWORD_FILE;
+  if (authFile) {
+    await ensureAuthRole(db, readFileSync(authFile, 'utf8').trim());
+    console.log('ограниченная роль auth готова');
+  }
 } finally {
   await close();
 }

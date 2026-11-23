@@ -2,9 +2,10 @@ name: CI
 
 # Правки только документации CI не гоняют - минуты не бесплатные (D-031).
 # dev - рабочая ветка, main - прод: CI на обеих, образы в прод - только с main (D-042).
+# auth - авторизация до готовности: своя ветка, CI на каждом пуше, в прод не идёт.
 on:
   push:
-    branches: [main, dev]
+    branches: [main, dev, auth]
     paths-ignore: ["docs/**", "**/*.md"]
   pull_request:
     paths-ignore: ["docs/**", "**/*.md"]
@@ -111,7 +112,15 @@ jobs:
       - run: pnpm test
 
       # Миграции и ограничения схемы на PGlite (отдельно: ~1,3 ГБ памяти, П-043).
+      # Гонки двух backend PGlite не покажет: им нужен настоящий Postgres - берём
+      # предустановленный в образе раннера. Нет его - падаем, а не пропускаем тихо.
+      - name: Бинарники Postgres для нативных DB-тестов
+        run: |
+          test -x /usr/lib/postgresql/16/bin/initdb
+          /usr/lib/postgresql/16/bin/postgres --version
       - run: pnpm test:db
+        env:
+          GF_TEST_PG_BIN: /usr/lib/postgresql/16/bin
 
       - run: pnpm games:build
 
