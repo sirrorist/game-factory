@@ -161,10 +161,11 @@ export function prepareAuthDb(hubOrigin: string): Record<string, string> {
   const owner = process.env.GF_E2E_PG;
   if (!owner) throw new Error('GF_E2E_PG не задан: e2e входа нужен Postgres (в CI - сервис postgres)');
   const dir = mkdtempSync(join(tmpdir(), 'gf-e2e-auth-'));
-  const hubPassword = randomBytes(18).toString('base64url');
+  const hubPassword = randomBytes(18).toString('base64url'), authPassword = randomBytes(18).toString('base64url');
   const files = { hub: join(dir, 'hub'), secret: join(dir, 'secret'), admin: join(dir, 'admin'),
-    member: join(dir, 'member'), factorKey: join(dir, 'factor-key'), totp: join(dir, 'totp') };
+    member: join(dir, 'member'), factorKey: join(dir, 'factor-key'), totp: join(dir, 'totp'), auth: join(dir, 'auth') };
   writeFileSync(files.hub, hubPassword);
+  writeFileSync(files.auth, authPassword);
   writeFileSync(files.secret, randomBytes(32).toString('base64url'));
   writeFileSync(files.admin, OWNER.password);
   writeFileSync(files.member, MEMBER.password);
@@ -175,7 +176,7 @@ export function prepareAuthDb(hubOrigin: string): Record<string, string> {
     const r = spawnSync(process.execPath, args, { cwd: join(ROOT, 'packages/db'), env: { ...process.env, GF_DATABASE_URL: owner, ...env }, encoding: 'utf8' });
     if (r.status !== 0) throw new Error(`${args.join(' ')}: ${r.stderr}${r.stdout}`);
   };
-  run([join(db, 'migrate.ts')], { GF_DB_HUB_PASSWORD_FILE: files.hub });
+  run([join(db, 'migrate.ts')], { GF_DB_HUB_PASSWORD_FILE: files.hub, GF_DB_AUTH_PASSWORD_FILE: files.auth });
   // Владелец мог остаться от прошлого файла тестов - тогда только пароль.
   try {
     run([join(db, 'admin.ts'), 'create-owner', '--email', OWNER.email, '--name', OWNER.name], { GF_ADMIN_PASSWORD_FILE: files.admin });
@@ -186,6 +187,10 @@ export function prepareAuthDb(hubOrigin: string): Record<string, string> {
   const url = new URL(owner);
   url.username = 'gf_hub';
   url.password = hubPassword;
+  // Процедуры B - ролью gf_auth, как будет на проде: у gf_hub на них нет EXECUTE.
+  const authUrl = new URL(owner);
+  authUrl.username = 'gf_auth';
+  authUrl.password = authPassword;
   return { GF_DATABASE_URL: url.toString(), GF_HUB_ORIGIN: hubOrigin, GF_AUTH_SECRET_FILE: files.secret,
-    GF_AUTH_FACTOR_KEY_FILE: files.factorKey };
+    GF_AUTH_FACTOR_KEY_FILE: files.factorKey, GF_AUTH_DATABASE_URL: authUrl.toString() };
 }

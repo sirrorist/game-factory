@@ -6,7 +6,7 @@ import { factorController } from './auth-factor-core.ts';
 import { factorHttp } from './auth-factor-http.ts';
 import { hubAuth, hubAuthSecret } from './auth.ts';
 import { hubOrigin } from './config.ts';
-import { hubDb } from './db.ts';
+import { authDb, hubDb } from './db.ts';
 import { sessionAccess } from './session-access.ts';
 
 let handle: ReturnType<typeof factorHttp> | undefined;
@@ -14,10 +14,11 @@ let handle: ReturnType<typeof factorHttp> | undefined;
 let brokenUntil = 0;
 
 function createHandle() {
-  const db = hubDb(), origin = hubOrigin(), auth = hubAuth();
-  if (!db || !origin || !auth) throw new Error('для действий B нужны база и origin хаба');
+  const db = hubDb(), procedures = authDb(), origin = hubOrigin(), auth = hubAuth();
+  if (!db || !procedures || !origin || !auth) throw new Error('для действий B нужны база, роль auth и origin хаба');
+  // Процедуры B - ролью gf_auth; сессия запроса - как у страниц, ролью gf_hub.
   return factorHttp({ enabled: true, origin, secret: hubAuthSecret(),
-    control: factorController(factorStore(db), factorKeysFromEnv()),
+    control: factorController(factorStore(procedures), factorKeysFromEnv()),
     async session(headers) {
       const current = await sessionAccess(auth, db, headers);
       return current ? { id: current.sessionId, email: current.user.email } : null;

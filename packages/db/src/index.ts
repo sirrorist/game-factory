@@ -28,6 +28,27 @@ export type AnyDb = PgDatabase<PgQueryResultHKT, typeof schema>;
  * Пароль - только файлом (`GF_DB_PASSWORD_FILE`, секрет compose), не переменной: переменные
  * окружения видны в `docker inspect` и в /proc. `GF_DATABASE_URL` - для локальной работы.
  */
+/**
+ * Адрес базы для процедур B - ролью `gf_auth`, не `gf_hub`: у роли хаба из B есть только
+ * `gf_b_session_access` и `gf_b_required`. `GF_AUTH_DATABASE_URL` - для локальной работы и e2e,
+ * иначе тот же хост и база, что у хаба, пароль - файлом `GF_DB_AUTH_PASSWORD_FILE`.
+ */
+export function authDatabaseUrl(env: NodeJS.ProcessEnv = process.env): string | null {
+  if (env.GF_AUTH_DATABASE_URL) return env.GF_AUTH_DATABASE_URL;
+  if (!env.GF_DB_HOST) return null;
+  const file = env.GF_DB_AUTH_PASSWORD_FILE;
+  if (!file) throw new Error('GF_DB_HOST задан, а GF_DB_AUTH_PASSWORD_FILE - нет: роль auth входит только паролем из файла');
+  const password = readFileSync(file, 'utf8').trim();
+  if (!password) throw new Error(`GF_DB_AUTH_PASSWORD_FILE: файл ${file} пуст`);
+  const url = new URL('postgres://');
+  url.hostname = env.GF_DB_HOST;
+  url.port = env.GF_DB_PORT || '5432';
+  url.username = 'gf_auth';
+  url.password = password;
+  url.pathname = `/${env.GF_DB_NAME || 'gf'}`;
+  return url.toString();
+}
+
 export function databaseUrl(env: NodeJS.ProcessEnv = process.env): string | null {
   if (env.GF_DATABASE_URL) return env.GF_DATABASE_URL;
   if (!env.GF_DB_HOST) return null;

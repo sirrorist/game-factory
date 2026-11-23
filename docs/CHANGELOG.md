@@ -9,7 +9,15 @@
 
 Итог: коммит `0728c8b` (владелец), CI 45196510809 - failure: `test:db` 113/116, три нативных
 теста `access-concurrency.pgtest.ts` входили владельцем одним паролем (локально они пропускаются -
-нет Postgres); `hub:build` и e2e не дошли. Исправлено следующим коммитом (subject - developer).
+нет Postgres); `hub:build` и e2e не дошли. Исправлено `1d011ee` (subject - developer). CI
+45198205246 на нём: `test:db` 116/116 без пропусков, `hub:build` - прошёл, e2e 41/43 - вход владельца
+через B давал 503: Postgres "permission denied for function gf_b_snapshot". Хаб ходил в процедуры B
+ролью `gf_hub`, а они выданы только `gf_auth` (PGlite этого не видит - там суперпользователь, П-086).
+Правка: отдельный пул `authDb()` ролью `gf_auth` (`authDatabaseUrl`: `GF_AUTH_DATABASE_URL` или тот же
+хост с паролем из `GF_DB_AUTH_PASSWORD_FILE`); e2e заводит роль через `migrate.ts`. Роль
+"Безопасность" на эту дельту: 1 medium (у `authDatabaseUrl` не было тестов - добавлен
+`auth-database-url.test.ts`, 3 мутации отката на адрес хаба красные) и 1 low (два пула в процессе
+хаба не названы в SECURITY.md - дописано). Unit 338/338.
 Флага нет (D-072): ветка `auth` сама не идёт на прод.
 - Маршрут `POST /api/account/security/[action]` -> `lib/auth-factor-runtime.ts` -> `factorHttp`;
   нет базы, origin или ключа факторов - 503, в журнал только имя и код ошибки, отказ держится 10 с.

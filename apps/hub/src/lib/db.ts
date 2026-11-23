@@ -1,7 +1,7 @@
 // База хаба - один пул на процесс, создаётся при первом обращении: сборка (`next build`)
 // и страницы, которым база не нужна, работают и без неё.
 
-import { createDb, databaseUrl, type Db } from '@gf/db';
+import { authDatabaseUrl, createDb, databaseUrl, type Db } from '@gf/db';
 
 let cached: { db: Db } | null | undefined;
 
@@ -12,4 +12,15 @@ export function hubDb(): Db | null {
     cached = url ? createDb(url) : null;
   }
   return cached?.db ?? null;
+}
+
+let auth: { db: Db } | null | undefined;
+
+/** Отдельный пул ролью gf_auth - только для процедур B (auth-factor-runtime.ts). */
+export function authDb(): Db | null {
+  if (auth === undefined) {
+    const url = authDatabaseUrl();
+    auth = url ? createDb(url) : null;
+  }
+  return auth?.db ?? null;
 }
